@@ -1,0 +1,13 @@
+m_ret:
+    domain: 1
+    num: 8
+    fields:
+        arn:
+            length: 5
+        prn:
+            length: 10
+
+msg:
+    fields:
+        count:
+            length: 32

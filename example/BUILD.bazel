@@ -1,0 +1,45 @@
+load("@rules_hdl//verilog:providers.bzl", "verilog_library")
+load("@rules_hdl//verilog:build_defs.bzl", "verilog_flist")
+load("@rules_verilator//verilator:defs.bzl", "verilator_cc_library")
+
+verilog_library(
+    name = "transactions_sv",
+    srcs = ["transactions.svh"],
+)
+
+verilog_library(
+    name = "top",
+    srcs = ["top.sv"],
+    deps = ["transactions_sv"],
+)
+
+verilog_flist(
+    name = "top.f",
+    srcs = [":top"],
+)
+
+verilator_cc_library(
+    name = "top_veri_lib",
+    mtop = "top",
+    vopts = ["-Wno-DECLFILENAME"],
+    flist = "top.f",
+)
+
+cc_library(
+    name = "transactions_cpp",
+    srcs = ["transactions.hpp", "transactions.cpp"],
+    deps = ["@cvm//include/cvm:bitmanip", "@cvm//include/cvm:messenger"],
+)
+
+cc_library(
+    name = "monitor",
+    srcs = ["retire_monitor.cpp"],
+    deps = ["transactions_cpp"],
+)
+
+cc_binary(
+    name = "top_veri",
+    srcs = ["sim_main.cpp"],
+    deps = [":top_veri_lib", ":monitor"],
+)
+

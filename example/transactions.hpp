@@ -14,10 +14,10 @@ namespace transactions {
     struct m_ret {
         std::uint8_t  arn;
         std::uint16_t prn;
-        m_ret(const std::uint8_t* bytes) {
-            arn = cvm::bitmanip::array_slice<decltype(arn)>(bytes,  4, 0);
-            prn = cvm::bitmanip::array_slice<decltype(prn)>(bytes, 14, 5);
-        }
+        constexpr m_ret(const std::uint8_t* bytes, const size_t offset) :
+            arn(cvm::bitmanip::array_slice<decltype(arn)>(bytes,  4+offset, 0+offset)),
+            prn(cvm::bitmanip::array_slice<decltype(prn)>(bytes, 14+offset, 5+offset))
+            {}
     };
 
 }

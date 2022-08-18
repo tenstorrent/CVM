@@ -1,7 +1,7 @@
 // FIXME generate
 package transactions;
 
-    typedef enum int {
+    typedef enum logic {
         MSG_NUMBER_M_RET = 0
     } message_number;
 
@@ -19,38 +19,34 @@ package transactions;
         m_ret_txn[7:0] m_ret_txns;
     } domain_1;
 
-    typedef struct packed {
-        logic[31:0] count;
-    } msg;
-
-    typedef struct packed {
-        msg   data;
-        logic valid;
-    } msg_txn;
 
 endpackage
 
 module transactions_messenger #(
     type T = logic,
-    transactions::message_number N = 0
+    type E =   int,
+    E    N =    '0
 ) (
-    input clk,
-    input valid,
-    input [$bits(T)-1:0] message
+    input  clk,
+    input  valid,
+    input  [$bits(T)-1:0] i
 );
+    localparam int  B = ($bits(E) + $bits(T)+7)/8;
 
-    localparam int B = ($bits(T)+7)/8;
-
-    import "DPI-C" function void transactions_message(transactions::message_number num, byte unsigned message[B-1:0]);
+    import "DPI-C" function void transactions_message_m_ret(byte unsigned message[B]);
 
     always @(posedge clk) begin
         if (valid) begin
-            automatic byte unsigned message_unpacked[B];
+            automatic logic[$bits(E) + $bits(T) - 1:0] message = {i, N};
+            automatic byte unsigned  o[B];
             for (int i = 0; i < B-1; i++) begin
-                message_unpacked[i] = message[8*i +: 8];
+                o[i] = message[8*i +: 8];
             end
-            message_unpacked[B-1] = (8)'(message[8*(B-1) +: $bits(T) % 8]);
-            transactions_message(N, message_unpacked);
+            o[B-1] = (8)'(message[8*(B-1) +: $bits(T) % 8]);
+            unique case(N)
+                transactions::MSG_NUMBER_M_RET: transactions_message_m_ret(o);
+                default: $error("unknown %d", N);
+            endcase
         end
     end
 
@@ -62,7 +58,7 @@ module transactions_domain_1(
 );
 
     for (genvar i = 0; i < $size(tx.m_ret_txns); i++) begin
-        transactions_messenger #(transactions::m_ret, transactions::MSG_NUMBER_M_RET) m_ret_messenger (clk, tx.m_ret_txns[i].valid, tx.m_ret_txns[i].data);
+        transactions_messenger #(transactions::m_ret, transactions::message_number, transactions::MSG_NUMBER_M_RET) m_ret_messenger (clk, tx.m_ret_txns[i].valid, tx.m_ret_txns[i].data);
     end
 
 endmodule

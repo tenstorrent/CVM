@@ -1,14 +1,14 @@
 cc_library(
     name = "bitmanip",
     hdrs = ["bitmanip.hpp"],
-    strip_include_prefix = "//include",
+    strip_include_prefix = "//cpp/include",
     visibility = ["//visibility:public"],
 )
 
 cc_library(
     name = "messenger",
     hdrs = ["messenger.hpp"],
-    strip_include_prefix = "//include",
+    strip_include_prefix = "//cpp/include",
     deps = ["@boost//:signals2"],
     visibility = ["//visibility:public"],
 )

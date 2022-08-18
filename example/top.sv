@@ -20,7 +20,19 @@ module dut(input clk, input rst);
 
 endmodule
 
-module top(input clk);
+module top(
+`ifdef TB_EXTERNAL_CLOCK
+    input clk
+`endif
+);
+
+`ifndef TB_EXTERNAL_CLOCK
+    logic clk;
+    initial begin
+        clk = '1;
+        forever #5 clk = !clk;
+    end
+`endif
 
     `TX_DOMAIN(1, clk)
 

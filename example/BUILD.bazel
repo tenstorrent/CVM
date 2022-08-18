@@ -1,6 +1,7 @@
 load("@rules_hdl//verilog:providers.bzl", "verilog_library")
 load("@rules_hdl//verilog:build_defs.bzl", "verilog_flist")
 load("@rules_verilator//verilator:defs.bzl", "verilator_cc_library")
+load("@rules_vcs//vcs:defs.bzl", "vcs_simv")
 
 verilog_library(
     name = "transactions_sv",
@@ -21,20 +22,41 @@ verilog_flist(
 verilator_cc_library(
     name = "top_veri_lib",
     mtop = "top",
-    vopts = ["-Wno-DECLFILENAME"],
+    vopts = [
+        "-Wno-DECLFILENAME",
+        "+define+TB_EXTERNAL_CLOCK",
+    ],
     flist = "top.f",
 )
 
 cc_library(
     name = "transactions_cpp",
     srcs = ["transactions.hpp", "transactions.cpp"],
-    deps = ["@cvm//include/cvm:bitmanip", "@cvm//include/cvm:messenger"],
+    deps = ["@cvm//cpp/include/cvm:bitmanip", "@cvm//cpp/include/cvm:messenger"],
+    alwayslink = True,
+    linkstatic = True,
 )
 
 cc_library(
     name = "monitor",
     srcs = ["retire_monitor.cpp"],
     deps = ["transactions_cpp"],
+    alwayslink = True,
+    linkstatic = True,
+)
+
+cc_binary(
+    name = "libdpi.so",
+    deps = ["monitor"],
+    linkshared = True,
+)
+
+vcs_simv(
+    name  = "top_vcs",
+    dpi   = ["libdpi.so"],
+    opts  = [
+    ],
+    flist = "top.f",
 )
 
 cc_binary(
@@ -43,3 +65,23 @@ cc_binary(
     deps = [":top_veri_lib", ":monitor"],
 )
 
+smoke_tests = []
+simulator_opts = { "veri" : [], "vcs" : ["-licwait 1"] }
+[
+    [
+        smoke_tests.append("smoke_{sim}_{test}".format(sim = sim, test = i)),
+        sh_test(
+            name = smoke_tests[-1],
+            srcs = ["sim.sh"],
+            args = ["$(location :top_{sim})".format(sim = sim), "+arg:{}".format(i),] + simulator_opts[sim],
+            data = [":top_{sim}".format(sim = sim)],
+        ),
+    ]
+    for i in range(1)
+    for sim in ["vcs", "veri"]
+]
+
+test_suite(
+    name = "smoke",
+    tests = smoke_tests,
+)

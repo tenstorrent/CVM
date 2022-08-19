@@ -1,5 +1,4 @@
 #include <boost/signals2.hpp>
-#include <iostream>
 
 namespace cvm {
 

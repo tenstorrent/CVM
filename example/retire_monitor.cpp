@@ -1,5 +1,6 @@
 #include "cvm/messenger.hpp"
 #include "example/transactions.hpp"
+#include <iostream>
 
 class retire_monitor {
 

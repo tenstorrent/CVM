@@ -3,11 +3,11 @@ m_ret:
     num: 8
     fields:
         arn:
-            length: 5
+            width: 5
         prn:
-            length: 10
+            width: 10
 
-msg:
-    fields:
-        count:
-            length: 32
+#msg:
+#    fields:
+#        count:
+#            width: 32

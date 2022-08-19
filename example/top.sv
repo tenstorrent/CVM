@@ -34,7 +34,7 @@ module top(
     end
 `endif
 
-    `TX_DOMAIN(1, clk)
+    `TRANSACTIONS_DOMAIN(1, clk)
 
     int clock_count = 0;
     always @(posedge clk) begin
@@ -49,8 +49,8 @@ module top(
     dut dut(.clk, .rst);
 
     for (genvar i = 0; i < 8; i++) begin
-        assign tx_dom_1.m_ret_txns[i].valid = !rst && (dut.sub[i].m_ret.prn % 2) == 0;
-        assign tx_dom_1.m_ret_txns[i].data  = dut.sub[i].m_ret;
+        assign tx_dom_1.m_rets[i].valid = !rst && (dut.sub[i].m_ret.prn % 2) == 0;
+        assign tx_dom_1.m_rets[i].data  = dut.sub[i].m_ret;
     end
 
     import "DPI-C" function void start_monitor();

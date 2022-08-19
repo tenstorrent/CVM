@@ -1,12 +1,11 @@
 #include "cvm/messenger.hpp"
-#include "transactions.hpp"
+#include "example/transactions.hpp"
 
 class retire_monitor {
 
     public:
 
         retire_monitor() {
-            using namespace std::placeholders;
             cvm::messenger<transactions::m_ret>::connect(
                 [this] (const transactions::m_ret& ret) {
                     return this->retire(ret);

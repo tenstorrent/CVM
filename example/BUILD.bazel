@@ -1,11 +1,16 @@
+load("//py:packet_gen.bzl", "packet_gen")
 load("@rules_hdl//verilog:providers.bzl", "verilog_library")
 load("@rules_hdl//verilog:build_defs.bzl", "verilog_flist")
 load("@rules_verilator//verilator:defs.bzl", "verilator_cc_library")
 load("@rules_vcs//vcs:defs.bzl", "vcs_simv")
 
-verilog_library(
-    name = "transactions_sv",
-    srcs = ["transactions.svh"],
+packet_gen(
+    name = "transactions",
+    src  = "transactions.yml",
+    cc_attrs = {
+        'alwayslink': True,
+        'linkstatic': True,
+    }
 )
 
 verilog_library(
@@ -31,8 +36,7 @@ verilator_cc_library(
 
 cc_library(
     name = "transactions_cpp",
-    srcs = ["transactions.hpp", "transactions.cpp"],
-    deps = ["@cvm//cpp/include/cvm:bitmanip", "@cvm//cpp/include/cvm:messenger"],
+    deps = ["transactions_cc"],
     alwayslink = True,
     linkstatic = True,
 )

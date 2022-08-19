@@ -91,7 +91,7 @@ class Packet:
 
 
     def to_sv_dpi_case_call(self, package):
-        return  f'{package}::{self.to_sv_enum()}: {package}_message_{self.name}(o);'
+        return  f'{package}::{self.to_sv_enum()}: always @(posedge clk) if (valid) {package}_message_{self.name}(unpack(i));'
 
     def to_sv_messenger_inst(self, package):
         return f"""for (genvar i = 0; i < $size(tx.{self.name}s); i++) begin
@@ -233,20 +233,25 @@ endpackage"""
 
 {textwrap.indent(nl.join(dpi_imports), 4*' ')}
 
-    always @(posedge clk) begin
-        if (valid) begin
-            automatic logic[$bits(E) + $bits(T) - 1:0] message = {{i, N}};
-            automatic byte unsigned  o[B];
-            for (int i = 0; i < B-1; i++) begin
-                o[i] = message[8*i +: 8];
-            end
-            o[B-1] = (8)'(message[8*(B-1) +: $bits(T) % 8]);
-            unique case(N)
-{textwrap.indent(nl.join(dpi_case_calls), 4*4*' ')}
-                default: $error("unknown %d", N);
-            endcase
+    typedef byte unsigned message_t[B];
+    function automatic message_t unpack(T v);
+
+        logic[$bits(E) + $bits(T) - 1:0] message = {{i, N}};
+        message_t o;
+
+        for (int i = 0; i < B-1; i++) begin
+            o[i] = message[8*i +: 8];
         end
-    end
+        o[B-1] = (8)'(message[8*(B-1) +: $bits(T) % 8]);
+
+        return o;
+
+    endfunction
+
+    case(N)
+{textwrap.indent(nl.join(dpi_case_calls), 2*4*' ')}
+        default: $error("unknown %d", N);
+    endcase
 
 endmodule"""
 

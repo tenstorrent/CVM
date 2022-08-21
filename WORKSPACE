@@ -78,3 +78,26 @@ http_archive(
 
 load("@com_github_nelhage_rules_boost//:boost/boost.bzl", "boost_deps")
 boost_deps()
+
+rules_python_version = "0.11.0"
+
+http_archive(
+    name = "rules_python",
+    sha256 = "1fe4f7f532a7af16bbe157a7757d7550c23f64798be07638f1f2df521bcf0d3c",
+    strip_prefix = "rules_python-{}".format(rules_python_version),
+    url = "https://github.com/bazelbuild/rules_python/archive/{}.zip".format(rules_python_version),
+)
+
+load("@rules_python//python:pip.bzl", "pip_parse")
+
+pip_parse(
+    name = "pypi",
+    # (Optional) You can set quiet to False if you want to see pip output.
+    #quiet = False,
+    requirements_lock = "//py:requirements_lock.txt",
+)
+
+load("@pypi//:requirements.bzl", "install_deps")
+
+# Initialize repositories for all packages in requirements_lock.txt.
+install_deps()

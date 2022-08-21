@@ -1,5 +1,10 @@
-py_binary(
-    name = "packet_gen",
-    srcs = ["packet_gen.py"],
-    visibility = ["//visibility:public"],
+load("@rules_python//python:pip.bzl", "compile_pip_requirements")
+
+# This rule adds a convenient way to update the requirements file.
+# bazel run //py:requirements.update
+compile_pip_requirements(
+    name = "requirements",
+    extra_args = ["--allow-unsafe"],
+    requirements_in = "requirements.in",
+    requirements_txt = "requirements_lock.txt",
 )

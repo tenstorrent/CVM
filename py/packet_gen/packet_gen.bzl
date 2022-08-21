@@ -46,7 +46,7 @@ _packet_gen = rule(
         "sv": attr.output(
         ),
         "_gen": attr.label(
-            default = "//py:packet_gen",
+            default = "//py/packet_gen:packet_gen",
             executable = True,
             cfg = "exec",
         ),
@@ -87,5 +87,3 @@ def packet_gen(name, visibility = None, cc_attrs = {}, **kwargs):
         name = name + '_sv',
         srcs  = [sv],
     )
-
-    

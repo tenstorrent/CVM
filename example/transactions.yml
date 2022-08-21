@@ -11,3 +11,25 @@ m_ret:
 #    fields:
 #        count:
 #            width: 32
+
+msg:
+    fields:
+        count:
+            width: 32
+
+m_ret2:
+    domain: 2
+    num: 3
+    fields:
+        foo:
+            width: 6
+        baz:
+            width: 1
+
+m_ret3:
+    domain: 1
+    num: 1
+    fields:
+        prn:
+            width: 4
+

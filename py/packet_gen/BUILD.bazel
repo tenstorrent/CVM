@@ -1,0 +1,11 @@
+load("@pypi//:requirements.bzl", "requirement")
+
+py_binary(
+    name = "packet_gen",
+    srcs = ["packet_gen.py"],
+    deps = [
+        requirement("Mako"),
+    ],
+    data = glob(["templates/template.*"]),
+    visibility = ["//visibility:public"],
+)

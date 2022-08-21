@@ -1,4 +1,4 @@
-load("//py:packet_gen.bzl", "packet_gen")
+load("//:defs.bzl", "packet_gen")
 load("@rules_hdl//verilog:providers.bzl", "verilog_library")
 load("@rules_hdl//verilog:build_defs.bzl", "verilog_flist")
 load("@rules_verilator//verilator:defs.bzl", "verilator_cc_library")

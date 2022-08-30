@@ -33,7 +33,7 @@ namespace cvm {
                 V v(0);
 
                 for (size_t bit = lsb; bit <= msb; bit += G - (bit % G)) {
-                    v |= slice(arr[bit / G], std::min(G-1, msb - bit), bit % G) << (bit - lsb);
+                    v |= V(slice(arr[bit / G], std::min(G-1, msb - bit), bit % G) << (bit - lsb));
                 }
 
                 return v;

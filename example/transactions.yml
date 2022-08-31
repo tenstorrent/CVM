@@ -6,6 +6,10 @@ m_ret:
             width: 5
         prn:
             width: 10
+        foo:
+            width: 54
+        bar:
+            width: 3
 
 #msg:
 #    fields:

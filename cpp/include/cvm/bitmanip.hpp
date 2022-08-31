@@ -32,8 +32,16 @@ namespace cvm {
 
                 V v(0);
 
-                for (size_t bit = lsb; bit <= msb; bit += G - (bit % G)) {
-                    v |= V(slice(arr[bit / G], std::min(G-1, msb - bit), bit % G)) << (bit - lsb);
+                size_t bits_left_in_g;
+                for (size_t bit = lsb; bit <= msb; bit += bits_left_in_g) {
+
+                    size_t bits_left = msb - bit + 1;
+                    size_t lsb_g = bit % G;
+                    bits_left_in_g = G - lsb_g;
+                    size_t bits_to_take_in_g = std::min(bits_left, bits_left_in_g);
+                    size_t msb_g = bits_to_take_in_g + lsb_g - 1;
+
+                    v |= V(slice(arr[bit / G], msb_g, lsb_g)) << (bit - lsb);
                 }
 
                 return v;

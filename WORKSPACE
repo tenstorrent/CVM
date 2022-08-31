@@ -5,6 +5,14 @@ load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
 
 maybe(
     http_archive,
+    name = "com_google_googletest",
+    urls = ["https://github.com/google/googletest/archive/release-1.11.0.zip"],
+    sha256 = "353571c2440176ded91c2de6d6cd88ddd41401d14692ec1f99e35d013feda55a",
+    strip_prefix = "googletest-release-1.11.0",
+)
+
+maybe(
+    http_archive,
     name = "bazel_skylib",
     urls = [
     "https://mirror.bazel.build/github.com/bazelbuild/bazel-skylib/releases/download/1.2.0/bazel-skylib-1.2.0.tar.gz",

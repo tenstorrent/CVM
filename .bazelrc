@@ -1,4 +1,4 @@
-build --cxxopt=-std=c++17
+build --cxxopt=-std=c++17 --cxxopt=-Wall --cxxopt=-Werror
 build --action_env=SNPSLMD_LICENSE_FILE
 build --action_env=VCS_HOME
 build --sandbox_tmpfs_path=/tmp

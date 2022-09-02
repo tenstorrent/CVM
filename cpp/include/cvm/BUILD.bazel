@@ -9,6 +9,5 @@ cc_library(
     name = "messenger",
     hdrs = ["messenger.hpp"],
     strip_include_prefix = "//cpp/include",
-    deps = ["@boost//:signals2"],
     visibility = ["//visibility:public"],
 )

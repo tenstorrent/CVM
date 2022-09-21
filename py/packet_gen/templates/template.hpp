@@ -27,3 +27,5 @@ namespace ${packets.name} {
 %endfor
 
 }
+
+extern "C" void ${packets.name}_finish();

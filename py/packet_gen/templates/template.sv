@@ -58,8 +58,13 @@ module ${packets.name}_messenger #(
     localparam int  B = (M+7)/8;
 
 %for packet in packets.packets:
-    import "DPI-C" function void ${packets.name}_message_${packet.name}(byte unsigned message[($bits(E) + $bits(${packets.name}::${packet.name}) + 7)/8]);
+    import "DPI-C" context function void ${packets.name}_message_${packet.name}(byte unsigned message[($bits(E) + $bits(${packets.name}::${packet.name}) + 7)/8]);
 %endfor
+
+    function void ${packets.name}_finish();
+        $finish;
+    endfunction
+    export "DPI-C" function ${packets.name}_finish;
 
     typedef byte unsigned message_t[B];
     function automatic message_t unpack(T v);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cinttypes>
+#include <bitset>
 #include "cvm/bitmanip.hpp"
 
 namespace ${packets.name} {
@@ -14,7 +15,7 @@ namespace ${packets.name} {
 %for packet in packets.packets:
     struct ${packet.name} {
     % for i,field in enumerate(packet.fields):
-        std::uint${field.get_c_width()}_t ${field.name};
+        ${field.get_c_type()} ${field.name};
     %endfor
         constexpr ${packet.name}(const std::uint8_t* bytes, const size_t offset) :
 <% start = 0 %>\

@@ -10,6 +10,8 @@ m_ret:
             width: 54
         bar:
             width: 3
+        wide:
+            width: 256
 
 #msg:
 #    fields:

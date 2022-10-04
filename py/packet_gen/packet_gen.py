@@ -28,7 +28,16 @@ class Field:
         elif self.width <= 32: return 32
         elif self.width <= 64: return 64
 
-        raise Exception("Can't handle width " + str(self.width))
+        return None
+
+    def get_c_type(self):
+
+        width = self.get_c_width()
+        if width:
+            return f"std::uint{width}_t"
+
+        return f"std::bitset<{self.width}>"
+
 
 @dataclass
 class Packet:

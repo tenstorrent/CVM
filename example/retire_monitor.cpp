@@ -18,10 +18,11 @@ class retire_monitor {
 
         void retire(const transactions::m_ret& m_ret) {
             std::cout << std::hex
-                <<  "arn 0x" << +m_ret.arn
-                << " prn 0x" << m_ret.prn
-                << " foo 0x" << m_ret.foo
-                << " bar 0x" << +m_ret.bar
+                <<  "arn  0x" << +m_ret.arn
+                << " prn  0x" << m_ret.prn
+                << " foo  0x" << m_ret.foo
+                << " bar  0x" << +m_ret.bar
+                << " wide 0x" << m_ret.wide
                 << "\n";
         }
 

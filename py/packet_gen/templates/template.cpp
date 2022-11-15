@@ -1,4 +1,4 @@
-#include "${hpp}"
+#include "${hpp.removeprefix(incdir).lstrip('/')}"
 #include "cvm/messenger.hpp"
 #include <type_traits>
 

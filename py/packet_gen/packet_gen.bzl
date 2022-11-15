@@ -8,12 +8,18 @@ def _packet_gen_impl(ctx):
     cpp = ctx.outputs.cpp
     sv  = ctx.outputs.sv
 
+    incdir = "/".join([
+        hpp.root.path,
+        hpp.owner.workspace_root,
+    ])
+
     args = ctx.actions.args()
     args.add("--definition", ctx.file.src)
-    args.add("--hpp" , hpp)
-    args.add("--cpp" , cpp)
-    args.add("--sv"  , sv )
-    args.add("--name", name)
+    args.add("--hpp"       , hpp)
+    args.add("--cpp"       , cpp)
+    args.add("--sv"        , sv )
+    args.add("--incdir"    , incdir)
+    args.add("--name"      , name)
 
     outputs = [hpp, cpp, sv]
 

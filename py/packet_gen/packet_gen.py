@@ -101,7 +101,8 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--definition", help="yml file containing packet definitions", required=True)
-    parser.add_argument("--name"  , help="name of output package and namespace", required=True)
+    parser.add_argument("--incdir"    , help="Path to strip off when generating #include", required=True)
+    parser.add_argument("--name"      , help="name of output package and namespace", required=True)
     parser.add_argument("--hpp", help="name of generated hpp", required=True)
     parser.add_argument("--cpp", help="name of generated cpp", required=True)
     parser.add_argument("--sv" , help="name of generated sv", required=True)
@@ -113,4 +114,4 @@ if __name__ == "__main__":
 
     for t in ['hpp', 'cpp', 'sv']:
         with open(getattr(args, t), 'w') as f:
-            g.gen(t, f, hpp = args.hpp, sv = args.sv)
+            g.gen(t, f, hpp = args.hpp, sv = args.sv, incdir = args.incdir)

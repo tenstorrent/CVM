@@ -67,22 +67,18 @@ module ${packets.name}_messenger #(
     export "DPI-C" function ${packets.name}_finish;
 
     typedef byte unsigned message_t[B];
-    function automatic message_t unpack(T v);
-
-        logic[B*8 - 1:0] message = (8*B)'({i, N});
-        message_t o;
+    message_t message;
+    always_comb begin
+        automatic logic[B*8 - 1:0] short = (8*B)'({i, N});
 
         for (int b = 0; b < B; b++) begin
-            o[b] = message[8*b +: 8];
+            message[b] = short[8*b +: 8];
         end
-
-        return o;
-
-    endfunction
+    end
 
     case(N)
 %for packet in packets.packets:
-        ${packets.name}::${packet.to_c_enum()}: always @(posedge clk) if (valid) ${packets.name}_message_${packet.name}(unpack(i));
+        ${packets.name}::${packet.to_c_enum()}: always @(posedge clk) if (valid) ${packets.name}_message_${packet.name}(message);
 %endfor
         default: $error("unknown %d", N);
     endcase

@@ -45,29 +45,19 @@ package ${packets.name};
 
 endpackage
 
-module ${packets.name}_messenger #(
+module ${packets.name}_write_message #(
     type T = logic,
     type E =   int,
-    E    N =    '0
+    E    N =    '0,
+
+    localparam int  M = $bits(E) + $bits(T),
+    localparam int  B = (M+7)/8
 ) (
     input  clk,
-    input  valid,
-    input  [$bits(T)-1:0] i
+    input  [$bits(T)-1:0] i,
+    output byte unsigned message [B]
 );
-    localparam int  M = $bits(E) + $bits(T);
-    localparam int  B = (M+7)/8;
 
-%for packet in packets.packets:
-    import "DPI-C" context function void ${packets.name}_message_${packet.name}(byte unsigned message[($bits(E) + $bits(${packets.name}::${packet.name}) + 7)/8]);
-%endfor
-
-    function void ${packets.name}_finish();
-        $finish;
-    endfunction
-    export "DPI-C" function ${packets.name}_finish;
-
-    typedef byte unsigned message_t[B];
-    message_t message;
     always_comb begin
         automatic logic[B*8 - 1:0] short = (8*B)'({i, N});
 
@@ -75,13 +65,6 @@ module ${packets.name}_messenger #(
             message[b] = short[8*b +: 8];
         end
     end
-
-    case(N)
-%for packet in packets.packets:
-        ${packets.name}::${packet.to_c_enum()}: always @(posedge clk) if (valid) ${packets.name}_message_${packet.name}(message);
-%endfor
-        default: $error("unknown %d", N);
-    endcase
 
 endmodule
 
@@ -91,11 +74,36 @@ module transactions_domain_${domain}(
     input transactions::domain_${domain} tx
 );
 
-    %for packet in domain_packets:
+    function void ${packets.name}_finish();
+        $finish;
+    endfunction
+    export "DPI-C" function ${packets.name}_finish;
+
+    localparam int HEADER_BITS = $bits(${packets.name}::message_number);
+
+%for packet in domain_packets:
+
+    localparam int DATA_${packet.name}_BITS = $bits(${packets.name}::${packet.name});
+    localparam int MESSAGE_${packet.name}_BYTES = (DATA_${packet.name}_BITS + HEADER_BITS + 7) / 8;
+    
+    byte unsigned ${packet.name}_message[$size(tx.${packet.name}s)][MESSAGE_${packet.name}_BYTES];
+
+    import "DPI-C" context function void ${packets.name}_message_${packet.name}(byte unsigned message[MESSAGE_${packet.name}_BYTES]);
+
     for (genvar i = 0; i < $size(tx.${packet.name}s); i++) begin
-        ${packets.name}_messenger #(${packets.name}::${packet.name}, ${packets.name}::message_number, ${packets.name}::${packet.to_sv_enum()}) ${packet.name}_messenger (clk, tx.${packet.name}s[i].valid, tx.${packet.name}s[i].data);
+        ${packets.name}_write_message #(${packets.name}::${packet.name}, ${packets.name}::message_number, ${packets.name}::${packet.to_sv_enum()}) ${packet.name}_writer (clk, tx.${packet.name}s[i].data, ${packet.name}_message[i]);
     end
-    %endfor
+%endfor
+
+    always @(posedge clk) begin
+%for packet in domain_packets:
+        for (int i = 0; i < $size(tx.${packet.name}s); i++) begin
+            if (tx.${packet.name}s[i].valid) begin
+                ${packets.name}_message_${packet.name}(${packet.name}_message[i]);
+            end
+        end
+%endfor
+    end
 
 endmodule
 %endfor

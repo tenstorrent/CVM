@@ -1,4 +1,4 @@
-load("@pypi//:requirements.bzl", "requirement")
+load("@cvm_pypi//:requirements.bzl", "requirement")
 
 py_binary(
     name = "packet_gen",

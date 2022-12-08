@@ -52,7 +52,7 @@ _packet_gen = rule(
         "sv": attr.output(
         ),
         "_gen": attr.label(
-            default = "//py/packet_gen:packet_gen",
+            default = "//src/packet_gen:packet_gen",
             executable = True,
             cfg = "exec",
         ),
@@ -82,8 +82,8 @@ def packet_gen(name, visibility = None, cc_attrs = {}, **kwargs):
         srcs = [cpp],
         hdrs = [hpp],
         deps = [
-            "@cvm//cpp/include/cvm:bitmanip",
-            "@cvm//cpp/include/cvm:messenger"
+            "@cvm//src/bitmanip:bitmanip",
+            "@cvm//src/messenger:messenger"
         ],
         visibility = visibility,
         **cc_attrs,

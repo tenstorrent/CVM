@@ -1,0 +1,7 @@
+cc_library(
+    name = "messenger",
+    hdrs = ["messenger.hpp"],
+    strip_include_prefix = "//src/messenger",
+    include_prefix = "cvm",
+    visibility = ["//visibility:public"],
+)

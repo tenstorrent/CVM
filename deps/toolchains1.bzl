@@ -6,5 +6,5 @@ def cvm_toolchains1():
         name = "cvm_pypi",
         # (Optional) You can set quiet to False if you want to see pip output.
         #quiet = False,
-        requirements_lock = "//deps:requirements_lock.txt",
+        requirements_lock = "@cvm//deps:requirements_lock.txt",
     )

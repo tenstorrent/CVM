@@ -1,0 +1,6 @@
+cc_library(
+    name = "vpi",
+    hdrs = ["vpi_user.h"],
+    strip_include_prefix = ".",
+    visibility = ["//visibility:public"],
+)

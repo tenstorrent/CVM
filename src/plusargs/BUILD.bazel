@@ -1,0 +1,12 @@
+cc_library(
+    name = "plusargs",
+    hdrs = ["plusargs.hpp"],
+    srcs = ["plusargs.cpp"],
+    deps = [
+        "//third_party/vpi:vpi",
+        "@com_github_gflags_gflags//:gflags",
+    ],
+    strip_include_prefix = ".",
+    include_prefix = "cvm",
+    visibility = ["//:__pkg__"],
+)

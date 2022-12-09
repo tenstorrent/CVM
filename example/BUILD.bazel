@@ -44,7 +44,10 @@ cc_library(
 cc_library(
     name = "monitor",
     srcs = ["retire_monitor.cpp"],
-    deps = ["transactions_cpp"],
+    deps = [
+        "transactions_cpp",
+        "//:plusargs",
+    ],
     alwayslink = True,
     linkstatic = True,
 )
@@ -66,7 +69,7 @@ vcs_simv(
 cc_binary(
     name = "top_veri",
     srcs = ["sim_main.cpp"],
-    deps = [":top_veri_lib", ":monitor"],
+    deps = [":monitor", ":top_veri_lib"],
 )
 
 smoke_tests = []

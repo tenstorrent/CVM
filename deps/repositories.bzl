@@ -57,3 +57,12 @@ def cvm_dependencies():
         strip_prefix = "rules_python-{}".format(rules_python_version),
         url = "https://github.com/bazelbuild/rules_python/archive/{}.zip".format(rules_python_version),
     )
+
+    gflags_version = "2.2.2"
+    maybe(
+        http_archive,
+        name = "com_github_gflags_gflags",
+        sha256 = "19713a36c9f32b33df59d1c79b4958434cb005b5b47dc5400a7a4b078111d9b5",
+        strip_prefix = "gflags-{}".format(gflags_version),
+        url = "https://github.com/gflags/gflags/archive/v{}.zip".format(gflags_version),
+    )

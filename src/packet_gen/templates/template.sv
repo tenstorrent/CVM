@@ -88,7 +88,7 @@ module transactions_domain_${domain}(
     
     byte unsigned ${packet.name}_message[$size(tx.${packet.name}s)][MESSAGE_${packet.name}_BYTES];
 
-    import "DPI-C" context function void ${packets.name}_message_${packet.name}(byte unsigned message[MESSAGE_${packet.name}_BYTES]);
+    import "DPI-C" ${"context" if packet.context else ""} function void ${packets.name}_message_${packet.name}(byte unsigned message[MESSAGE_${packet.name}_BYTES]);
 
     for (genvar i = 0; i < $size(tx.${packet.name}s); i++) begin
         ${packets.name}_write_message #(${packets.name}::${packet.name}, ${packets.name}::message_number, ${packets.name}::${packet.to_sv_enum()}) ${packet.name}_writer (clk, tx.${packet.name}s[i].data, ${packet.name}_message[i]);

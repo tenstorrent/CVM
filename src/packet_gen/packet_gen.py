@@ -44,12 +44,13 @@ class Packet:
     name: str
     domain: int
     num: int
+    context: bool
     fields: list[Field]
 
     @classmethod
     def load(cls, name, values):
         fields = [Field.load(name, v) for name,v in values['fields'].items()]
-        return cls(name, values.get("domain", None), values.get("num", 1), fields)
+        return cls(name, values.get("domain", None), values.get("num", 1), values.get("context", False), fields)
 
     def to_c_enum(self):
         return 'MSG_NUMBER_' + self.name

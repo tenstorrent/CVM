@@ -1,0 +1,11 @@
+cc_library(
+    name = "logger",
+    hdrs = ["logger.hpp"],
+    srcs = ["logger.cpp"],
+    deps = [
+        "@fmt//:fmt",
+    ],
+    strip_include_prefix = ".",
+    include_prefix = "cvm",
+    visibility = ["//:__pkg__"],
+)

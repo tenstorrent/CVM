@@ -3,3 +3,9 @@ cc_library(
     deps = ["//src/plusargs:plusargs"],
     visibility = ["//visibility:public"],
 )
+
+cc_library(
+    name = "logger",
+    deps = ["//src/logger:logger"],
+    visibility = ["//visibility:public"],
+)

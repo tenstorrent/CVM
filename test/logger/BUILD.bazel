@@ -1,0 +1,10 @@
+cc_test(
+    name = "logger_test",
+    size = "small",
+    srcs = ["logger_test.cpp"],
+    deps = [
+        "//:logger",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+

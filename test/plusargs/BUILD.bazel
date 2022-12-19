@@ -1,0 +1,22 @@
+load("@rules_verilator//verilator:defs.bzl", "verilator_cc_library")
+
+verilator_cc_library(
+    name = "plusargs_test_veri_lib",
+    mtop = "plusargs_test",
+    srcs = ["plusargs_test.sv"],
+)
+
+cc_test(
+    name = "plusargs_test",
+    srcs = ["plusargs_test.cpp"],
+    deps = [
+        "//:plusargs",
+        ":plusargs_test_veri_lib",
+        "@com_google_googletest//:gtest_main",
+        "@bazel_tools//tools/cpp/runfiles",
+    ],
+    data = [
+        "plusargs_test_flagfile"
+    ],
+    linkopts = ["-lz"],
+)

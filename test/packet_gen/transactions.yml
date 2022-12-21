@@ -1,0 +1,17 @@
+pkt:
+    domain: 1
+    num: 8
+    fields:
+        x54:
+            width: 54
+        x256:
+            width: 256
+        num:
+            width: 3
+
+ctx:
+    domain: 1
+    context: true
+    fields:
+        dummy:
+            width: 1

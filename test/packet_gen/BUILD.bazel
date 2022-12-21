@@ -2,7 +2,7 @@ load("//:defs.bzl", "packet_gen")
 load("@rules_hdl//verilog:providers.bzl", "verilog_library")
 load("@rules_hdl//verilog:build_defs.bzl", "verilog_flist")
 load("@rules_verilator//verilator:defs.bzl", "verilator_cc_library")
-load("@rules_vcs//vcs:defs.bzl", "vcs_simv")
+#load("@rules_vcs//vcs:defs.bzl", "vcs_simv")
 
 packet_gen(
     name = "transactions",
@@ -42,11 +42,11 @@ cc_library(
 )
 
 cc_library(
-    name = "monitor",
-    srcs = ["retire_monitor.cpp"],
+    name = "checker",
+    srcs = ["checker.cpp"],
     deps = [
         "transactions_cpp",
-        "//:plusargs",
+        "@com_google_googletest//:gtest",
     ],
     alwayslink = True,
     linkstatic = True,
@@ -54,22 +54,26 @@ cc_library(
 
 cc_binary(
     name = "libdpi.so",
-    deps = ["monitor"],
+    deps = ["checker"],
     linkshared = True,
 )
 
-vcs_simv(
-    name  = "top_vcs",
-    dpi   = ["libdpi.so"],
-    opts  = [
-    ],
-    flist = "top.f",
-)
+#vcs_simv(
+#    name  = "top_vcs",
+#    dpi   = ["libdpi.so"],
+#    opts  = [
+#    ],
+#    flist = "top.f",
+#)
 
 cc_binary(
     name = "top_veri",
     srcs = ["sim_main.cpp"],
-    deps = [":monitor", ":top_veri_lib"],
+    deps = [
+        ":checker",
+        ":top_veri_lib",
+        "@com_google_googletest//:gtest_main",
+    ],
 )
 
 smoke_tests = []
@@ -85,7 +89,7 @@ simulator_opts = { "veri" : [], "vcs" : ["-licwait 1"] }
         ),
     ]
     for i in range(1)
-    for sim in ["veri", "vcs"]
+    for sim in ["veri"] #, "vcs"]
 
 ]
 

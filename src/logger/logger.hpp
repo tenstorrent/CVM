@@ -85,8 +85,9 @@ namespace cvm {
             
     };
 
-    void set_verbosity(verbosity_level v) {
-        cvm::logger::set_verbosity(v);
-    }
+    template <typename... Args>
+        void set_verbosity(Args&&... args) {
+            logger::set_verbosity(std::forward<Args>(args)...);
+        }
 
 }

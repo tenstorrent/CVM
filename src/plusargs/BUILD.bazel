@@ -1,3 +1,5 @@
+load("@rules_hdl//verilog:providers.bzl", "verilog_library")
+
 cc_library(
     name = "plusargs",
     hdrs = ["plusargs.hpp"],
@@ -5,8 +7,25 @@ cc_library(
     deps = [
         "//third_party/vpi:vpi",
         "@com_github_gflags_gflags//:gflags",
+        ":plusargs_dpi",
     ],
     strip_include_prefix = ".",
     include_prefix = "cvm",
     visibility = ["//:__pkg__"],
+)
+
+verilog_library(
+    name = "plusargs_sv",
+    srcs = ["cvm_plusargs.sv"],
+    visibility = ["//:__pkg__"],
+)
+
+cc_library(
+    name = "plusargs_dpi",
+    srcs = ["plusargs_dpi.cpp"],
+    deps = [
+        "@com_github_gflags_gflags//:gflags",
+    ],
+    alwayslink = True,
+    linkstatic = True,
 )

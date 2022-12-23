@@ -33,4 +33,9 @@ TEST(Plusargs, Plusargs) {
     EXPECT_EQ(FLAGS_testclrbool, false);
     EXPECT_EQ(FLAGS_teststring, "test");
     EXPECT_EQ(FLAGS_testflaginfile, 42);
+
+    Vplusargs_test top;
+    while (!Verilated::gotFinish()) {
+        top.eval();
+    }
 }

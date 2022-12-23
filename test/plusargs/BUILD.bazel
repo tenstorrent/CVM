@@ -1,22 +1,43 @@
+load("@rules_hdl//verilog:providers.bzl", "verilog_library")
+load("@rules_hdl//verilog:build_defs.bzl", "verilog_flist")
 load("@rules_verilator//verilator:defs.bzl", "verilator_cc_library")
 
-verilator_cc_library(
-    name = "plusargs_test_veri_lib",
-    mtop = "plusargs_test",
+verilog_library(
+    name = "plusargs_test_sv",
     srcs = ["plusargs_test.sv"],
+    deps = ["//:plusargs_sv"],
 )
 
-cc_test(
+verilog_flist(
+    name = "plusargs_test.f",
+    srcs = [":plusargs_test_sv"],
+)
+
+verilator_cc_library(
+    name  = "plusargs_test_veri_lib",
+    mtop  = "plusargs_test",
+    vopts = ["--assert"],
+    flist = "plusargs_test.f",
+)
+
+cc_binary(
     name = "plusargs_test",
     srcs = ["plusargs_test.cpp"],
     deps = [
-        "//:plusargs",
-        ":plusargs_test_veri_lib",
         "@com_google_googletest//:gtest_main",
         "@bazel_tools//tools/cpp/runfiles",
+        "//:plusargs",
+        ":plusargs_test_veri_lib",
     ],
     data = [
         "plusargs_test_flagfile"
     ],
     linkopts = ["-lz"],
+)
+
+sh_test(
+    name = "sh_plusargs_test",
+    srcs = ["sim.sh"],
+    args = ["$(location :plusargs_test)"],
+    data = [":plusargs_test"],
 )

@@ -1,6 +1,14 @@
+load("@rules_hdl//verilog:providers.bzl", "verilog_library")
+
 cc_library(
     name = "plusargs",
     deps = ["//src/plusargs:plusargs"],
+    visibility = ["//visibility:public"],
+)
+
+verilog_library(
+    name = "plusargs_sv",
+    deps = ["//src/plusargs:plusargs_sv"],
     visibility = ["//visibility:public"],
 )
 

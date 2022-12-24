@@ -7,7 +7,7 @@ module plusargs_test();
         testflaginfile = cvm_plusargs::get_int("testflaginfile");
         assert(testflaginfile == 42) else $error("unexpected");
 
-        testsetbool = cvm_plusargs::get_bool("testsetbool");
+        testsetbool = cvm_plusargs::get_bool("testsetbool") != '0;
         assert(testsetbool == '1) else $error("unexpected");
 
         $finish;

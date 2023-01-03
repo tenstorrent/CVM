@@ -3,5 +3,5 @@ cc_library(
     hdrs = ["bitmanip.hpp"],
     strip_include_prefix = "//src/bitmanip",
     include_prefix = "cvm",
-    visibility = ["//visibility:public"],
+    visibility = ["//:__pkg__"],
 )

@@ -1,6 +1,12 @@
 load("@rules_hdl//verilog:providers.bzl", "verilog_library")
 
 cc_library(
+    name = "bitmanip",
+    deps = ["//src/bitmanip:bitmanip"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
     name = "plusargs",
     deps = ["//src/plusargs:plusargs"],
     visibility = ["//visibility:public"],

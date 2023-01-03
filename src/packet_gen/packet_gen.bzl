@@ -82,7 +82,7 @@ def packet_gen(name, visibility = None, cc_attrs = {}, **kwargs):
         srcs = [cpp],
         hdrs = [hpp],
         deps = [
-            "@cvm//src/bitmanip:bitmanip",
+            "@cvm//:bitmanip",
             "@cvm//src/messenger:messenger"
         ],
         visibility = visibility,

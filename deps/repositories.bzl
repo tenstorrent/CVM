@@ -6,8 +6,8 @@ def cvm_dependencies():
     maybe(
         http_archive,
         name = "com_google_googletest",
-        urls = ["https://github.com/google/googletest/archive/release-1.11.0.zip"],
-        sha256 = "353571c2440176ded91c2de6d6cd88ddd41401d14692ec1f99e35d013feda55a",
+        urls = ["https://aus-gitlab.local.tenstorrent.com/riscv/forks/googletest/-/archive/release-1.11.0/googletest-release-1.11.0.tar.bz2"],
+        sha256 = "b93e7c392d235153757b52583ffc5159783d5e5f754f392c51d5b664f6d46b3b",
         strip_prefix = "googletest-release-1.11.0",
     )
 

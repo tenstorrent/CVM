@@ -70,8 +70,8 @@ def cvm_dependencies():
     maybe(
         http_archive,
         name = "fmt",
-        url = "https://github.com/fmtlib/fmt/archive/8.1.1.tar.gz",
-        sha256 = "48104b18e6779d4f04dea35a0a3845b102a04bab3cd111a98275b7a89e05e567",
+        url = "https://aus-gitlab.local.tenstorrent.com/riscv/forks/fmt/-/archive/8.1.1/fmt-8.1.1.tar.gz",
+        sha256 = "3d794d3cf67633b34b2771eb9f073bde87e846e0d395d254df7b211ef1ec7346",
         strip_prefix = "fmt-8.1.1",
         build_file_content = """
 cc_library(

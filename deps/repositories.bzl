@@ -15,10 +15,10 @@ def cvm_dependencies():
         http_archive,
         name = "bazel_skylib",
         urls = [
-        "https://mirror.bazel.build/github.com/bazelbuild/bazel-skylib/releases/download/1.2.0/bazel-skylib-1.2.0.tar.gz",
-        "https://github.com/bazelbuild/bazel-skylib/releases/download/1.2.0/bazel-skylib-1.2.0.tar.gz",
+        "https://aus-gitlab.local.tenstorrent.com/riscv/forks/bazel-skylib/-/archive/1.2.0/bazel-skylib-1.2.0.tar.bz2",
         ],
-        sha256 = "af87959afe497dc8dfd4c6cb66e1279cb98ccc84284619ebfec27d9c09a903de",
+        sha256 = "beba08273c596c2e16c70e70f52689d38c0f19dc449551165e7918415e9dfb80",
+        strip_prefix = "bazel-skylib-1.2.0",
     )
 
     rules_hdl_hash="5ded43332b61f7fadf118ef8b5ebd26385d91500"

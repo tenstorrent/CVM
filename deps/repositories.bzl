@@ -6,8 +6,8 @@ def cvm_dependencies():
     maybe(
         http_archive,
         name = "com_google_googletest",
-        urls = ["https://github.com/google/googletest/archive/release-1.11.0.zip"],
-        sha256 = "353571c2440176ded91c2de6d6cd88ddd41401d14692ec1f99e35d013feda55a",
+        urls = ["https://aus-gitlab.local.tenstorrent.com/riscv/forks/googletest/-/archive/release-1.11.0/googletest-release-1.11.0.tar.bz2"],
+        sha256 = "b93e7c392d235153757b52583ffc5159783d5e5f754f392c51d5b664f6d46b3b",
         strip_prefix = "googletest-release-1.11.0",
     )
 
@@ -15,10 +15,10 @@ def cvm_dependencies():
         http_archive,
         name = "bazel_skylib",
         urls = [
-        "https://mirror.bazel.build/github.com/bazelbuild/bazel-skylib/releases/download/1.2.0/bazel-skylib-1.2.0.tar.gz",
-        "https://github.com/bazelbuild/bazel-skylib/releases/download/1.2.0/bazel-skylib-1.2.0.tar.gz",
+        "https://aus-gitlab.local.tenstorrent.com/riscv/forks/bazel-skylib/-/archive/1.2.0/bazel-skylib-1.2.0.tar.bz2",
         ],
-        sha256 = "af87959afe497dc8dfd4c6cb66e1279cb98ccc84284619ebfec27d9c09a903de",
+        sha256 = "beba08273c596c2e16c70e70f52689d38c0f19dc449551165e7918415e9dfb80",
+        strip_prefix = "bazel-skylib-1.2.0",
     )
 
     rules_hdl_hash="5ded43332b61f7fadf118ef8b5ebd26385d91500"
@@ -53,18 +53,18 @@ def cvm_dependencies():
     maybe(
         http_archive,
         name = "rules_python",
-        sha256 = "1fe4f7f532a7af16bbe157a7757d7550c23f64798be07638f1f2df521bcf0d3c",
+        sha256 = "94e2f4790b55823cf2a58d5e48fccf932ff879b5e868b10bd1e0fa9100ac0311",
         strip_prefix = "rules_python-{}".format(rules_python_version),
-        url = "https://github.com/bazelbuild/rules_python/archive/{}.zip".format(rules_python_version),
+        url = "https://aus-gitlab.local.tenstorrent.com/riscv/forks/rules_python/-/archive/{VERSION}/rules_python-{VERSION}.tar.bz2".format(VERSION=rules_python_version),
     )
 
     gflags_version = "2.2.2"
     maybe(
         http_archive,
         name = "com_github_gflags_gflags",
-        sha256 = "19713a36c9f32b33df59d1c79b4958434cb005b5b47dc5400a7a4b078111d9b5",
-        strip_prefix = "gflags-{}".format(gflags_version),
-        url = "https://github.com/gflags/gflags/archive/v{}.zip".format(gflags_version),
+        sha256 = "018f1973b45e90cc4e8c8bb2f685072ff3b20638f7830b8de19f164e10a7b97f",
+        url = "https://aus-gitlab.local.tenstorrent.com/riscv/forks/gflags/-/archive/v{VERSION}/gflags-v{VERSION}.tar.bz2".format(VERSION=gflags_version),
+        strip_prefix = "gflags-v{}".format(gflags_version),
     )
 
     maybe(

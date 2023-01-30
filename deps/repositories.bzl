@@ -53,18 +53,18 @@ def cvm_dependencies():
     maybe(
         http_archive,
         name = "rules_python",
-        sha256 = "1fe4f7f532a7af16bbe157a7757d7550c23f64798be07638f1f2df521bcf0d3c",
+        sha256 = "94e2f4790b55823cf2a58d5e48fccf932ff879b5e868b10bd1e0fa9100ac0311",
         strip_prefix = "rules_python-{}".format(rules_python_version),
-        url = "https://github.com/bazelbuild/rules_python/archive/{}.zip".format(rules_python_version),
+        url = "https://aus-gitlab.local.tenstorrent.com/riscv/forks/rules_python/-/archive/{VERSION}/rules_python-{VERSION}.tar.bz2".format(VERSION=rules_python_version),
     )
 
     gflags_version = "2.2.2"
     maybe(
         http_archive,
         name = "com_github_gflags_gflags",
-        sha256 = "19713a36c9f32b33df59d1c79b4958434cb005b5b47dc5400a7a4b078111d9b5",
-        strip_prefix = "gflags-{}".format(gflags_version),
-        url = "https://github.com/gflags/gflags/archive/v{}.zip".format(gflags_version),
+        sha256 = "018f1973b45e90cc4e8c8bb2f685072ff3b20638f7830b8de19f164e10a7b97f",
+        url = "https://aus-gitlab.local.tenstorrent.com/riscv/forks/gflags/-/archive/v{VERSION}/gflags-v{VERSION}.tar.bz2".format(VERSION=gflags_version),
+        strip_prefix = "gflags-v{}".format(gflags_version),
     )
 
     maybe(

@@ -23,3 +23,9 @@ cc_library(
     deps = ["//src/logger:logger"],
     visibility = ["//visibility:public"],
 )
+
+cc_library(
+    name = "callbacks",
+    deps = ["//src/callbacks:callbacks"],
+    visibility = ["//visibility:public"],
+)

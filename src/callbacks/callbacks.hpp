@@ -21,12 +21,10 @@ namespace cvm {
 
     // unified way for modules to add callbacks from C/C++ land
     // module should add a void function to queue
-
     class CbQue {
       public:
 
-        /// if fast, will spawn a separate thread to issue callbacks
-        CbQue(bool fast);
+        CbQue();
 
         void push(svScope scope, const std::string& tag, const cb& func);
 

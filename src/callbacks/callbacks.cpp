@@ -5,7 +5,7 @@
 DEFINE_bool(cb_async, false, "use asynchronous callbacks");
 
 using namespace cvm::callbacks;
-static CbQue queue(FLAGS_cb_async);
+static CbQue queue;
 
 void
 push(svScope scope, const std::string& tag, const cb& func) {
@@ -22,8 +22,9 @@ flush(const std::string& tag) {
   queue.flush(tag);
 }
 
-CbQue::CbQue(bool fast) {
-  if (fast) {
+CbQue::CbQue() {
+  // if async, will spawn a separate thread to issue callbacks
+  if (FLAGS_cb_async) {
     std::thread([&] () {
       while(1) { this->pull(); }}).detach();
   }
@@ -50,6 +51,9 @@ CbQue::pull() {
 
 void
 CbQue::flush(const std::string& tag) {
+  if (FLAGS_cb_async)
+    return;
+
   std::lock_guard<std::mutex> lock(m_);
   auto it = que_.begin();
   while (it != que_.end()) {
@@ -67,6 +71,9 @@ CbQue::flush(const std::string& tag) {
 
 void
 CbQue::flush() {
+  if (FLAGS_cb_async)
+    return;
+
   std::lock_guard<std::mutex> lock(m_);
   for (const auto& [scope, tag, func] : que_) {
     svSetScope(scope);

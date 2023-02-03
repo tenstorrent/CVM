@@ -25,6 +25,12 @@ cc_library(
 )
 
 cc_library(
+    name = "messenger",
+    deps = ["//src/messenger:messenger"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
     name = "callbacks",
     deps = ["//src/callbacks:callbacks"],
     visibility = ["//visibility:public"],

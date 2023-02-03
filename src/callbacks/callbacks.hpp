@@ -11,13 +11,13 @@ namespace cvm {
   namespace callbacks {
 
     typedef std::function<void()> cb;
-    void push(svScope scope, const std::string& tag, const cb& func);
+    extern "C" void push(svScope scope, const std::string& tag, const cb& func);
 
-    void pull();
+    extern "C" void pull();
 
     /// non-blocking flush (for polling)
     /// will only flush if tag matches
-    void flush(const std::string& tag);
+    extern "C" void flush(const std::string& tag);
 
     // unified way for modules to add callbacks from C/C++ land
     // module should add a void function to queue

@@ -8,40 +8,40 @@
 
 namespace cvm {
 
-  namespace callbacks {
+  struct callbacks {
 
     typedef std::function<void()> cb;
-    extern "C" void push(svScope scope, const std::string& tag, const cb& func);
+    static void push(svScope scope, const std::string& tag, const cb& func);
 
-    extern "C" void pull();
+    static void pull();
 
     /// non-blocking flush (for polling)
     /// will only flush if tag matches
-    extern "C" void flush(const std::string& tag);
+    static void flush(const std::string& tag);
+  };
 
-    // unified way for modules to add callbacks from C/C++ land
-    // module should add a void function to queue
-    class CbQue {
-      public:
+  // unified way for modules to add callbacks from C/C++ land
+  // module should add a void function to queue
+  class CbQue {
+    public:
 
-        CbQue();
+      CbQue();
 
-        void push(svScope scope, const std::string& tag, const cb& func);
+      void push(svScope scope, const std::string& tag, const callbacks::cb& func);
 
-        /// blocking pull
-        void pull();
+      /// blocking pull
+      void pull();
 
-        void flush(const std::string& tag);
+      void flush(const std::string& tag);
 
-        void flush();
+      void flush();
 
-      private:
+    private:
 
-        std::condition_variable c_;
-        mutable std::mutex m_;
+      std::condition_variable c_;
+      mutable std::mutex m_;
 
-        typedef std::tuple<svScope, std::string, const cb> scoped_cb;
-        std::list<scoped_cb> que_;
-    };
-  }
+      typedef std::tuple<svScope, std::string, const callbacks::cb> scoped_cb;
+      std::list<scoped_cb> que_;
+  };
 }

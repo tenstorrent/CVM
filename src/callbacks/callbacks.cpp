@@ -4,24 +4,24 @@
 
 DEFINE_bool(cb_async, false, "use asynchronous callbacks");
 
-using namespace cvm::callbacks;
+using namespace cvm;
 static CbQue queue;
 
 extern "C" 
 void
-push(svScope scope, const std::string& tag, const cb& func) {
+callbacks::push(svScope scope, const std::string& tag, const cb& func) {
   queue.push(scope, tag, func);
 }
 
 extern "C" 
 void
-pull() {
+callbacks::pull() {
   queue.pull();
 }
 
 extern "C" 
 void
-flush(const std::string& tag) {
+callbacks::flush(const std::string& tag) {
   queue.flush(tag);
 }
 
@@ -34,7 +34,7 @@ CbQue::CbQue() {
 }
 
 void
-CbQue::push(svScope scope, const std::string& tag, const cb& func) {
+CbQue::push(svScope scope, const std::string& tag, const callbacks::cb& func) {
   std::lock_guard<std::mutex> lock(m_);
   que_.emplace_back(std::make_tuple(scope, tag, func));
   c_.notify_one();

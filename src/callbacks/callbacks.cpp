@@ -7,19 +7,16 @@ DEFINE_bool(cb_async, false, "use asynchronous callbacks");
 using namespace cvm;
 static CbQue queue;
 
-extern "C" 
 void
 callbacks::push(svScope scope, const std::string& tag, const cb& func) {
   queue.push(scope, tag, func);
 }
 
-extern "C" 
 void
 callbacks::pull() {
   queue.pull();
 }
 
-extern "C" 
 void
 callbacks::flush(const std::string& tag) {
   queue.flush(tag);

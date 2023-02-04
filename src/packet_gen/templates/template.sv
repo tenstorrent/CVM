@@ -69,9 +69,9 @@ module ${packets.name}_write_message #(
 endmodule
 
 % for domain,domain_packets in by_domain.items():
-module transactions_domain_${domain}(
+module ${packets.name}_domain_${domain}(
     input clk,
-    input transactions::domain_${domain} tx
+    input ${packets.name}::domain_${domain} tx
 );
 
     function void ${packets.name}_finish();

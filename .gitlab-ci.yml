@@ -1,0 +1,12 @@
+image:
+    name: aus-gitlab.local.tenstorrent.com:5005/riscv/dv/cvm:09fa87e620ba45ff7ae85373f4c35aeade6879a21c7989cb8c987bff9a5697be
+
+stages:
+    - test
+
+test:
+    stage: test
+    script:
+        - bazel --output_user_root=./bazel_output_user_root test //test/... --test_output=all
+    after_script:
+        - chmod +w -R ./bazel_output_user_root

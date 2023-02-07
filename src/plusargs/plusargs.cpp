@@ -3,7 +3,6 @@
 #include <vector>
 #include <string>
 #include "vpi_user.h"
-#include <iostream>
 
 void cvm::plusargs::parse() {
 
@@ -28,7 +27,6 @@ void cvm::plusargs::parse() {
             argv = new char*[argc];
             for (int i = 0; i < argc; i++) {
                 argv[i] = argvv[i].data();
-                std::cout << "argv[" << i << "] " << argv[i] << "\n";
             }
         }
 

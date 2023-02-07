@@ -25,12 +25,8 @@ cc_binary(
     srcs = ["plusargs_test.cpp"],
     deps = [
         "@com_google_googletest//:gtest_main",
-        "@bazel_tools//tools/cpp/runfiles",
         "//:plusargs",
         ":plusargs_test_veri_lib",
-    ],
-    data = [
-        "plusargs_test_flagfile"
     ],
     linkopts = ["-lz"],
 )

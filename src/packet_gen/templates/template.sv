@@ -74,10 +74,13 @@ module ${packets.name}_domain_${domain}(
     input ${packets.name}::domain_${domain} tx
 );
 
+    % if any(packet.context for packet in domain_packets):
+    // TODO remove
     function void ${packets.name}_finish();
         $finish;
     endfunction
     export "DPI-C" function ${packets.name}_finish;
+    % endif
 
     localparam int HEADER_BITS = $bits(${packets.name}::message_number);
 

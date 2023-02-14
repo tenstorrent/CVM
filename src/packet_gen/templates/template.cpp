@@ -2,7 +2,7 @@
 #include "cvm/messenger.hpp"
 #include <type_traits>
 
-extern "C" void ${packets.name}_message(const std::uint8_t* message) {
+extern "C" void ${packets.name}_message(const std::uint8_t* message, uint64_t loc) {
 
     ${packets.name}::message_number message_number = ${packets.name}::message_number(cvm::bitmanip::array_slice<std::underlying_type<${packets.name}::message_number>::type>(message, ${packets.enum_width()-1}, 0));
 
@@ -10,7 +10,7 @@ extern "C" void ${packets.name}_message(const std::uint8_t* message) {
     %for packet in packets.packets:
         case ${packets.name}::${packet.to_c_enum()}: {
             ${packets.name}::${packet.name} ${packet.name}(message, ${packets.enum_width()});
-            cvm::messenger<${packets.name}::${packet.name}>::signal(${packet.name});
+            cvm::messenger<${packets.name}::${packet.name}>::signal(loc, ${packet.name});
             break;
         }
     %endfor

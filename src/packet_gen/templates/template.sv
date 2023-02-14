@@ -32,6 +32,7 @@ package ${packets.name};
     typedef struct packed {
         ${packet.name} data;
         logic valid;
+        longint unsigned location;
     } ${packet.name}_with_valid;
 %endfor
 
@@ -88,7 +89,7 @@ module transactions_domain_${domain}(
     
     byte unsigned ${packet.name}_message[$size(tx.${packet.name}s)][MESSAGE_${packet.name}_BYTES];
 
-    import "DPI-C" ${"context" if packet.context else ""} function void ${packets.name}_message_${packet.name}(byte unsigned message[MESSAGE_${packet.name}_BYTES]);
+    import "DPI-C" ${"context" if packet.context else ""} function void ${packets.name}_message_${packet.name}(byte unsigned message[MESSAGE_${packet.name}_BYTES], longint unsigned loc);
 
     for (genvar i = 0; i < $size(tx.${packet.name}s); i++) begin
         ${packets.name}_write_message #(${packets.name}::${packet.name}, ${packets.name}::message_number, ${packets.name}::${packet.to_sv_enum()}) ${packet.name}_writer (clk, tx.${packet.name}s[i].data, ${packet.name}_message[i]);
@@ -99,7 +100,7 @@ module transactions_domain_${domain}(
 %for packet in domain_packets:
         for (int i = 0; i < $size(tx.${packet.name}s); i++) begin
             if (tx.${packet.name}s[i].valid) begin
-                ${packets.name}_message_${packet.name}(${packet.name}_message[i]);
+              ${packets.name}_message_${packet.name}(${packet.name}_message[i], tx.${packet.name}s[i].location);
             end
         end
 %endfor

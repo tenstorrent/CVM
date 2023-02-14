@@ -8,26 +8,15 @@
 
 namespace cvm {
 
-  struct callbacks {
-
-    typedef std::function<void()> cb;
-    static void push(svScope scope, const std::string& tag, const cb& func);
-
-    static void pull();
-
-    /// non-blocking flush (for polling)
-    /// will only flush if tag matches
-    static void flush(const std::string& tag);
-  };
-
   // unified way for modules to add callbacks from C/C++ land
   // module should add a void function to queue
-  class CbQue {
+  class cb_que {
     public:
 
-      CbQue();
+      cb_que();
 
-      void push(svScope scope, const std::string& tag, const callbacks::cb& func);
+      typedef std::function<void()> cb;
+      void push(svScope scope, const std::string& tag, const cb& func);
 
       /// blocking pull
       void pull();
@@ -41,7 +30,29 @@ namespace cvm {
       std::condition_variable c_;
       mutable std::mutex m_;
 
-      typedef std::tuple<svScope, std::string, const callbacks::cb> scoped_cb;
+      typedef std::tuple<svScope, std::string, cb> scoped_cb;
       std::list<scoped_cb> que_;
+  };
+
+  struct callbacks {
+
+    inline static cb_que que_;
+
+    static void push(svScope scope, const std::string& tag, const cb_que::cb& func)
+    {
+      que_.push(scope, tag, func);
+    }
+
+    static void pull()
+    {
+      que_.pull();
+    }
+
+    /// non-blocking flush (for polling)
+    /// will only flush if tag matches
+    static void flush(const std::string& tag)
+    {
+      que_.flush(tag);
+    }
   };
 }

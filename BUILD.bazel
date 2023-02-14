@@ -35,3 +35,15 @@ cc_library(
     deps = ["//src/callbacks:callbacks"],
     visibility = ["//visibility:public"],
 )
+
+cc_library(
+    name = "topology",
+    deps = ["//src/topology:topology"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "registry",
+    deps = ["//src/registry:registry"],
+    visibility = ["//visibility:public"],
+)

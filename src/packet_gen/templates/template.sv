@@ -70,15 +70,18 @@ module ${packets.name}_write_message #(
 endmodule
 
 % for domain,domain_packets in by_domain.items():
-module transactions_domain_${domain}(
+module ${packets.name}_domain_${domain}(
     input clk,
-    input transactions::domain_${domain} tx
+    input ${packets.name}::domain_${domain} tx
 );
 
+    % if any(packet.context for packet in domain_packets):
+    // TODO remove
     function void ${packets.name}_finish();
         $finish;
     endfunction
     export "DPI-C" function ${packets.name}_finish;
+    % endif
 
     localparam int HEADER_BITS = $bits(${packets.name}::message_number);
 
@@ -98,11 +101,11 @@ module transactions_domain_${domain}(
 
     always @(posedge clk) begin
 %for packet in domain_packets:
-        for (int i = 0; i < $size(tx.${packet.name}s); i++) begin
-            if (tx.${packet.name}s[i].valid) begin
-              ${packets.name}_message_${packet.name}(${packet.name}_message[i], tx.${packet.name}s[i].location);
-            end
+    %for i in range(packet.num):
+        if (tx.${packet.name}s[${i}].valid) begin
+            ${packets.name}_message_${packet.name}(${packet.name}_message[${i}], tx.${packet.name}s[i].location);
         end
+    %endfor
 %endfor
     end
 

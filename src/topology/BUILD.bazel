@@ -1,8 +1,10 @@
-load(@cvm_pypi//:requirements.bzl", requirement")
+load("@cvm_pypi//:requirements.bzl", "requirement")
 
 cc_library(
   name = "topology",
   hdrs = ["topology.hpp"],
+  strip_include_prefix = "//src/topology",
+  include_prefix = "cvm",
   visibility = ["//visibility:public"],
 )
 

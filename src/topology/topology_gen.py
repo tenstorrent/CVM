@@ -31,6 +31,7 @@ class Topology:
     loc_id = 1
     for node in LevelOrderIter(root, filter_=lambda n: n.name not in ('top')):
       instances = list()
+      # continuously increasing id's across instances, fix later?
       for i in range(0, node.count):
         instances.append(Instance(i, loc_id))
         loc_id += 1
@@ -46,7 +47,7 @@ class TopologyGen:
       try:
         topology = yaml.safe_load(stream)
         for key, val in topology.items():
-          self.recurse(key, val, self.root)
+          self.recurse(key, val, self.root, 1)
         # print(RenderTree(self.root, style=AsciiStyle()).by_attr())
       except yaml.YAMLError as exc:
         print(exc)
@@ -54,12 +55,13 @@ class TopologyGen:
     # generate topology class
     self.topology = Topology.load(self.root)
 
-  def recurse(self, name, children, parent):
-    new = Node(name, parent=parent, count=children["count"])
+  def recurse(self, name, children, parent, uppers):
+    count = children["count"]*uppers
+    new = Node(name, parent=parent, count=count)
 
     for key, val in children.items():
       if key != "count":
-        self.recurse(key, val, new)
+        self.recurse(key, val, new, count)
 
   def generate(self, buf, which):
     template_dir_path = pathlib.Path(os.path.abspath(__file__)).parent/'templates'

@@ -3,6 +3,6 @@ cluster:
   core:
     count: 3
     y:
-      count: 3
-    z:
-      count: 4
+      count: 1
+  z:
+    count: 1

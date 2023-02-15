@@ -1,4 +1,5 @@
-package topology;
+package topology_pkg;
+
 <% caps = [x.name.upper() for x in topo.locations]
 %>
 typedef enum {
@@ -11,19 +12,24 @@ typedef enum {
 %endfor
 } loc;
 
-function longint unsigned to_loc(loc mod, int id);
+function longint unsigned to_loc(loc mod, int unsigned id);
   case(mod)
 %for idx, cap in enumerate(caps):
 <% instances = topo.locations[idx].instances
 %>
-    ${cap} : begin
+    ${cap}: begin
       case(id)
   %for instance in instances:
-        ${instance.real_id} : return ${instance.loc}
+        32'd${instance.real_id}: begin
+          return ${instance.loc};
+        end
   %endfor
+        default: return 0;
       endcase
     end
 %endfor
+    default: return 0;
   endcase
 endfunction
+
 endpackage;

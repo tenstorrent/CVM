@@ -1,3 +1,5 @@
+load("@rules_hdl//verilog:providers.bzl", "verilog_library")
+
 def _topology_gen_impl(ctx):
   name = ctx.attr.name
 
@@ -5,7 +7,7 @@ def _topology_gen_impl(ctx):
   sv = ctx.outputs.sv
 
   args = ctx.actions.args()
-  args.add("--description", ctx.file.description)
+  args.add("--description", ctx.file.src)
   args.add("--cpp", cpp)
   args.add("--sv", sv)
 
@@ -14,7 +16,7 @@ def _topology_gen_impl(ctx):
   ctx.actions.run(
       arguments = [args],
       executable = ctx.executable._gen,
-      inputs = ctx.files.definition,
+      inputs = ctx.files.src,
       outputs = outputs,
   )
 
@@ -27,7 +29,7 @@ def _topology_gen_impl(ctx):
 _topology_gen = rule(
   implementation = _topology_gen_impl,
   attrs = {
-      "description" : attr.label(
+      "src" : attr.label(
         mandatory = True,
         allow_single_file = [".yml"],
       ),
@@ -47,8 +49,9 @@ _topology_gen = rule(
 )
 
 def topology_gen(name, visibility = None, cc_attrs = {}, **kwargs):
-  cpp = "topology.cpp",
-  sv = "topology.sv",
+
+  cpp = name + ".cpp"
+  sv = name + ".sv"
 
   _topology_gen(
       name = name,
@@ -60,7 +63,7 @@ def topology_gen(name, visibility = None, cc_attrs = {}, **kwargs):
 
   native.cc_library(
       name = name + '_cc',
-      cpp = [cpp],
+      srcs = [cpp],
       deps = [
         "@cvm//src/topology:topology"
       ],

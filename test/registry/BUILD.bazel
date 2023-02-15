@@ -1,0 +1,21 @@
+load("//:defs.bzl", "topology_gen")
+
+topology_gen(
+    name = "topology",
+    src  = "topology.yml",
+    cc_attrs = {
+        'alwayslink': True,
+        'linkstatic': True,
+    }
+)
+
+cc_test(
+    name = "registry_test",
+    srcs = [ "dummy.cpp" ],
+    deps = [
+      "@cvm//:topology",
+      "@cvm//:registry",
+      "@com_google_googletest//:gtest_main",
+      "topology_cc",
+    ],
+)

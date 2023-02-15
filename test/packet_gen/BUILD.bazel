@@ -1,4 +1,5 @@
 load("//:defs.bzl", "packet_gen")
+load("//:defs.bzl", "topology_gen")
 load("@rules_hdl//verilog:providers.bzl", "verilog_library")
 load("@rules_hdl//verilog:build_defs.bzl", "verilog_flist")
 load("@rules_verilator//verilator:defs.bzl", "verilator_cc_library")
@@ -13,10 +14,22 @@ packet_gen(
     }
 )
 
+topology_gen(
+    name = "topology",
+    src  = "topology.yml",
+    cc_attrs = {
+        'alwayslink': True,
+        'linkstatic': True,
+    }
+)
+
 verilog_library(
     name = "top",
     srcs = ["top.sv"],
-    deps = ["transactions_sv"],
+    deps = [
+        "transactions_sv",
+        "topology_sv"
+    ],
 )
 
 verilog_flist(
@@ -47,6 +60,8 @@ cc_library(
     deps = [
         "transactions_cpp",
         "@com_google_googletest//:gtest",
+        "@cvm//:topology",
+        "topology_cc",
     ],
     alwayslink = True,
     linkstatic = True,

@@ -34,7 +34,7 @@ namespace cvm {
       std::list<scoped_cb> que_;
   };
 
-  struct callbacks {
+  class callbacks {
 
     inline static cb_que que_;
 

@@ -1,35 +1,47 @@
 #include "cvm/topology.hpp"
+#include <unordered_map>
+#include <vector>
+#include <memory>
 
 struct wrapper {
   wrapper() {
 %for location in topo.locations:
-    std::vector<loc_t> locs_${location.name};
+    std::vector<cvm::topology::loc_t> locs_${location.name};
   %for instance in location.instances:
-    locs_${location.name}[${instance.real_id}] = ${instance.loc}
+    locs_${location.name}.push_back(${instance.loc});
   %endfor
-    locs.emplace({"${location.name}", locs_${location.name}});
+    locs.insert({"${location.name}", locs_${location.name}});
 %endfor
   }
 
-  std::unordered_map<std::string, std::vector<loc_t>> locs;
-}
+  std::unordered_map<std::string, std::vector<cvm::topology::loc_t>> locs;
+};
 
-static wrapper wrap;
+namespace cvm {
+  namespace topology {
+    loc_t null = 0;
+    std::unique_ptr<wrapper> wrap;
 
-std::vector<cvm::topology::loc_t>
-cvm::topology::get(const std::string& module) {
-  if (not wrap.locs.count(module))
-    return cvm::topology::null;
+    std::vector<loc_t> get(const std::string& module) {
+      if (not wrap)
+        wrap = std::make_unique<wrapper>();
 
-  return locs.at(module);
-}
+      if (not wrap->locs.count(module))
+        return {};
 
-cvm::topology::loc_t
-cvm::topology::get(const std::string& module, int id) {
-  if (not wrap.locs.count(module))
-    return cvm::topology::null;
-  if (id >= wrap.locs.at(module).size())
-    return cvm::topology::null;
+      return wrap->locs.at(module);
+    }
 
-  return locs.at(instance).at(id);
+    loc_t get(const std::string& module, unsigned id) {
+      if (not wrap)
+        wrap = std::make_unique<wrapper>();
+
+      if (not wrap->locs.count(module))
+        return null;
+      if (size_t(id) >= wrap->locs.at(module).size())
+        return null;
+
+      return wrap->locs.at(module).at(id);
+    }
+  }
 }

@@ -22,7 +22,7 @@ extern "C" void ${packets.name}_message(const std::uint8_t* message, uint64_t lo
 }
 
 %for packet in packets.packets:
-extern "C" void ${packets.name}_message_${packet.name}(const std::uint8_t* message) {
-    ${packets.name}_message(message);
+extern "C" void ${packets.name}_message_${packet.name}(const std::uint8_t* message, uint64_t loc) {
+    ${packets.name}_message(message, loc);
 }
 %endfor

@@ -1,6 +1,9 @@
 #pragma once
 
 #include <cassert>
+#include <unordered_map>
+#include <vector>
+#include <functional>
 #include "cvm/topology.hpp"
 
 namespace cvm {

@@ -1,9 +1,10 @@
 cc_library(
   name = "registry",
-  hdrs = "registry.hpp",
+  hdrs = ["registry.hpp"],
   deps = [
-      "@cvm//:topology"
-      "//:topology_cc"
+      "@cvm//:topology",
   ],
+  strip_include_prefix = "//src/registry",
+  include_prefix = "cvm",
   visibility = ["//visibility:public"],
 )

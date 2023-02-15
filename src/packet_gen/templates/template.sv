@@ -103,7 +103,7 @@ module ${packets.name}_domain_${domain}(
 %for packet in domain_packets:
     %for i in range(packet.num):
         if (tx.${packet.name}s[${i}].valid) begin
-            ${packets.name}_message_${packet.name}(${packet.name}_message[${i}], tx.${packet.name}s[i].location);
+          ${packets.name}_message_${packet.name}(${packet.name}_message[${i}], tx.${packet.name}s[${i}].location);
         end
     %endfor
 %endfor

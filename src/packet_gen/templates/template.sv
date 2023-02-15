@@ -100,11 +100,11 @@ module ${packets.name}_domain_${domain}(
 
     always @(posedge clk) begin
 %for packet in domain_packets:
-        for (int i = 0; i < $size(tx.${packet.name}s); i++) begin
-            if (tx.${packet.name}s[i].valid) begin
-                ${packets.name}_message_${packet.name}(${packet.name}_message[i]);
-            end
+    %for i in range(packet.num):
+        if (tx.${packet.name}s[${i}].valid) begin
+            ${packets.name}_message_${packet.name}(${packet.name}_message[${i}]);
         end
+    %endfor
 %endfor
     end
 

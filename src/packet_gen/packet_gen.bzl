@@ -20,13 +20,15 @@ def _packet_gen_impl(ctx):
     args.add("--sv"        , sv )
     args.add("--incdir"    , incdir)
     args.add("--name"      , name)
+    args.add("--topology"  , ctx.file.topology)
 
+    inputs = [ctx.file.src, ctx.file.topology]
     outputs = [hpp, cpp, sv]
 
     ctx.actions.run(
         arguments = [args],
         executable = ctx.executable._gen,
-        inputs  = ctx.files.src,
+        inputs  = inputs,
         outputs = outputs,
         mnemonic = "CMVPacketGen"
     )
@@ -36,7 +38,6 @@ def _packet_gen_impl(ctx):
             files = depset(outputs,)
         ),
     ]
-    
 
 _packet_gen = rule(
     _packet_gen_impl,
@@ -44,6 +45,10 @@ _packet_gen = rule(
         "src": attr.label(
             mandatory = True,
             allow_single_file = True
+        ),
+        "topology": attr.label(
+            mandatory = True,
+            allow_single_file = [".json"],
         ),
         "hpp": attr.output(
         ),
@@ -62,7 +67,7 @@ _packet_gen = rule(
     ],
 )
 
-def packet_gen(name, visibility = None, cc_attrs = {}, **kwargs):
+def packet_gen(name, topology, visibility = None, cc_attrs = {}, **kwargs):
 
     hpp = name + ".hpp"
     cpp = name + ".cpp"
@@ -73,6 +78,7 @@ def packet_gen(name, visibility = None, cc_attrs = {}, **kwargs):
         hpp  = hpp,
         cpp  = cpp,
         sv   = sv,
+        topology = topology,
         visibility = visibility,
         **kwargs,
     )

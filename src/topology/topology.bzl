@@ -5,13 +5,15 @@ def _topology_gen_impl(ctx):
 
   cpp = ctx.outputs.cpp
   sv = ctx.outputs.sv
+  json = ctx.outputs.json
 
   args = ctx.actions.args()
-  args.add("--description", ctx.file.src)
+  args.add("--definition", ctx.file.src)
   args.add("--cpp", cpp)
   args.add("--sv", sv)
+  args.add("--json", json)
 
-  outputs = [cpp, sv]
+  outputs = [cpp, sv, json]
 
   ctx.actions.run(
       arguments = [args],
@@ -37,6 +39,8 @@ _topology_gen = rule(
       ),
       "sv" : attr.output(
       ),
+      "json" : attr.output(
+      ),
       "_gen": attr.label(
         default = "//src/topology:topology_gen",
         executable = True,
@@ -52,11 +56,13 @@ def topology_gen(name, visibility = None, cc_attrs = {}, **kwargs):
 
   cpp = name + ".cpp"
   sv = name + ".sv"
+  json = name + ".json"
 
   _topology_gen(
       name = name,
       cpp = cpp,
       sv = sv,
+      json = json,
       visibility = visibility,
       **kwargs,
   )
@@ -74,5 +80,10 @@ def topology_gen(name, visibility = None, cc_attrs = {}, **kwargs):
   verilog_library(
       name = name + '_sv',
       srcs = [sv],
+  )
+
+  native.filegroup(
+      name = name + '_json',
+      srcs = [json],
   )
 

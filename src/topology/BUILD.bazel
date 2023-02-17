@@ -1,5 +1,12 @@
 load("@cvm_pypi//:requirements.bzl", "requirement")
 
+py_library(
+  name = "topology_query",
+  srcs = ["query/topology_query.py"],
+  imports = ["query"],
+  visibility = ["//visibility:public"],
+)
+
 cc_library(
   name = "topology",
   hdrs = ["topology.hpp"],

@@ -5,18 +5,19 @@ load("@rules_hdl//verilog:build_defs.bzl", "verilog_flist")
 load("@rules_verilator//verilator:defs.bzl", "verilator_cc_library")
 #load("@rules_vcs//vcs:defs.bzl", "vcs_simv")
 
-packet_gen(
-    name = "transactions",
-    src  = "transactions.yml",
+topology_gen(
+    name = "topology",
+    src  = "topology.yml",
     cc_attrs = {
         'alwayslink': True,
         'linkstatic': True,
     }
 )
 
-topology_gen(
-    name = "topology",
-    src  = "topology.yml",
+packet_gen(
+    name = "transactions",
+    src  = "transactions.yml",
+    topology = "topology_json",
     cc_attrs = {
         'alwayslink': True,
         'linkstatic': True,

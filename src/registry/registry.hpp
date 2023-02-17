@@ -9,14 +9,18 @@ namespace cvm {
     // core   -   core   -   core
     //   |          |          |
     // checker    checker    checker
-
     inline constexpr int all = -1;
 
     template<typename T>
     bool regist(const std::string& module, int id) {
       static std::vector<T> objs_;
 
-      if (id == -1) {
+      if (module == "top") {
+        auto locs = cvm::topology::get(module);
+        assert(loc != cvm::topology::null);
+        objs_.emplace(objs_.end(), loc, objs_.size());
+      }
+      else if (id == -1) {
         auto locs = cvm::topology::get(module);
         for (const auto& loc : locs)
           objs_.emplace(objs_.end(), loc, objs_.size());

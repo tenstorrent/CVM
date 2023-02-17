@@ -4,6 +4,7 @@ import os
 import yaml
 import argparse
 import pathlib
+import json
 from dataclasses import dataclass
 from anytree import Node, RenderTree, AsciiStyle, LevelOrderIter
 
@@ -17,33 +18,42 @@ class Instance:
   loc: int
 
 @dataclass
+class Attribute:
+  name: str
+  value: str
+
+@dataclass
 class Location:
   name: str
   instances: list[Instance]
+  attrs: list[Attribute]
 
 @dataclass
 class Topology:
   locations: list[Location]
 
   @classmethod
-  def load(cls, root):
+  def load(cls, root, attributes: dict):
     locations = list()
-    loc_id = 1
+    locations.append(Location("top", [Instance(0, 1)], list()))
+
+    loc_id = 2
     for node in LevelOrderIter(root, filter_=lambda n: n.name not in ('top')):
       instances = list()
       # continuously increasing id's across instances, fix later?
       for i in range(0, node.count):
         instances.append(Instance(i, loc_id))
         loc_id += 1
-      locations.append(Location(node.name, instances))
+      locations.append(Location(node.name, instances, attributes[node.name]))
     return cls(locations)
 
 class TopologyGen:
 
   root = Node("top")
+  attributes = {}
 
-  def __init__(self, description: str):
-    with open(description, 'r') as stream:
+  def __init__(self, definition: str):
+    with open(definition, 'r') as stream:
       try:
         topology = yaml.safe_load(stream)
         for key, val in topology.items():
@@ -53,14 +63,20 @@ class TopologyGen:
         print(exc)
 
     # generate topology class
-    self.topology = Topology.load(self.root)
+    self.topology = Topology.load(self.root, self.attributes)
 
   def recurse(self, name, children, parent, uppers):
     count = children["count"]*uppers
     new = Node(name, parent=parent, count=count)
 
+    if "attrs" in children:
+      for attr in children["attrs"]:
+        self.attributes[name] = list(Attribute(key, str(val)) for key, val in attr.items())
+    else:
+      self.attributes[name] = list()
+
     for key, val in children.items():
-      if key != "count":
+      if key != "count" and key != "attrs":
         self.recurse(key, val, new, count)
 
   def generate(self, buf, which):
@@ -75,15 +91,16 @@ class TopologyGen:
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
-  parser.add_argument("--description", help="yml file describing topology", required=True)
-  parser.add_argument("--cpp", help="cpp file to generate")
-  parser.add_argument("--sv", help="sv file to generate")
+  parser.add_argument("--definition", help="yml file describing topology", required=True)
+  parser.add_argument("--cpp", help="cpp file to generate", required=True)
+  parser.add_argument("--sv", help="sv file to generate", required=True)
+  parser.add_argument("--json", help="populate json to be parsed by topology_query library", required=True)
 
   args = parser.parse_args()
 
   # parse yaml for topology structure
-  p = TopologyGen(args.description)
+  p = TopologyGen(args.definition)
   # generate SV and C++ headers
-  for typ in ["cpp", "sv"]:
+  for typ in ["cpp", "sv", "json"]:
     with open(getattr(args, typ), 'w') as f:
       p.generate(f, typ)

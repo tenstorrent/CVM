@@ -8,6 +8,8 @@ from dataclasses import dataclass
 import textwrap
 import math
 import pathlib
+from topology_query import Query
+import re
 
 from mako.template import Template
 from mako.runtime import Context
@@ -65,7 +67,24 @@ class Packets:
 
 
     @classmethod
-    def load_file(cls, name, filename):
+    def load_file(cls, name, filename, topology):
+        query = Query(topology)
+        sub_matcher = re.compile(r'\$\{(.*)\}')
+        def sub_constructor(loader, node):
+            value = node.value
+            expr = sub_matcher.match(value).group()[2:-1]
+            variables = re.findall(r'\w+\.\w+', expr)
+            for variable in variables:
+                pair = variable.split('.')
+                val = query.query(pair[0], pair[1])
+                if type(val) != int:
+                  raise Exception(f"attribute {variable} must be number")
+                expr = expr.replace(variable, str(val))
+            return eval(expr)
+
+        yaml.add_implicit_resolver('!sub', sub_matcher, None, yaml.SafeLoader)
+        yaml.add_constructor('!sub', sub_constructor, yaml.SafeLoader)
+
         with open(filename, "r") as stream:
             return cls(name, [Packet.load(name, values) for name,values in yaml.safe_load(stream).items()])
 
@@ -107,10 +126,11 @@ if __name__ == "__main__":
     parser.add_argument("--hpp", help="name of generated hpp", required=True)
     parser.add_argument("--cpp", help="name of generated cpp", required=True)
     parser.add_argument("--sv" , help="name of generated sv", required=True)
+    parser.add_argument("--topology", help="name of topology json", required=True)
 
     args = parser.parse_args()
 
-    p = Packets.load_file(args.name, args.definition)
+    p = Packets.load_file(args.name, args.definition, args.topology)
     g = PacketsGen(p)
 
     for t in ['hpp', 'cpp', 'sv']:

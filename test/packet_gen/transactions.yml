@@ -3,7 +3,7 @@ pkt:
     num: 8
     fields:
         x54:
-            width: 54
+            width: ${core.decode_width * 27}
         x256:
             width: 256
         num:

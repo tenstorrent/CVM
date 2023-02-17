@@ -78,7 +78,7 @@ def packet_gen(name, topology, visibility = None, cc_attrs = {}, **kwargs):
         hpp  = hpp,
         cpp  = cpp,
         sv   = sv,
-        topology = topology,
+        topology = topology + "_json",
         visibility = visibility,
         **kwargs,
     )

@@ -16,7 +16,7 @@ namespace cvm {
       static std::vector<T> objs_;
 
       if (module == "top") {
-        auto loc = cvm::topology::get(module);
+        auto loc = cvm::topology::get(module, 0);
         assert(loc != cvm::topology::null);
         objs_.emplace(objs_.end(), loc, objs_.size());
       }

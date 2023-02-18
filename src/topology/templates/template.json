@@ -1,26 +1,28 @@
 {
 %for idx, location in enumerate(topo.locations):
   "${location.name}" : {
-    "count" : ${len(location.instances)}
+    "count" : ${len(location.instances)}\
   %if len(location.attrs) != 0:
-\
 ,
+  %else:
+
   %endif
-  %for idx, attr in enumerate(location.attrs):
+  %for attr_idx, attr in enumerate(location.attrs):
     %if not attr.value.isnumeric():
-    "${attr.name}" : "${attr.value}"
+    "${attr.name}" : "${attr.value}"\
     %else:
-    "${attr.name}" : ${attr.value}
+    "${attr.name}" : ${attr.value}\
     %endif
-    %if idx != len(location.attrs) - 1:
-\
+    %if attr_idx != len(location.attrs) - 1:
 ,
     %endif
+
   %endfor
   }\
   %if idx != len(topo.locations) - 1:
 ,
+  %else:
+
   %endif
 %endfor
-
 }

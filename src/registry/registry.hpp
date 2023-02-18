@@ -1,4 +1,5 @@
 #include <cassert>
+#include <list>
 #include "cvm/topology.hpp"
 
 namespace cvm {
@@ -13,24 +14,24 @@ namespace cvm {
 
     template<typename T>
     bool regist(const std::string& module, int id) {
-      static std::vector<T> objs_;
+      static std::list<T> objs_;
 
       if (module == "top") {
         auto loc = cvm::topology::get(module, 0);
         assert(loc != cvm::topology::null);
-        objs_.emplace(objs_.end(), loc, objs_.size());
+        objs_.emplace_back(loc, objs_.size());
       }
       else if (id == -1) {
         auto locs = cvm::topology::get(module);
         for (const auto& loc : locs)
-          objs_.emplace(objs_.end(), loc, objs_.size());
+          objs_.emplace_back(loc, objs_.size());
       }
       else {
         auto loc = cvm::topology::get(module, id);
         if (loc == cvm::topology::null)
           return false;
 
-        objs_.emplace(objs_.end(), loc, objs_.size());
+        objs_.emplace_back(loc, objs_.size());
       }
 
       return true;

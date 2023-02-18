@@ -1,4 +1,5 @@
 load("@cvm_pypi//:requirements.bzl", "requirement")
+load("@rules_hdl//verilog:providers.bzl", "verilog_library")
 
 py_library(
   name = "topology_query",
@@ -13,6 +14,15 @@ cc_library(
   strip_include_prefix = "//src/topology",
   include_prefix = "cvm",
   visibility = ["//visibility:public"],
+)
+
+verilog_library(
+  name = "topology_defines",
+  srcs = [
+      "topology_defines.sv",
+      "cvm_topology.sv"
+  ],
+  visibility = ["//:__pkg__"],
 )
 
 py_binary(

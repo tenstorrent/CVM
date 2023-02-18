@@ -36,23 +36,26 @@ namespace cvm {
 
   class callbacks {
 
-    inline static cb_que que_;
+    private:
 
-    static void push(svScope scope, const std::string& tag, const cb_que::cb& func)
-    {
-      que_.push(scope, tag, func);
-    }
+      inline static cb_que que_;
 
-    static void pull()
-    {
-      que_.pull();
-    }
+    public:
+      static void push(svScope scope, const std::string& tag, const cb_que::cb& func)
+      {
+        que_.push(scope, tag, func);
+      }
 
-    /// non-blocking flush (for polling)
-    /// will only flush if tag matches
-    static void flush(const std::string& tag)
-    {
-      que_.flush(tag);
-    }
+      static void pull()
+      {
+        que_.pull();
+      }
+
+      /// non-blocking flush (for polling)
+      /// will only flush if tag matches
+      static void flush(const std::string& tag)
+      {
+        que_.flush(tag);
+      }
   };
 }

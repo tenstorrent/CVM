@@ -29,6 +29,7 @@ verilog_library(
     srcs = ["top.sv"],
     deps = [
         "transactions_sv",
+        "@cvm//:topology_sv",
         "topology_sv"
     ],
 )

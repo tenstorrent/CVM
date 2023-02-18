@@ -92,6 +92,8 @@ def packet_gen(name, topology, visibility = None, cc_attrs = {}, **kwargs):
             "@cvm//src/messenger:messenger"
         ],
         visibility = visibility,
+        # FIXME: need a better solution for this
+        strip_include_prefix = ".",
         **cc_attrs,
     )
 

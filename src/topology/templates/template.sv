@@ -8,7 +8,7 @@ package topology_pkg;
 %endfor
   } topology_t;
 
-  localparam topology_t t = '{
+  localparam topology_t mods = '{
 %for idx, cap in enumerate(caps):
     ${cap}: ${idx}\
     %if idx != len(caps) - 1:
@@ -19,22 +19,4 @@ package topology_pkg;
 
   localparam longint unsigned nul = 0;
 
-  function longint unsigned to_loc(int unsigned mod, int unsigned id);
-    case(mod)
-%for idx, cap in enumerate(caps):
-<% instances = topo.locations[idx].instances
-%>
-      ${idx}: begin
-        case(id)
-  %for instance in instances:
-          'd${instance.real_id}: return ${instance.loc};
-  %endfor
-          default: return 0;
-        endcase
-      end
-%endfor
-      default: return 0;
-    endcase
-  endfunction
-
-endpackage;
+endpackage

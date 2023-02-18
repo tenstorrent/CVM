@@ -52,11 +52,11 @@ module top(
         assign tx_dom_1.pkts[i].data.num  = dut.sub[i].pkt.num ;
         assign tx_dom_1.pkts[i].data.x256 = dut.sub[i].pkt.x256 ;
         assign tx_dom_1.pkts[i].data.x54  = dut.sub[i].pkt.x54;
-        assign tx_dom_1.pkts[i].location  = topology_pkg::to_loc(topology_pkg::t.CORE, 0);
+        assign tx_dom_1.pkts[i].location  = cvm_topology::get_location(topology_pkg::mods.CORE, 0);
     end
     assign tx_dom_1.ctxs[0].valid      = clock_count == 15;
     assign tx_dom_1.ctxs[0].data.dummy = 1'b1;
-    assign tx_dom_1.ctxs[0].location   = topology_pkg::to_loc(topology_pkg::t.CORE, 0);
+    assign tx_dom_1.ctxs[0].location   = cvm_topology::get_location(topology_pkg::mods.CORE, 0);
 
     import "DPI-C" function void start_checker();
     initial start_checker();

@@ -42,6 +42,12 @@ cc_library(
     visibility = ["//visibility:public"],
 )
 
+verilog_library(
+    name = "topology_sv",
+    deps = ["//src/topology:topology_defines"],
+    visibility = ["//visibility:public"],
+)
+
 cc_library(
     name = "registry",
     deps = ["//src/registry:registry"],

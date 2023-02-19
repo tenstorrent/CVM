@@ -17,6 +17,4 @@ package topology_pkg;
 %endfor
   };
 
-  localparam longint unsigned nul = 0;
-
 endpackage

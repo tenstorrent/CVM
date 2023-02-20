@@ -6,10 +6,9 @@
 #include <functional>
 #include "cvm/topology.hpp"
 
+extern std::vector<std::function<void()>> messenger_disconnects_;
 
 namespace cvm {
-
-    static std::vector<std::function<void()>> messenger_disconnects;
 
     template <typename T>
         class messenger {
@@ -24,7 +23,7 @@ namespace cvm {
                 static void connect(cvm::topology::loc_t loc, const listener& l) {
                     assert(loc != cvm::topology::null);
                     if (not signals_.count(loc)) {
-                      messenger_disconnects.push_back(
+                      messenger_disconnects_.push_back(
                         [] () { return signals_.clear(); });
                     }
                     signals_[loc].push_back(l);
@@ -38,14 +37,4 @@ namespace cvm {
                     }
                 }
         };
-}
-
-extern "C" {
-
-    void cvm_messenger_reset() {
-        for (const auto& discon : cvm::messenger_disonnects) {
-            discon();
-        }
-        disconnects.clear();
-    }
 }

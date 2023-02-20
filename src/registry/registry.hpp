@@ -41,9 +41,7 @@ namespace cvm {
             return false;
 
           constructors().push_back(
-            [loc] () {
-              objs_.emplace_back(loc, objs_.size());
-            });
+            [loc] () { objs_.emplace_back(loc, objs_.size()); });
         }
         else if (id == all) {
           auto locs = cvm::topology::get(module);
@@ -53,8 +51,7 @@ namespace cvm {
           constructors().push_back(
             [locs] () {
               for (const auto& loc : locs)
-                objs_.emplace_back(loc, objs_.size());
-            });
+                objs_.emplace_back(loc, objs_.size()); });
         }
         else {
           auto loc = cvm::topology::get(module, id);
@@ -62,9 +59,7 @@ namespace cvm {
             return false;
 
           constructors().push_back(
-            [loc] () {
-              objs_.emplace_back(loc, objs_.size());
-            });
+            [loc] () { objs_.emplace_back(loc, objs_.size()); });
         }
 
         destructors().push_back([] () { return objs_.clear(); });

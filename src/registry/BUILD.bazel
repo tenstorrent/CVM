@@ -1,8 +1,5 @@
-load("@rules_hdl//verilog:providers.bzl", "verilog_library")
-
 cc_library(
   name = "registry",
-  srcs = ["registry_dpi.cpp"],
   hdrs = ["registry.hpp"],
   deps = [
       "@cvm//:topology",
@@ -10,10 +7,4 @@ cc_library(
   strip_include_prefix = "//src/registry",
   include_prefix = "cvm",
   visibility = ["//visibility:public"],
-)
-
-verilog_library(
-  name = "registry_sv",
-  srcs = ["cvm_registry.sv"],
-  visibility = ["//:__pkg__"],
 )

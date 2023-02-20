@@ -30,12 +30,6 @@ cc_library(
     visibility = ["//visibility:public"],
 )
 
-verilog_library(
-    name = "messenger_sv",
-    deps = ["//src/messneger:messenger_sv"],
-    visibility = ["//visibility:public"],
-)
-
 cc_library(
     name = "callbacks",
     deps = ["//src/callbacks:callbacks"],
@@ -57,11 +51,5 @@ verilog_library(
 cc_library(
     name = "registry",
     deps = ["//src/registry:registry"],
-    visibility = ["//visibility:public"],
-)
-
-verilog_library(
-    name = "registry_sv",
-    deps = ["//src/registry:registry_sv"],
     visibility = ["//visibility:public"],
 )

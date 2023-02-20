@@ -10,6 +10,10 @@ extern std::vector<std::function<void()>> messenger_disconnects_;
 
 namespace cvm {
 
+    namespace messenger_reset {
+        void reset();
+    }
+
     template <typename T>
         class messenger {
 

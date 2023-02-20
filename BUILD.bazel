@@ -53,3 +53,9 @@ cc_library(
     deps = ["//src/registry:registry"],
     visibility = ["//visibility:public"],
 )
+
+verilog_library(
+    name = "registry_sv",
+    deps = ["//src/registry:registry_sv"],
+    visibility = ["//visibility:public"],
+)

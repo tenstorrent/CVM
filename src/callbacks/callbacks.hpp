@@ -38,6 +38,7 @@ namespace cvm {
 
     private:
 
+      // FIXME: needs to be reset?
       inline static cb_que que_;
 
     public:

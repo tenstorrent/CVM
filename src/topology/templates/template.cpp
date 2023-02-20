@@ -22,40 +22,35 @@ struct wrapper {
 namespace cvm {
   namespace topology {
     loc_t null = 0;
-    std::unique_ptr<wrapper> wrap;
+
+    auto& wrap() {
+      static wrapper wrap_;
+      return wrap_;
+    }
 
     std::vector<loc_t> get(const std::string& module) {
-      if (not wrap)
-        wrap = std::make_unique<wrapper>();
-
-      if (not wrap->locs0.count(module))
+      if (not wrap().locs0.count(module))
         return {};
 
-      return wrap->locs0.at(module);
+      return wrap().locs0.at(module);
     }
 
     loc_t get(const std::string& module, unsigned id) {
-      if (not wrap)
-        wrap = std::make_unique<wrapper>();
-
-      if (not wrap->locs0.count(module))
+      if (not wrap().locs0.count(module))
         return null;
-      if (size_t(id) >= wrap->locs0.at(module).size())
+      if (size_t(id) >= wrap().locs0.at(module).size())
         return null;
 
-      return wrap->locs0.at(module).at(id);
+      return wrap().locs0.at(module).at(id);
     }
 
     loc_t get(uint32_t module, unsigned id) {
-      if (not wrap)
-        wrap = std::make_unique<wrapper>();
-
-      if (not wrap->locs1.count(module))
+      if (not wrap().locs1.count(module))
         return null;
-      if (size_t(id) >= wrap->locs1.at(module).size())
+      if (size_t(id) >= wrap().locs1.at(module).size())
         return null;
 
-      return wrap->locs1.at(module).at(id);
+      return wrap().locs1.at(module).at(id);
     }
   }
 }

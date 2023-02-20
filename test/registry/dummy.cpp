@@ -26,7 +26,10 @@ class dummy2 {
 REGISTRY_register(dummy, core, 0)
 REGISTRY_register(dummy2, cluster, (cvm::registry::all))
 
+extern "C" void cvm_registry_reset();
+
 TEST(Registry, Dummy) {
     EXPECT_EQ(dummy_SUCCESS, true);
     EXPECT_EQ(dummy2_SUCCESS, true);
+    cvm_registry_reset();
 }

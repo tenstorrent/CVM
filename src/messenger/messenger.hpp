@@ -6,7 +6,10 @@
 #include <functional>
 #include "cvm/topology.hpp"
 
+
 namespace cvm {
+
+    static std::vector<std::function<void()>> messenger_disconnects;
 
     template <typename T>
         class messenger {
@@ -19,16 +22,30 @@ namespace cvm {
 
                 // assume hierarchical path
                 static void connect(cvm::topology::loc_t loc, const listener& l) {
-                  assert(loc != cvm::topology::null);
-                  signals_[loc].push_back(l);
+                    assert(loc != cvm::topology::null);
+                    if (not signals_.count(loc)) {
+                      messenger_disconnects.push_back(
+                        [] () { return signals_.clear(); });
+                    }
+                    signals_[loc].push_back(l);
                 }
 
                 static void signal(cvm::topology::loc_t loc, const T& t) {
-                  assert(loc != cvm::topology::null);
-                  if (signals_.count(loc)) {
-                    for (const auto& func : signals_.at(loc))
-                      func(t);
-                  }
+                    assert(loc != cvm::topology::null);
+                    if (signals_.count(loc)) {
+                        for (const auto& func : signals_.at(loc))
+                            func(t);
+                    }
                 }
         };
+}
+
+extern "C" {
+
+    void cvm_messenger_reset() {
+        for (const auto& discon : cvm::messenger_disonnects) {
+            discon();
+        }
+        disconnects.clear();
+    }
 }

@@ -1,3 +1,6 @@
+load("@rules_hdl//verilog:providers.bzl", "verilog_library")
+load("@rules_hdl//verilog:build_defs.bzl", "verilog_flist")
+load("@rules_verilator//verilator:defs.bzl", "verilator_cc_library")
 load("//:defs.bzl", "topology_gen")
 
 topology_gen(
@@ -9,13 +12,39 @@ topology_gen(
     }
 )
 
-cc_test(
+verilog_library(
+    name = "dummy_sv",
+    srcs = ["dummy.sv"],
+)
+
+verilog_flist(
+    name = "dummy.f",
+    srcs = [":dummy_sv"],
+)
+
+verilator_cc_library(
+    name = "registry_test_veri_lib",
+    mtop = "registry_test",
+    vopts = ["--assert"],
+    flist = "dummy.f",
+)
+
+cc_binary(
     name = "registry_test",
-    srcs = [ "dummy.cpp" ],
+    srcs = ["dummy.cpp"],
     deps = [
       "@cvm//:topology",
       "@cvm//:registry",
       "@com_google_googletest//:gtest_main",
+      "registry_test_veri_lib",
       "topology_cc",
     ],
+    linkopts = ["-lz"],
+)
+
+sh_test(
+    name = "sh_registry_test",
+    srcs = ["sim.sh"],
+    args = ["$(location :registry_test)"],
+    data = [":registry_test"],
 )

@@ -3,60 +3,44 @@
 #include <mutex>
 #include <condition_variable>
 #include <functional>
-#include <list>
+#include <queue>
+#include <thread>
+#include <atomic>
 #include "svdpi.h"
 
 namespace cvm {
 
   // unified way for modules to add callbacks from C/C++ land
-  // module should add a void function to queue
-  class cb_que {
+  // callbacks should be a void function
+  class callbackss {
     public:
 
-      cb_que();
+      callbackss();
+
+      ~callbackss();
 
       typedef std::function<void()> cb;
-      void push(svScope scope, const std::string& tag, const cb& func);
+      void push(svScope scope, const cb& func);
 
       /// blocking pull
       void pull();
 
-      void flush(const std::string& tag);
-
       void flush();
+
+      void clear();
+
+      inline bool finished()
+      { return quit_ == false; }
 
     private:
 
       std::condition_variable c_;
       mutable std::mutex m_;
 
-      typedef std::tuple<svScope, std::string, cb> scoped_cb;
-      std::list<scoped_cb> que_;
-  };
+      typedef std::tuple<svScope, cb> scoped_cb;
+      std::queue<scoped_cb> que_;
 
-  class callbacks {
-
-    private:
-
-      // FIXME: needs to be reset?
-      inline static cb_que que_;
-
-    public:
-      static void push(svScope scope, const std::string& tag, const cb_que::cb& func)
-      {
-        que_.push(scope, tag, func);
-      }
-
-      static void pull()
-      {
-        que_.pull();
-      }
-
-      /// non-blocking flush (for polling)
-      /// will only flush if tag matches
-      static void flush(const std::string& tag)
-      {
-        que_.flush(tag);
-      }
+      std::thread async_;
+      std::atomic<bool> quit_;
   };
 }

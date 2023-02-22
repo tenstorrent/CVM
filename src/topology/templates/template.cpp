@@ -57,7 +57,7 @@ namespace cvm {
 
 extern "C" {
 
-    uint64_t cvm_topology_get_location(uint32_t module, uint32_t id) {
+    uint32_t cvm_topology_get_location(uint32_t module, uint32_t id) {
         return cvm::topology::get(module, id);
     }
 }

@@ -5,6 +5,6 @@ cluster:
     y:
       count: 1
     attrs:
-      - decode_width: 2
+      - width: 2
   z:
     count: 1

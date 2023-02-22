@@ -89,10 +89,9 @@ def packet_gen(name, topology, visibility = None, cc_attrs = {}, **kwargs):
         hdrs = [hpp],
         deps = [
             "@cvm//:bitmanip",
-            "@cvm//src/messenger:messenger"
+            "@cvm//:registry",
         ],
         visibility = visibility,
-        # FIXME: need a better solution for this
         strip_include_prefix = ".",
         **cc_attrs,
     )

@@ -1,67 +1,61 @@
 #include "cvm/callbacks.hpp"
 #include "cvm/plusargs.hpp"
-#include <thread>
 
 DEFINE_bool(cb_async, false, "use asynchronous callbacks");
 
 using namespace cvm;
 
-cb_que::cb_que() {
+callbackss::callbackss() {
   // if async, will spawn a separate thread to issue callbacks
   if (FLAGS_cb_async) {
-    std::thread([&] () {
-      while(1) { this->pull(); }}).detach();
+    async_ = std::thread([&] () {
+      while(not this->finished()) { this->pull(); }});
   }
 }
 
+callbackss::~callbackss() {
+  quit_ = true;
+  if (async_.joinable())
+    async_.join();
+}
+
 void
-cb_que::push(svScope scope, const std::string& tag, const cb& func) {
+callbackss::push(svScope scope, const cb& func) {
   std::lock_guard<std::mutex> lock(m_);
-  que_.emplace_back(std::make_tuple(scope, tag, func));
+  que_.emplace(std::make_tuple(scope, func));
   c_.notify_one();
 }
 
 void
-cb_que::pull() {
+callbackss::pull() {
   std::unique_lock<std::mutex> lock(m_);
   while (que_.empty()) {
     c_.wait(lock);
   }
-  auto [scope, tag, func] = std::move(que_.front());
-  que_.pop_front();
+  auto [scope, func] = std::move(que_.front());
+  que_.pop();
   svSetScope(scope);
   func();
 }
 
 void
-cb_que::flush(const std::string& tag) {
+callbackss::flush() {
   if (FLAGS_cb_async)
     return;
 
   std::lock_guard<std::mutex> lock(m_);
-  auto it = que_.begin();
-  while (it != que_.end()) {
-    auto [scope, used, func] = *it;
-    if (used == tag) {
-      it = que_.erase(it);
-      svSetScope(scope);
-      func();
-    }
-    else {
-      ++it;
-    }
+  while (!que_.empty()) {
+    auto [scope, func] = std::move(que_.front());
+    que_.pop();
+    svSetScope(scope);
+    func();
   }
 }
 
 void
-cb_que::flush() {
-  if (FLAGS_cb_async)
-    return;
-
+callbackss::clear() {
   std::lock_guard<std::mutex> lock(m_);
-  for (const auto& [scope, tag, func] : que_) {
-    svSetScope(scope);
-    func();
+  while (!que_.empty()) {
+    que_.pop();
   }
-  que_.clear();
 }

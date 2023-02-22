@@ -51,7 +51,9 @@ class Packet:
 
     @classmethod
     def load(cls, name, values):
-        fields = [Field.load(name, v) for name,v in values['fields'].items()]
+        # packets always need topology location
+        fields = [Field.load("location", { "width" : 32 })]
+        fields += [Field.load(name, v) for name,v in values['fields'].items()]
         return cls(name, values.get("domain", None), values.get("num", 1), values.get("context", False), fields)
 
     def to_c_enum(self):

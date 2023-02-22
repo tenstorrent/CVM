@@ -63,6 +63,7 @@ cc_library(
         "transactions_cpp",
         "@com_google_googletest//:gtest",
         "@cvm//:topology",
+        "@cvm//:registry",
         "topology_cc",
     ],
     alwayslink = True,

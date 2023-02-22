@@ -1,6 +1,10 @@
+#pragma once
+
 #include <cassert>
 #include <list>
 #include <functional>
+#include "cvm/messenger.hpp"
+#include "cvm/callbacks.hpp"
 #include "cvm/topology.hpp"
 
 namespace cvm {
@@ -28,8 +32,11 @@ namespace cvm {
       // core   -   core   -   core
       //   |          |          |
       // checker    checker    checker
-      inline static constexpr int all = -1;
+      static constexpr int all = -1;
+      inline static messengerr messenger;
+      inline static callbackss callbacks;
 
+      // generic interface
       // register classes during static init
       template<typename T>
       static bool regist(const std::string& module, int id) {
@@ -67,6 +74,8 @@ namespace cvm {
       }
 
       static void reset() {
+        messenger.clear();
+        callbacks.clear();
         for (const auto& destruct : destructors())
           destruct();
         for (const auto& construct : constructors())
@@ -78,5 +87,7 @@ namespace cvm {
 // this should be used in source file
 // presumably, objects will subscribe to transactions in constructor
 #define REGISTRY_register(type, module, id) \
-  auto type##_register = []() -> bool { return cvm::registry::regist<type>( #module, id); }; \
-  bool type##_SUCCESS = type##_register();
+  namespace _registry { \
+    auto type##_register = []() -> bool { return cvm::registry::regist<type>( #module, id); }; \
+    bool type##_SUCCESS = type##_register(); \
+  }

@@ -1,0 +1,37 @@
+load("@cvm_pypi//:requirements.bzl", "requirement")
+load("@rules_hdl//verilog:providers.bzl", "verilog_library")
+
+py_library(
+  name = "topology_query",
+  srcs = ["query/topology_query.py"],
+  imports = ["query"],
+  visibility = ["//visibility:public"],
+)
+
+cc_library(
+  name = "topology",
+  hdrs = ["topology.hpp"],
+  strip_include_prefix = "//src/topology",
+  include_prefix = "cvm",
+  visibility = ["//visibility:public"],
+)
+
+verilog_library(
+  name = "topology_defines",
+  srcs = [
+      "topology_defines.sv",
+      "cvm_topology.sv"
+  ],
+  visibility = ["//:__pkg__"],
+)
+
+py_binary(
+  name = "topology_gen",
+  srcs = ["topology_gen.py"],
+  deps = [
+      requirement("Mako"),
+      requirement("anytree"),
+  ],
+  data = glob(["templates/template.*"]),
+  visibility = ["//visibility:public"],
+)

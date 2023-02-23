@@ -1,4 +1,5 @@
-#include "cvm/messenger.hpp"
+#include "cvm/topology.hpp"
+#include "cvm/registry.hpp"
 #include "test/packet_gen/transactions.hpp"
 #include <gtest/gtest.h>
 
@@ -7,12 +8,15 @@ class checker {
     public:
 
         checker() {
-            cvm::messenger<transactions::pkt>::connect(
+            auto loc = cvm::topology::get("core", 0);
+            cvm::registry::messenger.connect<transactions::pkt>(
+                loc,
                 [this] (const transactions::pkt& ret) {
                     return this->check(ret);
                 }
              );
-            cvm::messenger<transactions::ctx>::connect(
+            cvm::registry::messenger.connect<transactions::ctx>(
+                loc,
                 [this] (const transactions::ctx& ret) {
                     transactions_finish();
                 }

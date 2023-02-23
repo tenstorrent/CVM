@@ -1,5 +1,5 @@
 #include "${hpp.removeprefix(incdir).lstrip('/')}"
-#include "cvm/messenger.hpp"
+#include "cvm/registry.hpp"
 #include <type_traits>
 
 extern "C" void ${packets.name}_message(const std::uint8_t* message) {
@@ -10,7 +10,7 @@ extern "C" void ${packets.name}_message(const std::uint8_t* message) {
     %for packet in packets.packets:
         case ${packets.name}::${packet.to_c_enum()}: {
             ${packets.name}::${packet.name} ${packet.name}(message, ${packets.enum_width()});
-            cvm::messenger<${packets.name}::${packet.name}>::signal(${packet.name});
+            cvm::registry::messenger.signal<${packets.name}::${packet.name}>(${packet.name}.location, ${packet.name});
             break;
         }
     %endfor

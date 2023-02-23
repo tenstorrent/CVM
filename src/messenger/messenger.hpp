@@ -1,25 +1,47 @@
 #pragma once
 
-#include <boost/signals2.hpp>
+#include <cassert>
+#include <unordered_map>
+#include <vector>
+#include <functional>
+#include <typeinfo>
+#include <typeindex>
+#include "cvm/topology.hpp"
 
 namespace cvm {
 
-    template <typename T>
-        class messenger {
+      class messengerr {
 
-            public:
+          public:
 
-                typedef std::function<void(const T&)> listener;
-                inline static boost::signals2::signal<void(const T&)> signal_;
+              typedef std::function<void(const void*)> listener;
+              typedef std::unordered_map<cvm::topology::loc_t, std::vector<listener>> per_type;
+              std::unordered_map<std::type_index, per_type> signals_;
 
-                static void connect(const listener& l) {
-                    signal_.connect(l);
-                }
+              // assume topology
+              template<typename T>
+              void connect(cvm::topology::loc_t loc, const std::function<void(const T&)>& l) {
+                  assert(loc != cvm::topology::null);
+                  auto& per = signals_[std::type_index(typeid(T))];
+                  per[loc].push_back([l] (const void* p) {
+                      auto pT = static_cast<const T*>(p);
+                      l(*pT); });
+              }
 
-                static void signal(const T& t) {
-                    signal_(t);
-                }
+              template<typename T>
+              void signal(cvm::topology::loc_t loc, const T& t) {
+                  assert(loc != cvm::topology::null);
+                  auto& per = signals_[std::type_index(typeid(T))];
+                  auto it = per.find(loc);
+                  if (it != per.end()) {
+                      auto p = static_cast<const void*>(&t);
+                      for (const auto& func : it->second)
+                          func(p);
+                  }
+              }
 
-        };
-
+              void clear() {
+                  signals_.clear();
+              }
+      };
 }

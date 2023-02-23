@@ -23,3 +23,33 @@ cc_library(
     deps = ["//src/logger:logger"],
     visibility = ["//visibility:public"],
 )
+
+cc_library(
+    name = "messenger",
+    deps = ["//src/messenger:messenger"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "callbacks",
+    deps = ["//src/callbacks:callbacks"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "topology",
+    deps = ["//src/topology:topology"],
+    visibility = ["//visibility:public"],
+)
+
+verilog_library(
+    name = "topology_sv",
+    deps = ["//src/topology:topology_defines"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "registry",
+    deps = ["//src/registry:registry"],
+    visibility = ["//visibility:public"],
+)

@@ -1,0 +1,12 @@
+cc_library(
+  name = "registry",
+  hdrs = ["registry.hpp"],
+  deps = [
+      "@cvm//:messenger",
+      "@cvm//:callbacks",
+      "@cvm//:topology",
+  ],
+  strip_include_prefix = "//src/registry",
+  include_prefix = "cvm",
+  visibility = ["//visibility:public"],
+)

@@ -1,0 +1,12 @@
+cc_library(
+    name = "callbacks",
+    srcs = ["callbacks.cpp"],
+    hdrs = ["callbacks.hpp"],
+    deps = [
+        "//third_party/dpi:dpi",
+        "//:plusargs",
+    ],
+    strip_include_prefix = ".",
+    include_prefix = "cvm",
+    visibility = ["//:__pkg__"],
+)

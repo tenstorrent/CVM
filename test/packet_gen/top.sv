@@ -47,13 +47,22 @@ module top(
 
     dut dut(.clk, .rst);
 
+    int unsigned loc;
+    always @(posedge clk) begin
+        if (rst) begin
+            loc = cvm_topology::get_location(topology_pkg::mods.CORE, 0);
+        end
+    end
+
     for (genvar i = 0; i < 8; i++) begin
         assign tx_dom_1.pkts[i].valid = clock_count >= 6;
+        assign tx_dom_1.pkts[i].data.location  = loc;
         assign tx_dom_1.pkts[i].data.num  = dut.sub[i].pkt.num ;
         assign tx_dom_1.pkts[i].data.x256 = dut.sub[i].pkt.x256 ;
         assign tx_dom_1.pkts[i].data.x54  = dut.sub[i].pkt.x54;
     end
     assign tx_dom_1.ctxs[0].valid      = clock_count == 15;
+    assign tx_dom_1.ctxs[0].data.location   = loc;
     assign tx_dom_1.ctxs[0].data.dummy = 1'b1;
 
     import "DPI-C" function void start_checker();

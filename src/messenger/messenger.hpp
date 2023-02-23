@@ -33,9 +33,9 @@ namespace cvm {
                   assert(loc != cvm::topology::null);
                   auto& per = signals_[std::type_index(typeid(T))];
                   auto it = per.find(loc);
-                  if (it != loc.end()) {
+                  if (it != per.end()) {
                       auto p = static_cast<const void*>(&t);
-                      for (const auto& func : it.second)
+                      for (const auto& func : it->second)
                           func(p);
                   }
               }

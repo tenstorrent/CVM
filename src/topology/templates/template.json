@@ -8,9 +8,7 @@
 
   %endif
   %for attr_idx, attr in enumerate(location.attrs):
-    %if not attr.value.isnumeric():
-    "${attr.name}" : "${attr.value}"\
-    %else:
+    %if attr.value.isnumeric():
     "${attr.name}" : ${attr.value}\
     %endif
     %if attr_idx != len(location.attrs) - 1:

@@ -6,20 +6,23 @@ def _topology_gen_impl(ctx):
   cpp = ctx.outputs.cpp
   sv = ctx.outputs.sv
   json = ctx.outputs.json
+  merged = ctx.outputs.merged
 
   args = ctx.actions.args()
-  args.add("--definition", ctx.file.src)
+  args.add_all("--definitions", ctx.files.srcs)
   args.add("--cpp", cpp)
   args.add("--sv", sv)
   args.add("--json", json)
+  args.add("--merged", merged)
 
-  outputs = [cpp, sv, json]
+  outputs = [cpp, sv, json, merged]
 
   ctx.actions.run(
       arguments = [args],
       executable = ctx.executable._gen,
-      inputs = ctx.files.src,
+      inputs = ctx.files.srcs,
       outputs = outputs,
+      mnemonic = "CVMTopologyGen"
   )
 
   return [
@@ -31,15 +34,17 @@ def _topology_gen_impl(ctx):
 _topology_gen = rule(
   implementation = _topology_gen_impl,
   attrs = {
-      "src" : attr.label(
+      "srcs" : attr.label_list(
         mandatory = True,
-        allow_single_file = [".yml"],
+        allow_files = True,
       ),
       "cpp" : attr.output(
       ),
       "sv" : attr.output(
       ),
       "json" : attr.output(
+      ),
+      "merged" : attr.output(
       ),
       "_gen": attr.label(
         default = "//src/topology:topology_gen",
@@ -57,12 +62,14 @@ def topology_gen(name, visibility = None, cc_attrs = {}, **kwargs):
   cpp = name + ".cpp"
   sv = name + ".sv"
   json = name + ".json"
+  merged = name + "_merged.yml"
 
   _topology_gen(
       name = name,
       cpp = cpp,
       sv = sv,
       json = json,
+      merged = merged,
       visibility = visibility,
       **kwargs,
   )

@@ -7,7 +7,7 @@ load("@rules_verilator//verilator:defs.bzl", "verilator_cc_library")
 
 topology_gen(
     name = "topology",
-    src  = "topology.yml",
+    srcs = ["topology.yml"],
     cc_attrs = {
         'alwayslink': True,
         'linkstatic': True,

@@ -1,10 +1,11 @@
-cluster:
-  count: 1
-  core:
-    count: 3
-    y:
-      count: 1
-    attrs:
-      - width: 2
-  z:
+top:
+  cluster:
     count: 1
+    core:
+      count: 3
+      y:
+        count: 1
+      attrs:
+        width: 2
+    z:
+      count: 1

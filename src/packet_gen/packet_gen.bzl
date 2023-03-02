@@ -3,6 +3,7 @@ load("@rules_hdl//verilog:providers.bzl", "verilog_library")
 def _packet_gen_impl(ctx):
 
     name = ctx.attr.name
+    package = ctx.attr.package
 
     hpp = ctx.outputs.hpp
     cpp = ctx.outputs.cpp
@@ -19,7 +20,12 @@ def _packet_gen_impl(ctx):
     args.add("--cpp"       , cpp)
     args.add("--sv"        , sv )
     args.add("--incdir"    , incdir)
-    args.add("--name"      , name)
+
+    if not package:
+      args.add("--name"      , name)
+    else:
+      args.add("--name"      , package)
+
     args.add("--topology"  , ctx.file.topology)
 
     inputs = [ctx.file.src, ctx.file.topology]
@@ -30,7 +36,7 @@ def _packet_gen_impl(ctx):
         executable = ctx.executable._gen,
         inputs  = inputs,
         outputs = outputs,
-        mnemonic = "CMVPacketGen"
+        mnemonic = "CVMPacketGen"
     )
 
     return [
@@ -50,6 +56,8 @@ _packet_gen = rule(
             mandatory = True,
             allow_single_file = [".json"],
         ),
+        "package": attr.string(
+        ),
         "hpp": attr.output(
         ),
         "cpp": attr.output(
@@ -67,11 +75,16 @@ _packet_gen = rule(
     ],
 )
 
-def packet_gen(name, topology, visibility = None, cc_attrs = {}, **kwargs):
+def packet_gen(name, topology, package = "", visibility = None, cc_attrs = {}, **kwargs):
 
     hpp = name + ".hpp"
     cpp = name + ".cpp"
     sv  = name + ".sv"
+
+    if package:
+      hpp = name + "/" + package + ".hpp"
+      cpp = name + "/" + package + ".cpp"
+      sv  = name + "/" + package + ".sv"
 
     _packet_gen(
         name = name,
@@ -79,6 +92,7 @@ def packet_gen(name, topology, visibility = None, cc_attrs = {}, **kwargs):
         cpp  = cpp,
         sv   = sv,
         topology = topology + "_json",
+        package = package,
         visibility = visibility,
         **kwargs,
     )
@@ -92,7 +106,7 @@ def packet_gen(name, topology, visibility = None, cc_attrs = {}, **kwargs):
             "@cvm//:registry",
         ],
         visibility = visibility,
-        strip_include_prefix = ".",
+        strip_include_prefix = name if package else ".",
         **cc_attrs,
     )
 

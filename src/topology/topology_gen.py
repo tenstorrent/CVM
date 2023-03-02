@@ -2,8 +2,10 @@
 
 import os
 import yaml
+
 import argparse
 import pathlib
+import fileinput
 import json
 from dataclasses import dataclass
 from anytree import Node, RenderTree, AsciiStyle, LevelOrderIter
@@ -52,11 +54,32 @@ class TopologyGen:
   root = Node("top")
   attributes = {}
 
-  def __init__(self, definition: str):
-    with open(definition, 'r') as stream:
+  def __init__(self, definitions: list[str], merged: str):
+    # cat >>
+    with open(merged, 'wb') as ostream:
+      for defin in definitions:
+        with open(defin, 'rb') as istream:
+          ostream.write(istream.read())
+
+    with open(merged, 'r') as istream:
       try:
-        topology = yaml.safe_load(stream)
-        for key, val in topology.items():
+        topology = yaml.safe_load(istream)
+
+        # delete all nodes not under top (anchors)
+        keys_to_delete = []
+        found_top = False
+        for k in topology:
+          if k != "top":
+            keys_to_delete += [k]
+          else:
+            found_top = True
+        for k in keys_to_delete:
+          del topology[k]
+
+        if not found_top:
+          raise RuntimeError("Expecting top to be defined in topology")
+
+        for key, val in topology["top"].items():
           self.recurse(key, val, self.root, 1)
         # print(RenderTree(self.root, style=AsciiStyle()).by_attr())
       except yaml.YAMLError as exc:
@@ -70,8 +93,7 @@ class TopologyGen:
     new = Node(name, parent=parent, count=count)
 
     if "attrs" in children:
-      for attr in children["attrs"]:
-        self.attributes[name] = list(Attribute(key, str(val)) for key, val in attr.items())
+      self.attributes[name] = list(Attribute(key, str(val)) for key, val in children["attrs"].items())
     else:
       self.attributes[name] = list()
 
@@ -91,15 +113,16 @@ class TopologyGen:
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
-  parser.add_argument("--definition", help="yml file describing topology", required=True)
+  parser.add_argument("--definitions", nargs='+', help="yml files describing topology", required=True)
   parser.add_argument("--cpp", help="cpp file to generate", required=True)
   parser.add_argument("--sv", help="sv file to generate", required=True)
   parser.add_argument("--json", help="populate json to be parsed by topology_query library", required=True)
+  parser.add_argument("--merged", help="hierarchical topology to generate", required=True)
 
   args = parser.parse_args()
 
   # parse yaml for topology structure
-  p = TopologyGen(args.definition)
+  p = TopologyGen(args.definitions, args.merged)
   # generate SV and C++ headers
   for typ in ["cpp", "sv", "json"]:
     with open(getattr(args, typ), 'w') as f:

@@ -1,6 +1,6 @@
 #include "cvm/topology.hpp"
 #include "cvm/registry.hpp"
-#include "test/packet_gen/transactions.hpp"
+#include "transactions.hpp"
 #include <gtest/gtest.h>
 
 class checker {

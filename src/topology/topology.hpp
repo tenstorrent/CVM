@@ -7,7 +7,7 @@
 namespace cvm {
   namespace topology {
     typedef uint32_t loc_t;
-    extern loc_t null;
+    const inline loc_t null = 0;
 
     std::vector<loc_t> get(const std::string& module);
     loc_t get(const std::string& module, unsigned id);

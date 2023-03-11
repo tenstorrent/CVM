@@ -30,7 +30,6 @@ struct wrapper {
 
 namespace cvm {
   namespace topology {
-    loc_t null = 0;
 
     auto& wrap() {
       static wrapper wrap_;

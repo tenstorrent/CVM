@@ -30,7 +30,7 @@ namespace cvm {
       void clear();
 
       inline bool finished()
-      { return quit_ == false; }
+      { return quit_ == true; }
 
     private:
 
@@ -41,6 +41,6 @@ namespace cvm {
       std::queue<scoped_cb> que_;
 
       std::thread async_;
-      std::atomic<bool> quit_;
+      std::atomic<bool> quit_ = false;
   };
 }

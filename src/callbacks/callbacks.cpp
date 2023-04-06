@@ -6,23 +6,22 @@ DEFINE_bool(cb_async, false, "use asynchronous callbacks");
 using namespace cvm;
 
 callbackss::callbackss() {
-  // if async, will spawn a separate thread to issue callbacks
-  if (FLAGS_cb_async) {
-    async_ = std::thread([&] () {
-      while(not this->finished()) { this->pull(); }});
-  }
 }
 
 callbackss::~callbackss() {
-  quit_ = true;
-  if (async_.joinable())
-    async_.join();
 }
 
 void
 callbackss::push(svScope scope, const cb& func) {
   std::lock_guard<std::mutex> lock(m_);
-  que_.emplace(std::make_tuple(scope, func));
+  que_.emplace(scope, func);
+  c_.notify_one();
+}
+
+void
+callbackss::push(svScope scope, cb&& func) {
+  std::lock_guard<std::mutex> lock(m_);
+  que_.emplace(scope, std::move(func));
   c_.notify_one();
 }
 
@@ -55,6 +54,17 @@ callbackss::flush() {
 void
 callbackss::clear() {
   std::lock_guard<std::mutex> lock(m_);
+
+  // if async, will spawn a separate thread to issue callbacks
+  quit_ = true;
+  if (async_.joinable())
+    async_.join();
+
+  quit_ = false;
+  if (FLAGS_cb_async) {
+    async_ = std::thread([&] () {
+      while(not this->finished()) { this->pull(); }});
+  }
   while (!que_.empty()) {
     que_.pop();
   }

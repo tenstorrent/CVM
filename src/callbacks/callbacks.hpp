@@ -21,6 +21,7 @@ namespace cvm {
 
       typedef std::function<void()> cb;
       void push(svScope scope, const cb& func);
+      void push(svScope scope, cb&& func);
 
       /// blocking pull
       void pull();

@@ -38,7 +38,7 @@ void cvm::plusargs::parse() {
 
     args args(argvv);
 
-    gflags::AllowCommandLineReparsing();
+    //gflags::AllowCommandLineReparsing();
     gflags::ParseCommandLineFlags(&args.argc, &args.argv, false);
 
 }

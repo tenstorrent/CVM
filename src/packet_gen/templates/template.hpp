@@ -19,7 +19,7 @@ namespace ${packets.name} {
     %endfor
         constexpr ${packet.name}(
             % for i,field in enumerate(packet.fields):
-            const ${field.get_c_type()} ${field.name}${[",", ""][(i+1)//len(packet.fields)]}
+            const ${field.get_c_type()}& ${field.name}${[",", ""][(i+1)//len(packet.fields)]}
             %endfor
         ) :
             % for i,field in enumerate(packet.fields):

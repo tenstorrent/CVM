@@ -41,4 +41,3 @@ namespace ${packets.name} {
 % if any(packet.context for packet in packets.packets):
 extern "C" void ${packets.name}_finish();
 % endif
-extern "C" void ${packets.name}_message(const std::uint8_t* message);

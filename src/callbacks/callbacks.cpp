@@ -1,5 +1,7 @@
 #include "cvm/callbacks.hpp"
 #include "cvm/plusargs.hpp"
+#include <chrono>
+using namespace std::chrono_literals;
 
 DEFINE_bool(cb_async, false, "use asynchronous callbacks");
 
@@ -9,6 +11,9 @@ callbackss::callbackss() {
 }
 
 callbackss::~callbackss() {
+  quit_ = true;
+  if (async_.joinable())
+    async_.join();
 }
 
 void
@@ -29,7 +34,8 @@ void
 callbackss::pull() {
   std::unique_lock<std::mutex> lock(m_);
   while (que_.empty()) {
-    c_.wait(lock);
+    c_.wait_for(lock, 100ms);
+    if (this->finished()) return;
   }
   auto [scope, func] = std::move(que_.front());
   que_.pop();

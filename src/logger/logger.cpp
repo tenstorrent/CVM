@@ -27,3 +27,7 @@ DEFINE_string(cvm_verbosity, "MEDIUM", "cvm logging verbosity, valid values matc
 DEFINE_validator(cvm_verbosity, &validate_verbosity);
 
 cvm::verbosity_level cvm::logger::verbosity = cvm::verbosity_level::MEDIUM;
+
+void cvm::file_logger::flush() {
+    output_file.flush();
+}

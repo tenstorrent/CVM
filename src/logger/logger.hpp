@@ -48,7 +48,6 @@ namespace cvm {
                     }
 
                 }
-
     };
 
     class file_logger {
@@ -73,6 +72,8 @@ namespace cvm {
                 auto operator()(Args&&... args) -> decltype(log(std::forward<Args>(args)...)) {
                     return log(std::forward<Args>(args)...);
                 }
+
+            void flush();
 
     };
 

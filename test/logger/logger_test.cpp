@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
-#include "cvm/logger.hpp" 
-#include "cvm/plusargs.hpp" 
+#include "cvm/logger.hpp"
+#include "cvm/plusargs.hpp"
 #include <fstream>
 
 #include <sys/types.h>
@@ -9,6 +9,8 @@
 #include <cstdio>
 
 #include "Vlogger_test.h"
+
+#include "logger_mock.hpp"
 
 void check(const std::string& filename) {
     std::ifstream t(filename);
@@ -78,4 +80,27 @@ TEST(Logger, Plusargs) {
 
     check("test.log");
 
+}
+
+TEST(Logger, Handler) {
+    cvm::set_verbosity(cvm::MEDIUM);
+
+    MockHandler handler;
+    cvm::set_handler(cvm::ERROR, [&handler]() { return handler.handle(); });
+    EXPECT_CALL(handler, handle()).Times(1);
+
+    int pfd = open("stdout.log", O_WRONLY | O_CREAT, 0777);
+    int saved = dup(1);
+
+    close(1);
+    dup(pfd);
+    close(pfd);
+
+    cvm::log(cvm::ERROR, "a 1\n");
+
+    fflush(stdout);
+
+    // restore it back
+    dup2(saved, 1);
+    close(saved);
 }

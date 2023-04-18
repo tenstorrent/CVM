@@ -6,8 +6,8 @@
 namespace cvm {
 
     enum verbosity_level {
-        NONE   =   0,
         ERROR  =   0,
+        NONE   =   1,
         LOW    = 100,
         MEDIUM = 200,
         HIGH   = 300,

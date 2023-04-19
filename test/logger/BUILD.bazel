@@ -22,7 +22,10 @@ verilator_cc_library(
 cc_test(
     name = "logger_test",
     size = "small",
-    srcs = ["logger_test.cpp"],
+    srcs = [
+        "logger_test.cpp",
+        "logger_mock.hpp",
+    ],
     deps = [
         "//:logger",
         ":logger_test_veri_lib",

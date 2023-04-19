@@ -86,7 +86,7 @@ TEST(Logger, Handler) {
     cvm::set_verbosity(cvm::MEDIUM);
 
     MockHandler handler;
-    cvm::set_handler(cvm::ERROR, [&handler]() { return handler.handle(); });
+    cvm::set_logger_handler(cvm::ERROR, [&handler]() { return handler.handle(); });
     EXPECT_CALL(handler, handle()).Times(1);
 
     int pfd = open("stdout.log", O_WRONLY | O_CREAT, 0777);

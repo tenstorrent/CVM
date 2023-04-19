@@ -44,12 +44,13 @@ namespace cvm {
                     if (v <= verbosity) {
 
                         fmt::print(std::forward<Args>(args)...);
-                        auto it = handlers.find(v);
-                        if (it != handlers.end()) {
 
-                          (it->second)();
+                    }
 
-                        }
+                    auto it = handlers.find(v);
+                    if (it != handlers.end()) {
+
+                      (it->second)();
 
                     }
 
@@ -61,12 +62,13 @@ namespace cvm {
                     if (v <= verbosity) {
 
                         out.print(std::forward<Args>(args)...);
-                        auto it = handlers.find(v);
-                        if (it != handlers.end()) {
 
-                          (it->second)();
+                    }
 
-                        }
+                    auto it = handlers.find(v);
+                    if (it != handlers.end()) {
+
+                      (it->second)();
 
                     }
 
@@ -116,7 +118,7 @@ namespace cvm {
 
 
     template <typename... Args>
-        void set_handler(Args&&... args) {
+        void set_logger_handler(Args&&... args) {
             logger::set_handler(std::forward<Args>(args)...);
         }
 }

@@ -16,7 +16,7 @@ class dummy2 {
     };
 };
 
-REGISTRY_register(dummy2, cluster, (cvm::registry::all))
+REGISTRY_register(dummy2, TOP.CLUSTER.CORE, (cvm::registry::all))
 
 TEST(Registry, Dummy2) {
     EXPECT_EQ(_registry::dummy2_SUCCESS, true);

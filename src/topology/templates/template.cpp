@@ -4,22 +4,28 @@
 #include <memory>
 #include <utility>
 
+<%
+  def strip(name: str):
+    return name.strip('~')
+%>
 struct wrapper {
   wrapper() {
-%for idx, location in enumerate(topo.locations):
-    std::vector<cvm::topology::loc_t> locs_${location.name};
-    std::unordered_map<std::string, uint32_t> attrs_${location.name};
+%for location in topo.locations:
+    std::vector<cvm::topology::loc_t> locs_${strip(location.name)}_${location.path_id};
   %for instance in location.instances:
-    locs_${location.name}.push_back(${instance.loc});
+    locs_${strip(location.name)}_${location.path_id}.push_back(${instance.loc});
   %endfor
-  %for attr in location.attrs:
+    locs_str.insert({"${location.path}", locs_${strip(location.name)}_${location.path_id}});
+    locs_int.insert({${location.path_id}, locs_${strip(location.name)}_${location.path_id}});
+%endfor
+%for name, attrs in topo.attrs.items():
+    std::unordered_map<std::string, uint32_t> attrs_${name};
+  %for attr in attrs:
     %if attr.value.isnumeric():
-    attrs_${location.name}["${attr.name}"] = ${attr.value};
+      attrs_${name}["${attr.name}"] = ${attr.value};
     %endif
   %endfor
-    attrs.insert({"${location.name}", attrs_${location.name}});
-    locs_str.insert({"${location.name}", locs_${location.name}});
-    locs_int.insert({${idx}, locs_${location.name}});
+    attrs.insert({"${name.upper()}", attrs_${name}});
 %endfor
   }
 
@@ -36,45 +42,45 @@ namespace cvm {
       return wrap_;
     }
 
-    std::vector<loc_t> get(const std::string& module) {
-      if (not wrap().locs_str.count(module))
+    std::vector<loc_t> get(const std::string& hierarchy) {
+      if (not wrap().locs_str.count(hierarchy))
         return {};
 
-      return wrap().locs_str.at(module);
+      return wrap().locs_str.at(hierarchy);
     }
 
-    loc_t get(const std::string& module, unsigned id) {
-      if (not wrap().locs_str.count(module))
+    loc_t get(const std::string& hierarchy, unsigned id) {
+      if (not wrap().locs_str.count(hierarchy))
         return null;
-      if (size_t(id) >= wrap().locs_str.at(module).size())
+      if (size_t(id) >= wrap().locs_str.at(hierarchy).size())
         return null;
 
-      return wrap().locs_str.at(module).at(id);
+      return wrap().locs_str.at(hierarchy).at(id);
     }
 
-    loc_t get(uint32_t module, unsigned id) {
-      if (not wrap().locs_int.count(module))
+    loc_t get(uint32_t hierarchy, unsigned id) {
+      if (not wrap().locs_int.count(hierarchy))
         return null;
-      if (size_t(id) >= wrap().locs_int.at(module).size())
+      if (size_t(id) >= wrap().locs_int.at(hierarchy).size())
         return null;
 
-      return wrap().locs_int.at(module).at(id);
+      return wrap().locs_int.at(hierarchy).at(id);
     }
 
-    std::pair<bool, uint32_t> attr(const std::string& module, const std::string& attribute) {
-      if (not wrap().attrs.count(module))
+    std::pair<bool, uint32_t> attr(const std::string& hierarchy, const std::string& attribute) {
+      if (not wrap().attrs.count(hierarchy))
         return std::make_pair(false, uint32_t(0));
-      if (not wrap().attrs[module].count(attribute))
+      if (not wrap().attrs[hierarchy].count(attribute))
         return std::make_pair(false, uint32_t(0));
 
-      return std::make_pair(true, wrap().attrs.at(module).at(attribute));
+      return std::make_pair(true, wrap().attrs.at(hierarchy).at(attribute));
     }
   }
 }
 
 extern "C" {
 
-    uint32_t cvm_topology_get_location(uint32_t module, uint32_t id) {
-        return cvm::topology::get(module, id);
+    uint32_t cvm_topology_get_location(uint32_t hierarchy, uint32_t id) {
+        return cvm::topology::get(hierarchy, id);
     }
 }

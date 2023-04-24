@@ -9,7 +9,7 @@ package topology_pkg;
     int unsigned id;
     int unsigned count;
   %for child in location.children:
-    ${child.strip('~').upper()}_${topo.location(child).path_id}_t ${child.strip('~').upper()};
+    ${child.strip('~')}_${topo.location(child).path_id}_t ${child.strip('~').upper()};
   %endfor
   } ${location.stripped_name()}_${location.path_id}_t;
 

@@ -43,37 +43,39 @@ namespace cvm {
     }
 
     std::vector<loc_t> get(const std::string& hierarchy) {
-      if (not wrap().locs_str.count(hierarchy))
+      try {
+        return wrap().locs_str.at(hierarchy);
+      }
+      catch (...) {
         return {};
-
-      return wrap().locs_str.at(hierarchy);
+      }
     }
 
     loc_t get(const std::string& hierarchy, unsigned id) {
-      if (not wrap().locs_str.count(hierarchy))
+      try {
+        return wrap().locs_str.at(hierarchy).at(id);
+      }
+      catch (...) {
         return null;
-      if (size_t(id) >= wrap().locs_str.at(hierarchy).size())
-        return null;
-
-      return wrap().locs_str.at(hierarchy).at(id);
+      }
     }
 
     loc_t get(uint32_t hierarchy, unsigned id) {
-      if (not wrap().locs_int.count(hierarchy))
+      try {
+        return wrap().locs_int.at(hierarchy).at(id);
+      }
+      catch (...) {
         return null;
-      if (size_t(id) >= wrap().locs_int.at(hierarchy).size())
-        return null;
-
-      return wrap().locs_int.at(hierarchy).at(id);
+      }
     }
 
     std::pair<bool, uint32_t> attr(const std::string& hierarchy, const std::string& attribute) {
-      if (not wrap().attrs.count(hierarchy))
+      try {
+        return std::make_pair(true, wrap().attrs.at(hierarchy).at(attribute));
+      }
+      catch (...) {
         return std::make_pair(false, uint32_t(0));
-      if (not wrap().attrs[hierarchy].count(attribute))
-        return std::make_pair(false, uint32_t(0));
-
-      return std::make_pair(true, wrap().attrs.at(hierarchy).at(attribute));
+      }
     }
   }
 }

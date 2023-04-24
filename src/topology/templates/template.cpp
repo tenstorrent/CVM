@@ -4,19 +4,15 @@
 #include <memory>
 #include <utility>
 
-<%
-  def strip(name: str):
-    return name.strip('~')
-%>
 struct wrapper {
   wrapper() {
 %for location in topo.locations:
-    std::vector<cvm::topology::loc_t> locs_${strip(location.name)}_${location.path_id};
+    std::vector<cvm::topology::loc_t> locs_${location.stripped_name()}_${location.path_id};
   %for instance in location.instances:
-    locs_${strip(location.name)}_${location.path_id}.push_back(${instance.loc});
+    locs_${location.stripped_name()}_${location.path_id}.push_back(${instance.loc});
   %endfor
-    locs_str.insert({"${location.path}", locs_${strip(location.name)}_${location.path_id}});
-    locs_int.insert({${location.path_id}, locs_${strip(location.name)}_${location.path_id}});
+    locs_str.insert({"${location.path}", locs_${location.stripped_name()}_${location.path_id}});
+    locs_int.insert({${location.path_id}, locs_${location.stripped_name()}_${location.path_id}});
 %endfor
 %for name, attrs in topo.attrs.items():
     std::unordered_map<std::string, uint32_t> attrs_${name};

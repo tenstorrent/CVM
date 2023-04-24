@@ -1,8 +1,3 @@
-<%!
-  def strip(name: str):
-    return name.strip('~')
-%>
-
 package topology_pkg;
 
 <%
@@ -14,9 +9,9 @@ package topology_pkg;
     int unsigned id;
     int unsigned count;
   %for child in location.children:
-    ${strip(child)}_${topo.location(child).path_id}_t ${child.strip('~').upper()};
+    ${child.strip('~').upper()}_${topo.location(child).path_id}_t ${child.strip('~').upper()};
   %endfor
-  } ${strip(location.name)}_${location.path_id}_t;
+  } ${location.stripped_name()}_${location.path_id}_t;
 
 %endfor
 

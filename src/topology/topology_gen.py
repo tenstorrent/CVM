@@ -32,6 +32,9 @@ class Location:
   children: list[str]
   instances: list[Instance]
 
+  def stripped_name(self):
+    return self.name.strip('~')
+
 @dataclass
 class Topology:
   locations: list[Location]

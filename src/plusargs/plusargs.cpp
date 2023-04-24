@@ -33,7 +33,7 @@ void cvm::plusargs::parse() {
         }
 
         ~args() {
-            delete argv;
+            delete[] argv;
         }
 
     };

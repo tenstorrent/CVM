@@ -50,7 +50,7 @@ module top(
     int unsigned loc;
     always @(posedge clk) begin
         if (rst) begin
-            loc = cvm_topology::get_location(topology_pkg::mods.CORE.id, 0);
+            loc = cvm_topology::get_location(topology_pkg::mods.TOP.CLUSTER.CORE.id, 0);
         end
     end
 

@@ -8,7 +8,7 @@ import pathlib
 import fileinput
 import json
 from dataclasses import dataclass
-from anytree import Node, RenderTree, AsciiStyle, LevelOrderIter
+from anytree import Node, RenderTree, AsciiStyle, LevelOrderIter, Walker
 
 from mako.template import Template
 from mako.runtime import Context
@@ -16,7 +16,7 @@ from mako import exceptions
 
 @dataclass
 class Instance:
-  real_id: int
+  instance_id: int
   loc: int
 
 @dataclass
@@ -24,35 +24,65 @@ class Attribute:
   name: str
   value: str
 
+  def __iter__(self):
+    return iter((self.name, self.value))
+
 @dataclass
 class Location:
   name: str
+  typ: str
+  path_id: int
+  path: str
+  children: list[str]
   instances: list[Instance]
-  attrs: list[Attribute]
+  attributes: list()
 
 @dataclass
 class Topology:
   locations: list[Location]
+  types: list[str]
+
+  def location(self, name: str):
+    for location in self.locations:
+      if location.name == name:
+        return location
+    raise RuntimeError(f"Could not find location corresponding to {name}")
 
   @classmethod
-  def load(cls, root, attributes: dict):
+  def load(cls, root):
     locations = list()
-    locations.append(Location("top", [Instance(0, 1)], list()))
+    types = list()
+    loc_id = 1
+    path_id = 0
+    w = Walker()
 
-    loc_id = 2
+    # null == 0, top (root) == 1
+    locations.append(Location("top", "top", path_id, "TOP", [child.name for child in root.children], [Instance(0, 1)], attributes=list()))
+    types.append("top")
+
     for node in LevelOrderIter(root, filter_=lambda n: n.name not in ('top')):
       instances = list()
+
       # continuously increasing id's across instances, fix later?
       for i in range(0, node.count):
-        instances.append(Instance(i, loc_id))
         loc_id += 1
-      locations.append(Location(node.name, instances, attributes[node.name]))
-    return cls(locations)
+        instances.append(Instance(i, loc_id))
+
+      path_id += 1
+      path = "TOP"
+      walk = list(list(w.walk(root, node))[2])
+      for parent in walk:
+        path += "." + parent.name.upper()
+
+      if node.typ not in types:
+        types.append(node.typ)
+      locations.append(Location(node.name, node.typ, path_id, path, [child.name for child in node.children], instances, node.attributes))
+    return cls(locations, types)
 
 class TopologyGen:
 
   root = Node("top")
-  attributes = {}
+  names = []
 
   def __init__(self, definitions: list[str], merged: str):
     # cat >>
@@ -80,25 +110,29 @@ class TopologyGen:
           raise RuntimeError("Expecting top to be defined in topology")
 
         for key, val in topology["top"].items():
-          self.recurse(key, val, self.root, 1)
+          self.recurse(key, val, self.root, uppers=1)
         # print(RenderTree(self.root, style=AsciiStyle()).by_attr())
       except yaml.YAMLError as exc:
         print(exc)
 
     # generate topology class
-    self.topology = Topology.load(self.root, self.attributes)
+    self.topology = Topology.load(self.root)
 
   def recurse(self, name, children, parent, uppers):
+    if "count" not in children or "type" not in children:
+      raise RuntimeError("Must specify a `count` and `type` for each node in topology")
+
     count = children["count"]*uppers
-    new = Node(name, parent=parent, count=count)
 
     if "attrs" in children:
-      self.attributes[name] = list(Attribute(key, str(val)) for key, val in children["attrs"].items())
+      attributes = list(Attribute(key, str(val)) for key, val in children["attrs"].items())
     else:
-      self.attributes[name] = list()
+      attributes = list()
+
+    new = Node(name, parent=parent, count=count, typ=children["type"], attributes=attributes)
 
     for key, val in children.items():
-      if key != "count" and key != "attrs":
+      if key != "count" and key != "type" and key != "attrs":
         self.recurse(key, val, new, count)
 
   def generate(self, buf, which):

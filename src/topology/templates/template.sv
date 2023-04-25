@@ -1,38 +1,43 @@
 package topology_pkg;
 
-%for location in topo.locations:
+<%
+  reversed = topo.locations[::-1]
+%>
 
+%for location in reversed:
   typedef struct packed {
     int unsigned id;
     int unsigned count;
-  %for attr in location.attrs:
-    %if attr.value.isnumeric():
-    int unsigned ${attr.name};
+  %for child in location.children:
+    ${child}_${topo.location(child).path_id}_t ${child.upper()};
+  %endfor
+  %for (name, value) in location.attributes:
+    %if value.isnumeric():
+    int unsigned ${name};
     %endif
   %endfor
-  } ${location.name}_t;
+  } ${location.name}_${location.path_id}_t;
+
 %endfor
 
   typedef struct packed {
-%for location in topo.locations:
-    ${location.name}_t ${location.name.upper()};
-%endfor
+    top_${topo.location("top").path_id}_t TOP;
   } topology_t;
 
   localparam topology_t mods = '{
-%for idx, location in enumerate(topo.locations):
-    ${location.name.upper()}: '{${idx}, ${len(location.instances)}\
-  %for attr in location.attrs:
-    %if attr.value.isnumeric():
-, ${attr.value}\
+<%def name="recurse(next)">
+    '{${next.path_id}, ${len(next.instances)}\
+  %for child in next.children:
+, ${recurse(topo.location(child))}\
+  %endfor
+  %for name, value in next.attributes:
+    %if value.isnumeric():
+, ${value}
     %endif
   %endfor
 }\
-    %if idx != len(topo.locations) - 1:
-,
-    %endif
-%endfor
-
+</%def>\
+    TOP:${recurse(topo.location("top"))}
   };
 
 endpackage

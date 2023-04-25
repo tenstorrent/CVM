@@ -42,7 +42,7 @@ namespace cvm {
       static bool regist(const std::string& module, int id) {
         static std::list<T> objs_;
 
-        if (module == "top") {
+        if (module == "TOP") {
           auto loc = cvm::topology::get(module, 0);
           if (loc == cvm::topology::null)
             return false;

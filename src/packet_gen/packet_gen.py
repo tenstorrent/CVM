@@ -75,10 +75,10 @@ class Packets:
         def sub_constructor(loader, node):
             value = node.value
             expr = sub_matcher.match(value).group()[2:-1]
-            variables = re.findall(r'\w+\.\w+', expr)
+            variables = re.findall(r'\w+(?:\.\w+)+', expr)
             for variable in variables:
-                pair = variable.split('.')
-                val = query.query(pair[0], pair[1])
+                pattern = variable.split('.')
+                val = query.query(".".join(pattern[:-1]), pattern[-1])
                 if type(val) != int:
                   raise Exception(f"attribute {variable} must be number")
                 expr = expr.replace(variable, str(val))

@@ -13,10 +13,11 @@ class dummy2 {
       EXPECT_FALSE(ids.count(id));
       locations.insert(loc);
       ids.insert(id);
+      EXPECT_LT(id, 16);
     };
 };
 
-REGISTRY_register(dummy2, cluster, (cvm::registry::all))
+REGISTRY_register(dummy2, CORE, (cvm::registry::all))
 
 TEST(Registry, Dummy2) {
     EXPECT_EQ(_registry::dummy2_SUCCESS, true);

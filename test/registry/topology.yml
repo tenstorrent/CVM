@@ -1,5 +1,10 @@
 top:
   cluster:
     count: 4
-    core:
+    type: cluster
+    foo:
       count: 3
+      type: core
+    core:
+      count: 1
+      type: core

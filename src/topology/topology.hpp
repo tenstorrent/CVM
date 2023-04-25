@@ -9,8 +9,8 @@ namespace cvm {
     typedef uint32_t loc_t;
     const inline loc_t null = 0;
 
-    std::vector<loc_t> get(const std::string& module);
-    loc_t get(const std::string& module, unsigned id);
-    std::pair<bool, uint32_t> attr(const std::string& module, const std::string& attribute);
+    std::vector<loc_t> get(const std::string& query);
+    loc_t get(const std::string& query, unsigned id);
+    std::pair<bool, uint32_t> attr(loc_t loc, const std::string& attribute);
   }
 }

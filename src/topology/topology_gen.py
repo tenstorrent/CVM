@@ -24,21 +24,23 @@ class Attribute:
   name: str
   value: str
 
+  def __iter__(self):
+    return iter((self.name, self.value))
+
 @dataclass
 class Location:
   name: str
+  typ: str
   path_id: int
   path: str
   children: list[str]
   instances: list[Instance]
-
-  def stripped_name(self):
-    return self.name.strip('~')
+  attributes: list()
 
 @dataclass
 class Topology:
   locations: list[Location]
-  attrs: dict()
+  types: list[str]
 
   def location(self, name: str):
     for location in self.locations:
@@ -47,15 +49,16 @@ class Topology:
     raise RuntimeError(f"Could not find location corresponding to {name}")
 
   @classmethod
-  def load(cls, root, attributes: dict):
+  def load(cls, root):
     locations = list()
-    attrs = attributes
+    types = list()
     loc_id = 1
     path_id = 0
     w = Walker()
 
     # null == 0, top (root) == 1
-    locations.append(Location("top", path_id, "TOP", [child.name for child in root.children], [Instance(0, 1)]))
+    locations.append(Location("top", "top", path_id, "TOP", [child.name for child in root.children], [Instance(0, 1)], attributes=list()))
+    types.append("top")
 
     for node in LevelOrderIter(root, filter_=lambda n: n.name not in ('top')):
       instances = list()
@@ -69,15 +72,16 @@ class Topology:
       path = "TOP"
       walk = list(list(w.walk(root, node))[2])
       for parent in walk:
-        path += "." + parent.name.strip('~').upper()
+        path += "." + parent.name.upper()
 
-      locations.append(Location(node.name, path_id, path, [child.name for child in node.children], instances))
-    return cls(locations, attrs)
+      if node.typ not in types:
+        types.append(node.typ)
+      locations.append(Location(node.name, node.typ, path_id, path, [child.name for child in node.children], instances, node.attributes))
+    return cls(locations, types)
 
 class TopologyGen:
 
   root = Node("top")
-  attributes = {}
   names = []
 
   def __init__(self, definitions: list[str], merged: str):
@@ -112,25 +116,23 @@ class TopologyGen:
         print(exc)
 
     # generate topology class
-    self.topology = Topology.load(self.root, self.attributes)
+    self.topology = Topology.load(self.root)
 
   def recurse(self, name, children, parent, uppers):
+    if "count" not in children or "type" not in children:
+      raise RuntimeError("Must specify a `count` and `type` for each node in topology")
+
     count = children["count"]*uppers
 
-    real_name = name
-    while real_name in self.attributes:
-      real_name += '~'
+    if "attrs" in children:
+      attributes = list(Attribute(key, str(val)) for key, val in children["attrs"].items())
+    else:
+      attributes = list()
 
-    new = Node(real_name, parent=parent, count=count)
+    new = Node(name, parent=parent, count=count, typ=children["type"], attributes=attributes)
 
-    if "attrs" in children and '~' in real_name:
-      raise RuntimeError(f"Not allowed to redefine attributes for a module: {name}")
-    elif "attrs" in children:
-      self.attributes[name] = list(Attribute(key, str(val)) for key, val in children["attrs"].items())
-
-    self.names += [real_name]
     for key, val in children.items():
-      if key != "count" and key != "attrs":
+      if key != "count" and key != "type" and key != "attrs":
         self.recurse(key, val, new, count)
 
   def generate(self, buf, which):

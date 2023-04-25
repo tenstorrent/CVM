@@ -9,7 +9,7 @@ class checker {
 
         checker() {
             auto loc = cvm::topology::get("TOP.CLUSTER.CORE", 0);
-            check<uint32_t>("CORE.width", cvm::topology::attr("CORE", "width").second, 2);
+            check<uint32_t>("CORE.width", cvm::topology::attr(loc, "width").second, 2);
             cvm::registry::messenger.connect<transactions::pkt>(
                 loc,
                 [this] (const transactions::pkt& ret) {

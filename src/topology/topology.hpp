@@ -12,5 +12,6 @@ namespace cvm {
     std::vector<loc_t> get(const std::string& query);
     loc_t get(const std::string& query, unsigned id);
     std::pair<bool, uint32_t> attr(loc_t loc, const std::string& attribute);
+    std::string name(loc_t loc);
   }
 }

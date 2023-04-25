@@ -22,7 +22,7 @@ struct wrapper {
   %for instance in location.instances:
     locs_${location.name}_${location.path_id}.push_back(${instance.loc});
     locs_${location.typ}.push_back(${instance.loc});
-    names[${instance.loc}] = "${location.name}.upper()";
+    names[${instance.loc}] = "${location.name.upper()}";
   %if location.attributes:
     attrs[${instance.loc}] = attrs_${location.name}_${location.path_id};
   %endif

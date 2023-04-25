@@ -22,6 +22,7 @@ struct wrapper {
   %for instance in location.instances:
     locs_${location.name}_${location.path_id}.push_back(${instance.loc});
     locs_${location.typ}.push_back(${instance.loc});
+    names[${instance.loc}] = "${location.name.upper()}";
   %if location.attributes:
     attrs[${instance.loc}] = attrs_${location.name}_${location.path_id};
   %endif
@@ -38,6 +39,7 @@ struct wrapper {
   std::unordered_map<uint32_t,    std::vector<cvm::topology::loc_t>> int_hierarchy;
   std::unordered_map<std::string, std::vector<cvm::topology::loc_t>> str_type;
   std::unordered_map<cvm::topology::loc_t, std::unordered_map<std::string, uint32_t>> attrs;
+  std::unordered_map<cvm::topology::loc_t, std::string> names;
 };
 
 namespace cvm {
@@ -92,6 +94,15 @@ namespace cvm {
       }
       catch (...) {
         return std::make_pair(false, uint32_t(0));
+      }
+    }
+
+    std::string name(cvm::topology::loc_t loc) {
+      try {
+        return wrap().names.at(loc);
+      }
+      catch (...) {
+        return {};
       }
     }
   }

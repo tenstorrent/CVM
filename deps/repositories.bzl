@@ -73,6 +73,7 @@ def cvm_dependencies():
         url = "https://aus-gitlab.local.tenstorrent.com/riscv/forks/fmt/-/archive/8.1.1/fmt-8.1.1.tar.gz",
         sha256 = "3d794d3cf67633b34b2771eb9f073bde87e846e0d395d254df7b211ef1ec7346",
         strip_prefix = "fmt-8.1.1",
+        patches = ["@cvm//deps:fmt.patch"],
         build_file_content = """
 cc_library(
     name = "fmt",

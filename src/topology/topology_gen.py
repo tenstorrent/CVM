@@ -89,7 +89,7 @@ class TopologyGen:
     with open(merged, 'wb') as ostream:
       for defin in definitions:
         with open(defin, 'rb') as istream:
-          ostream.write(istream.read())
+          ostream.write(istream.read() + b'\n')
 
     with open(merged, 'r') as istream:
       try:

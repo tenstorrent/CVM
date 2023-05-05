@@ -19,7 +19,7 @@ class checker {
              );
             cvm::registry::messenger.connect<transactions::ctx>(
                 loc,
-                [this] (const transactions::ctx& ret) {
+                [] (const transactions::ctx& ret) {
                     transactions_finish();
                 }
              );

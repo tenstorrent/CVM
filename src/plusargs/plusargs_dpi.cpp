@@ -36,6 +36,8 @@ extern "C" {
     }
 
     const char* cvm_plusargs_get_string(const char* p) {
-        return get<std::string>(p).c_str();
+        static std::string s;
+        s = get<std::string>(p);
+        return s.c_str();
     }
 }

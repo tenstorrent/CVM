@@ -3,6 +3,8 @@
 #include <cinttypes>
 #include <algorithm>
 #include <cassert>
+#include <bitset>
+#include <limits>
 
 namespace cvm {
 
@@ -24,6 +26,19 @@ namespace cvm {
         template <typename T>
             static constexpr T slice(const T& t, size_t msb, size_t lsb) {
                 return (t & mask<T>(msb, lsb)) >> lsb;
+            }
+
+        template <typename T, typename V>
+            static constexpr void slice(const T& t, V& res, size_t msb, size_t lsb) {
+                res = slice<T>(t, msb, lsb);
+            }
+
+        template <typename T, size_t N>
+            static constexpr void slice(const std::bitset<N>& t, T& res, size_t msb, size_t lsb) {
+                static_assert(std::numeric_limits<T>::max() <= std::numeric_limits<unsigned long long>::max());
+                std::bitset<N> mask((1 << (msb - lsb + 1)) - 1);
+                auto lower = (t >> lsb) & mask;
+                res = slice<T>(lower.to_ullong(), msb - lsb, 0);
             }
 
         template <typename V, typename T>

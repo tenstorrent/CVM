@@ -4,9 +4,6 @@
 
 import json
 
-class QueryError(Exception):
-  pass
-
 class Query:
 
   def __init__(self, json_path: str):
@@ -18,12 +15,12 @@ class Query:
 
   def num_instances(self, module: str):
     try:
-      return self.info[module]["count"]
+      return self.info[module]["NUM"]
     except:
-      raise QueryException
+      raise RuntimeError(f"Fatal: NUM not defined")
 
   def query(self, module: str, attr: str):
     try:
       return self.info[module][attr]
     except:
-      raise QueryException
+      raise RuntimeError(f"Undefined module or attr: {module}, {attr}")

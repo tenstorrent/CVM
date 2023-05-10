@@ -11,17 +11,19 @@ struct wrapper {
 %endfor
 %for location in topo.locations:
     std::vector<cvm::topology::loc_t> locs_${location.name}_${location.path_id};
-  %if location.attributes:
     std::unordered_map<std::string, uint32_t> attrs_${location.name}_${location.path_id};
+    attrs_${location.name}_${location.path_id}["SHARD"] = ${location.shard};
+    attrs_${location.name}_${location.path_id}["TOTAL"] = ${len(location.instances)};
     %for (name, value) in location.attributes:
       %if value.isnumeric():
-    attrs_${location.name}_${location.path_id}["${name}"] = ${value};
+    attrs_${location.name}_${location.path_id}["${name.upper()}"] = ${value};
       %endif
     %endfor
-  %endif
   %for instance in location.instances:
     locs_${location.name}_${location.path_id}.push_back(${instance.loc});
-    locs_${location.typ}.push_back(${instance.loc});
+    %for typ in location.types:
+    locs_${typ}.push_back(${instance.loc});
+    %endfor
     names[${instance.loc}] = "${location.name.upper()}";
   %if location.attributes:
     attrs[${instance.loc}] = attrs_${location.name}_${location.path_id};
@@ -50,29 +52,36 @@ namespace cvm {
       return wrap_;
     }
 
-    // determine whether we received a path or type
-    inline bool isHierarchy(const std::string query) {
-      return query.find('.') != std::string::npos;
-    }
-
-    std::vector<loc_t> get(const std::string& query) {
+    std::vector<loc_t> get_from_type(const std::string& type) {
       try {
-        if (isHierarchy(query))
-          return wrap().str_hierarchy.at(query);
-        else
-          return wrap().str_type.at(query);
+        return wrap().str_type.at(type);
       }
       catch (...) {
         return {};
       }
     }
 
-    loc_t get(const std::string& query, unsigned id) {
+    std::vector<loc_t> get_from_hierarchy(const std::string& hierarchy) {
       try {
-        if (isHierarchy(query))
-          return wrap().str_hierarchy.at(query).at(id);
-        else
-          return wrap().str_type.at(query).at(id);
+        return wrap().str_hierarchy.at(hierarchy);
+      }
+      catch (...) {
+        return {};
+      }
+    }
+
+    loc_t get_from_type(const std::string& type, unsigned id) {
+      try {
+          return wrap().str_type.at(type).at(id);
+      }
+      catch (...) {
+        return null;
+      }
+    }
+
+    loc_t get_from_hierarchy(const std::string& hierarchy, unsigned id) {
+      try {
+          return wrap().str_hierarchy.at(hierarchy).at(id);
       }
       catch (...) {
         return null;

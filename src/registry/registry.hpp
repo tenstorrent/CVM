@@ -32,7 +32,7 @@ namespace cvm {
       // core   -   core   -   core
       //   |          |          |
       // checker    checker    checker
-      static constexpr int all = -1;
+      inline static int all = -1;
       inline static messengerr messenger;
       inline static callbackss callbacks;
 
@@ -42,16 +42,15 @@ namespace cvm {
       static bool regist(const std::string& module, int id) {
         static std::list<T> objs_;
 
-        if (module == "TOP") {
-          auto loc = cvm::topology::get(module, 0);
-          if (loc == cvm::topology::null)
-            return false;
+        bool from_hierarchy = module.find('.') != std::string::npos;
 
-          constructors().push_back(
-            [loc] () { objs_.emplace_back(loc, objs_.size()); });
-        }
-        else if (id == all) {
-          auto locs = cvm::topology::get(module);
+        if (id == all) {
+          std::vector<cvm::topology::loc_t> locs;
+          if (from_hierarchy)
+            locs = cvm::topology::get_from_hierarchy(module);
+          else
+            locs = cvm::topology::get_from_type(module);
+
           if (locs.empty())
             return false;
 
@@ -61,7 +60,13 @@ namespace cvm {
                 objs_.emplace_back(loc, objs_.size()); });
         }
         else {
-          auto loc = cvm::topology::get(module, id);
+          cvm::topology::loc_t loc;
+
+          if (from_hierarchy)
+            loc = cvm::topology::get_from_hierarchy(module, id);
+          else
+            loc = cvm::topology::get_from_type(module, id);
+
           if (loc == cvm::topology::null)
             return false;
 
@@ -73,13 +78,16 @@ namespace cvm {
         return true;
       }
 
-      static void reset() {
+      static void build() {
+        for (const auto& construct : constructors())
+          construct();
+      }
+
+      static void shutdown() {
         messenger.clear();
         callbacks.clear();
         for (const auto& destruct : destructors())
           destruct();
-        for (const auto& construct : constructors())
-          construct();
       }
   };
 }

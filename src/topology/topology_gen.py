@@ -30,10 +30,11 @@ class Attribute:
 @dataclass
 class Location:
   name: str
-  typ: str
+  types: list[str]
   path_id: int
   path: str
   children: list[str]
+  shard: int
   instances: list[Instance]
   attributes: list()
 
@@ -57,7 +58,7 @@ class Topology:
     w = Walker()
 
     # null == 0, top (root) == 1
-    locations.append(Location("top", "top", path_id, "TOP", [child.name for child in root.children], [Instance(0, 1)], attributes=list()))
+    locations.append(Location("top", ["top"], path_id, "TOP", [child.name for child in root.children], 1, [Instance(0, 1)], attributes=list()))
     types.append("top")
 
     for node in LevelOrderIter(root, filter_=lambda n: n.name not in ('top')):
@@ -74,9 +75,11 @@ class Topology:
       for parent in walk:
         path += "." + parent.name.upper()
 
-      if node.typ not in types:
-        types.append(node.typ)
-      locations.append(Location(node.name, node.typ, path_id, path, [child.name for child in node.children], instances, node.attributes))
+      for typ in node.types:
+        if typ not in types:
+          types.append(typ)
+
+      locations.append(Location(node.name, node.types, path_id, path, [child.name for child in node.children], node.shard, instances, node.attributes))
     return cls(locations, types)
 
 class TopologyGen:
@@ -114,13 +117,14 @@ class TopologyGen:
         # print(RenderTree(self.root, style=AsciiStyle()).by_attr())
       except yaml.YAMLError as exc:
         print(exc)
+        raise Exception("Failed to parse merged topology file")
 
     # generate topology class
     self.topology = Topology.load(self.root)
 
   def recurse(self, name, children, parent, uppers):
     if "count" not in children or "type" not in children:
-      raise RuntimeError("Must specify a `count` and `type` for each node in topology")
+      raise RuntimeError("Must specify a `count` and `type` for each node in topology. Faulting node is {name}")
 
     count = children["count"]*uppers
 
@@ -129,10 +133,12 @@ class TopologyGen:
     else:
       attributes = list()
 
-    new = Node(name, parent=parent, count=count, typ=children["type"], attributes=attributes)
+    new = Node(name, parent=parent, shard=children["count"], count=count, types=children["type"], attributes=attributes)
 
     for key, val in children.items():
       if key != "count" and key != "type" and key != "attrs":
+        if key == "instances":
+            raise RuntimeError("Reserved keyword: instances")
         self.recurse(key, val, new, count)
 
   def generate(self, buf, which):

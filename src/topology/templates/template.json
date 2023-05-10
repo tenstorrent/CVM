@@ -1,19 +1,13 @@
 {
 %for idx, location in enumerate(topo.locations):
   "${location.path}" : {
+    "SHARD" : ${location.shard},
+    "TOTAL" : ${len(location.instances)}${"," if location.attributes else ""}
   %for attr_idx, (name, value) in enumerate(location.attributes):
     %if value.isnumeric():
-    "${name}" : ${value}\
-    %endif
-    %if attr_idx != len(location.attributes) - 1:
-,
+    "${name.upper()}" : ${value}${"," if attr_idx != len(location.attributes) - 1 else ""}
     %endif
   %endfor
-  }\
-  %if idx != len(topo.locations) - 1:
-,
-  %else:
-
-  %endif
+  }${"," if idx != len(topo.locations) - 1 else ""}
 %endfor
 }

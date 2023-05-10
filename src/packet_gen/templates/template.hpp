@@ -12,6 +12,7 @@ namespace ${packets.name} {
 %endfor
     } message_number;
 
+    // TODO: namespace by ports
 %for packet in packets.packets:
     struct ${packet.name} {
     % for i,field in enumerate(packet.fields):

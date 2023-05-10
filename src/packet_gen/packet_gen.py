@@ -47,14 +47,15 @@ class Packet:
     domain: int
     num: int
     context: bool
+    port: str
     fields: list[Field]
 
     @classmethod
-    def load(cls, name, values):
+    def load(cls, name, values, port):
         # packets always need topology location
         fields = [Field.load("location", { "width" : 32 })]
         fields += [Field.load(name, v) for name,v in values['fields'].items()]
-        return cls(name, values.get("domain", None), values.get("num", 1), values.get("context", False), fields)
+        return cls(name, values.get("domain", None), values.get("num", 1), values.get("context", False), port, fields)
 
     def to_c_enum(self):
         return 'MSG_NUMBER_' + self.name
@@ -66,7 +67,7 @@ class Packet:
 class Packets:
     name: str
     packets: list[Packet]
-
+    ports: dict
 
     @classmethod
     def load_file(cls, name, filename, topology):
@@ -87,8 +88,13 @@ class Packets:
         yaml.add_implicit_resolver('!sub', sub_matcher, None, yaml.SafeLoader)
         yaml.add_constructor('!sub', sub_constructor, yaml.SafeLoader)
 
+        packets = []
+        ports = dict()
         with open(filename, "r") as stream:
-            return cls(name, [Packet.load(name, values) for name,values in yaml.safe_load(stream).items()])
+            for port, values in yaml.safe_load(stream).items():
+                ports[port] = values.get("num", 1)
+                packets += [Packet.load(packet_name, packet_values, port) for packet_name, packet_values in values.items() if packet_name != "num"]
+        return cls(name, packets, ports)
 
     def clog2(self, num):
 

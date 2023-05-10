@@ -13,7 +13,8 @@ class dummy {
 REGISTRY_register(dummy, TOP.CLUSTER.CORE, 0)
 
 extern "C" void cvm_registry_reset() {
-    cvm::registry::reset();
+    cvm::registry::build();
+    cvm::registry::shutdown();
 };
 
 TEST(Registry, Dummy) {

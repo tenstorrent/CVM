@@ -11,15 +11,35 @@ namespace cvm {
     struct bitmanip {
 
         template <typename T>
+        struct is_bitset : std::false_type {};
+
+        template <std::size_t N>
+        struct is_bitset<std::bitset<N>> : std::true_type {};
+
+        template <typename T>
+        inline static constexpr bool is_bitset_v = is_bitset<T>::value;
+
+        template <typename T>
             static constexpr T mask(size_t bits) {
-                assert(8*sizeof(T) >= bits);
-                if (8*sizeof(T) == bits) return ~T(0);
-                return (T(1) << bits) - 1;
+                if constexpr (is_bitset_v<T>) {
+                    assert(T().size() >= bits);
+                    assert(8*sizeof(uint64_t) > bits);
+                    if (T().size() == bits) return ~T(0);
+                    return T((1ULL << bits) - 1);
+                }
+                else {
+                    assert(8*sizeof(T) >= bits);
+                    if (8*sizeof(T) == bits) return ~T(0);
+                    return (T(1) << bits) - 1;
+                }
             }
 
         template <typename T>
             static constexpr T mask(size_t msb, size_t lsb) {
-                assert(8*sizeof(T) > msb);
+                if constexpr(is_bitset_v<T>)
+                  assert(T().size() > msb);
+                else
+                  assert(8*sizeof(T) > msb);
                 return mask<T>(msb - lsb + 1) << lsb;
             }
 
@@ -28,26 +48,13 @@ namespace cvm {
                 return (t & mask<T>(msb, lsb)) >> lsb;
             }
 
-        template <typename T, typename V>
-            static constexpr void slice(const T& t, V& res, size_t msb, size_t lsb) {
-                res = slice<T>(t, msb, lsb);
-            }
-
-        template <typename T, size_t N>
-            static constexpr void slice(const std::bitset<N>& t, T& res, size_t msb, size_t lsb) {
-                static_assert(std::numeric_limits<T>::max() <= std::numeric_limits<unsigned long long>::max());
-                std::bitset<N> mask((1 << (msb - lsb + 1)) - 1);
-                auto lower = (t >> lsb) & mask;
-                res = slice<T>(lower.to_ullong(), msb - lsb, 0);
-            }
-
         template <typename V, typename T>
             static constexpr V array_slice(const T* arr, const size_t msb, const size_t lsb) {
                 const std::size_t G = 8*sizeof(T);
 
                 V v(0);
 
-                size_t bits_left_in_g;
+                size_t bits_left_in_g = 0;
                 for (size_t bit = lsb; bit <= msb; bit += bits_left_in_g) {
 
                     size_t bits_left = msb - bit + 1;

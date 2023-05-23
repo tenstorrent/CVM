@@ -21,25 +21,23 @@ namespace cvm {
 
         template <typename T>
             static constexpr T mask(size_t bits) {
-                if constexpr (is_bitset_v<T>) {
-                    assert(T().size() >= bits);
-                    assert(8*sizeof(uint64_t) > bits);
-                    if (T().size() == bits) return ~T(0);
-                    return T((1ULL << bits) - 1);
-                }
-                else {
-                    assert(8*sizeof(T) >= bits);
-                    if (8*sizeof(T) == bits) return ~T(0);
-                    return (T(1) << bits) - 1;
-                }
+                size_t size;
+                if constexpr (is_bitset_v<T>)
+                    size = T().size();
+                else
+                    size = 8*sizeof(T);
+
+                assert(size >= bits);
+                if (size == bits) return ~T(0);
+                return ~(~T(0) << bits);
             }
 
         template <typename T>
             static constexpr T mask(size_t msb, size_t lsb) {
                 if constexpr(is_bitset_v<T>)
-                  assert(T().size() > msb);
+                    assert(T().size() > msb);
                 else
-                  assert(8*sizeof(T) > msb);
+                    assert(8*sizeof(T) > msb);
                 return mask<T>(msb - lsb + 1) << lsb;
             }
 

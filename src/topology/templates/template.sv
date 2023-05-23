@@ -6,14 +6,15 @@ package topology_pkg;
 
 %for location in reversed:
   typedef struct packed {
-    int unsigned id;
-    int unsigned count;
+    int unsigned ID;
+    int unsigned SHARD;
+    int unsigned TOTAL;
   %for child in location.children:
     ${child}_${topo.location(child).path_id}_t ${child.upper()};
   %endfor
   %for (name, value) in location.attributes:
     %if value.isnumeric():
-    int unsigned ${name};
+    int unsigned ${name.upper()};
     %endif
   %endfor
   } ${location.name}_${location.path_id}_t;
@@ -25,14 +26,14 @@ package topology_pkg;
   } topology_t;
 
   localparam topology_t mods = '{
-<%def name="recurse(next)">
-    '{${next.path_id}, ${len(next.instances)}\
+<%def name="recurse(next)">\
+    '{${next.path_id}, ${next.shard}, ${len(next.instances)}\
   %for child in next.children:
 , ${recurse(topo.location(child))}\
   %endfor
   %for name, value in next.attributes:
     %if value.isnumeric():
-, ${value}
+, ${value}\
     %endif
   %endfor
 }\

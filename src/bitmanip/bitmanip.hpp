@@ -3,21 +3,41 @@
 #include <cinttypes>
 #include <algorithm>
 #include <cassert>
+#include <bitset>
+#include <limits>
 
 namespace cvm {
 
     struct bitmanip {
 
         template <typename T>
+        struct is_bitset : std::false_type {};
+
+        template <std::size_t N>
+        struct is_bitset<std::bitset<N>> : std::true_type {};
+
+        template <typename T>
+        inline static constexpr bool is_bitset_v = is_bitset<T>::value;
+
+        template <typename T>
             static constexpr T mask(size_t bits) {
-                assert(8*sizeof(T) >= bits);
-                if (8*sizeof(T) == bits) return ~T(0);
-                return (T(1) << bits) - 1;
+                size_t size;
+                if constexpr (is_bitset_v<T>)
+                    size = T().size();
+                else
+                    size = 8*sizeof(T);
+
+                assert(size >= bits);
+                if (size == bits) return ~T(0);
+                return ~(~T(0) << bits);
             }
 
         template <typename T>
             static constexpr T mask(size_t msb, size_t lsb) {
-                assert(8*sizeof(T) > msb);
+                if constexpr(is_bitset_v<T>)
+                    assert(T().size() > msb);
+                else
+                    assert(8*sizeof(T) > msb);
                 return mask<T>(msb - lsb + 1) << lsb;
             }
 
@@ -32,7 +52,7 @@ namespace cvm {
 
                 V v(0);
 
-                size_t bits_left_in_g;
+                size_t bits_left_in_g = 0;
                 for (size_t bit = lsb; bit <= msb; bit += bits_left_in_g) {
 
                     size_t bits_left = msb - bit + 1;

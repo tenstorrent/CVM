@@ -1,17 +1,27 @@
-pkt:
-    domain: 1
-    num: 8
-    fields:
-        x54:
-            width: ${TOP.CLUSTER.CORE.width * 27}
-        x256:
-            width: 256
-        num:
-            width: 3
+dut:
+  num: 1
+  pkt:
+      domain: 1
+      num: 8
+      fields:
+          x54:
+              width: ${TOP.CLUSTER.CORE.WIDTH * 27}
+          x256:
+              width: 256
+          num:
+              width: 3
 
-ctx:
-    domain: 1
-    context: true
-    fields:
-        dummy:
-            width: 1
+  ctx:
+      domain: 1
+      context: true
+      fields:
+          dummy:
+              width: 1
+
+dut2:
+  num: 2
+  pkt2:
+      domain: 1
+      fields:
+          dummy2:
+            width: 2

@@ -8,7 +8,7 @@
         if packet.domain is not None:
             if packet.domain not in by_domain:
                 by_domain[packet.domain] = []
-            by_domain[packet.domain].append(packet) 
+            by_domain[packet.domain].append(packet)
     bs = "\\"
 %>\
 `ifndef ${include_guard}
@@ -38,7 +38,7 @@ package ${packets.name};
 %for domain,domain_packets in by_domain.items():
     typedef struct packed {
     %for packet in domain_packets:
-        ${packet.name}_with_valid[${packet.num}-1:0] ${packet.name}s;
+        ${packet.name}_with_valid[${packets.ports[packet.port]}-1:0][${packet.num}-1:0] ${packet.name}s;
     %endfor
     } domain_${domain};
 %endfor
@@ -86,24 +86,30 @@ module ${packets.name}_domain_${domain}(
 
 %for packet in domain_packets:
 
+    localparam int NUM_PORTS_${packet.name} = $size(tx.${packet.name}s);
+
     localparam int DATA_${packet.name}_BITS = $bits(${packets.name}::${packet.name});
     localparam int MESSAGE_${packet.name}_BYTES = (DATA_${packet.name}_BITS + HEADER_BITS + 7) / 8;
-    
-    byte unsigned ${packet.name}_message[$size(tx.${packet.name}s)][MESSAGE_${packet.name}_BYTES];
+
+    byte unsigned ${packet.name}_message[NUM_PORTS_${packet.name}][$size(tx.${packet.name}s[0])][MESSAGE_${packet.name}_BYTES];
 
     import "DPI-C" ${"context" if packet.context else ""} function void ${packets.name}_message_${packet.name}(byte unsigned message[MESSAGE_${packet.name}_BYTES]);
 
-    for (genvar i = 0; i < $size(tx.${packet.name}s); i++) begin
-        ${packets.name}_write_message #(${packets.name}::${packet.name}, ${packets.name}::message_number, ${packets.name}::${packet.to_sv_enum()}) ${packet.name}_writer (clk, tx.${packet.name}s[i].data, ${packet.name}_message[i]);
+    for (genvar port = 0; port < NUM_PORTS_${packet.name}; port++) begin
+        for (genvar i = 0; i < $size(tx.${packet.name}s[0]); i++) begin
+            ${packets.name}_write_message #(${packets.name}::${packet.name}, ${packets.name}::message_number, ${packets.name}::${packet.to_sv_enum()}) ${packet.name}_writer (clk, tx.${packet.name}s[port][i].data, ${packet.name}_message[port][i]);
+        end
     end
 %endfor
 
     always @(posedge clk) begin
 %for packet in domain_packets:
-    %for i in range(packet.num):
-        if (tx.${packet.name}s[${i}].valid) begin
-          ${packets.name}_message_${packet.name}(${packet.name}_message[${i}]);
+    %for port in range(packets.ports[packet.port]):
+        %for i in range(packet.num):
+        if (tx.${packet.name}s[${port}][${i}].valid) begin
+            ${packets.name}_message_${packet.name}(${packet.name}_message[${port}][${i}]);
         end
+        %endfor
     %endfor
 %endfor
     end
@@ -120,4 +126,23 @@ endmodule
             .*                                        ${bs}
         );
 
+<%
+  by_port = {}
+  for port in packets.ports:
+      for packet in domain_packets:
+          if packet.port == port:
+              by_port[port] = by_port.get(port, list()) + [packet]
+%>
+%for port, port_packets in by_port.items():
+`define ${packets.name.upper()}_OUTPUT_${port.upper()}                     ${bs}
+    %for idx, packet in enumerate(port_packets):
+    output ${packets.name}::${packet.name}_with_valid[${packet.num}-1:0] ${packet.name}s${", \\" if idx != len(port_packets) - 1 else ""}
+    %endfor
+
+`define ${packets.name.upper()}_SOURCE_${port.upper()}(domain, port_num)   ${bs}
+    %for idx, packet in enumerate(port_packets):
+    .${packet.name}s(tx_dom_``domain.${packet.name}s[port_num])${", \\" if idx != len(port_packets) - 1 else ""}
+    %endfor
+
+%endfor
 `endif

@@ -1,15 +1,19 @@
 top:
   cluster:
     count: 1
-    type: cluster
+    type:
+      - cluster
     core:
       count: 3
-      type: core
+      type:
+        - core
       y:
         count: 1
-        type: foo
+        type:
+          - foo
       attrs:
         width: 2
     z:
       count: 1
-      type: bar
+      type:
+        - bar

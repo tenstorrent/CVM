@@ -1,24 +1,51 @@
-module dut(input clk, input rst);
-
-    typedef struct packed {
-        logic[2:0]   num;
-        logic[255:0] x256;
-        logic[53:0]  x54;
-    } my_pkt;
+module dut(
+    input clk,
+    input rst,
+    `TRANSACTIONS_OUTPUT_DUT
+);
 
     logic [7:0] count;
     always @(posedge clk) count <= rst ? '0 : (count + 1);
 
-    for (genvar i = 0; i < 8; i++) begin : sub
-        my_pkt pkt;
-
-        always @(posedge clk) begin
-            pkt.num  <= i;
-            pkt.x256 <= 256'(1) << 255 | 256'(count);
-            pkt.x54  <=  54'(1) <<  53 |  54'(count);
+    int unsigned loc = cvm_topology::nil;
+    always @(posedge clk) begin
+        if (rst) begin
+            loc = cvm_topology::get_location(topology_pkg::mods.TOP.CLUSTER.CORE.ID, 0);
         end
     end
 
+    for (genvar i = 0; i < 8; i++) begin
+        always @(posedge clk) begin
+            pkts[i].valid         <= count > 0;
+            pkts[i].data.location <= loc;
+            pkts[i].data.num      <= i;
+            pkts[i].data.x256     <= 256'(1) << 255 | (256'(count)-1);
+            pkts[i].data.x54      <=  54'(1) <<  53 | (54'(count)-1);
+        end
+    end
+
+    assign ctxs[0].valid           = count == 10;
+    assign ctxs[0].data.location   = loc;
+    assign ctxs[0].data.dummy      = 1'b1;
+
+endmodule
+
+module dut2(
+    input clk,
+    input rst,
+    `TRANSACTIONS_OUTPUT_DUT2
+);
+
+    int unsigned loc = cvm_topology::nil;
+    always@ (posedge clk) begin
+        if (rst) begin
+            loc = cvm_topology::get_location(topology_pkg::mods.TOP.CLUSTER.CORE.ID, 0);
+        end
+    end
+
+    assign pkt2s[0].valid             = loc != cvm_topology::nil;
+    assign pkt2s[0].data.location     = loc;
+    assign pkt2s[0].data.dummy2       = 3;
 endmodule
 
 module top(
@@ -45,25 +72,19 @@ module top(
     logic rst;
     assign rst = clock_count < 5;
 
-    dut dut(.clk, .rst);
+    dut dut(
+        .clk,
+        .rst,
+        `TRANSACTIONS_SOURCE_DUT(1, 0)
+    );
 
-    int unsigned loc;
-    always @(posedge clk) begin
-        if (rst) begin
-            loc = cvm_topology::get_location(topology_pkg::mods.TOP.CLUSTER.CORE.id, 0);
-        end
+    for (genvar p = 0; p < 2; p++) begin
+        dut2 dut(
+            .clk,
+            .rst,
+            `TRANSACTIONS_SOURCE_DUT2(1, p)
+        );
     end
-
-    for (genvar i = 0; i < 8; i++) begin
-        assign tx_dom_1.pkts[i].valid = clock_count >= 6;
-        assign tx_dom_1.pkts[i].data.location  = loc;
-        assign tx_dom_1.pkts[i].data.num  = dut.sub[i].pkt.num ;
-        assign tx_dom_1.pkts[i].data.x256 = dut.sub[i].pkt.x256 ;
-        assign tx_dom_1.pkts[i].data.x54  = dut.sub[i].pkt.x54;
-    end
-    assign tx_dom_1.ctxs[0].valid      = clock_count == 15;
-    assign tx_dom_1.ctxs[0].data.location   = loc;
-    assign tx_dom_1.ctxs[0].data.dummy = 1'b1;
 
     import "DPI-C" function void start_checker();
     initial start_checker();

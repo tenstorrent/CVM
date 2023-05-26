@@ -91,15 +91,25 @@ module ${packets.name}_domain_${domain}(
     localparam int DATA_${packet.name}_BITS = $bits(${packets.name}::${packet.name});
     localparam int MESSAGE_${packet.name}_BYTES = (DATA_${packet.name}_BITS + HEADER_BITS + 7) / 8;
 
-    byte unsigned ${packet.name}_message[NUM_PORTS_${packet.name}][$size(tx.${packet.name}s[0])][MESSAGE_${packet.name}_BYTES];
+    typedef byte unsigned ${packet.name}_message_t[MESSAGE_${packet.name}_BYTES];
 
-    import "DPI-C" ${"context" if packet.context else ""} function void ${packets.name}_message_${packet.name}(byte unsigned message[MESSAGE_${packet.name}_BYTES]);
+    import "DPI-C" ${"context" if packet.context else ""} function void ${packets.name}_message_${packet.name}(${packet.name}_message_t message);
 
-    for (genvar port = 0; port < NUM_PORTS_${packet.name}; port++) begin
-        for (genvar i = 0; i < $size(tx.${packet.name}s[0]); i++) begin
-            ${packets.name}_write_message #(${packets.name}::${packet.name}, ${packets.name}::message_number, ${packets.name}::${packet.to_sv_enum()}) ${packet.name}_writer (clk, tx.${packet.name}s[port][i].data, ${packet.name}_message[port][i]);
+    function automatic ${packet.name}_message_t ${packet.name}_unpack(${packets.name}::${packet.name} packet);
+        localparam int B = MESSAGE_${packet.name}_BYTES;
+        localparam ${packets.name}::message_number N = ${packets.name}::${packet.to_sv_enum()};
+
+        ${packet.name}_message_t message;
+
+        automatic logic[B*8 - 1:0] short = (8*B)'({packet, N});
+
+        for (int b = 0; b < B; b++) begin
+            message[b] = short[8*b +: 8];
         end
-    end
+
+        return message;
+
+    endfunction
 %endfor
 
     always @(posedge clk) begin
@@ -107,7 +117,7 @@ module ${packets.name}_domain_${domain}(
     %for port in range(packets.ports[packet.port]):
         %for i in range(packet.num):
         if (tx.${packet.name}s[${port}][${i}].valid) begin
-            ${packets.name}_message_${packet.name}(${packet.name}_message[${port}][${i}]);
+            ${packets.name}_message_${packet.name}(${packet.name}_unpack(tx.${packet.name}s[${port}][${i}].data));
         end
         %endfor
     %endfor

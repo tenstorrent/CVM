@@ -38,8 +38,8 @@ namespace cvm {
 
       // generic interface
       // register classes during static init
-      template<typename T>
-      static bool regist(const std::string& module, int id) {
+      template<typename T, typename... Args>
+      static bool regist(const std::string& module, int id, Args&&... args) {
         static std::list<T> objs_;
 
         bool from_hierarchy = module.find('.') != std::string::npos;
@@ -55,9 +55,9 @@ namespace cvm {
             return false;
 
           constructors().push_back(
-            [locs] () {
+            [locs, ...args = std::forward<Args>(args)] () {
               for (const auto& loc : locs)
-                objs_.emplace_back(loc, objs_.size()); });
+                objs_.emplace_back(loc, objs_.size(), args...); });
         }
         else {
           cvm::topology::loc_t loc;
@@ -71,7 +71,7 @@ namespace cvm {
             return false;
 
           constructors().push_back(
-            [loc] () { objs_.emplace_back(loc, objs_.size()); });
+            [loc, ...args = std::forward<Args>(args)] () { objs_.emplace_back(loc, objs_.size(), args...); });
         }
 
         destructors().push_back([] () { return objs_.clear(); });
@@ -94,8 +94,8 @@ namespace cvm {
 
 // this should be used in source file
 // presumably, objects will subscribe to transactions in constructor
-#define REGISTRY_register(type, module, id) \
+#define REGISTRY_register(type, module, id, ...) \
   namespace _registry { \
-    auto type##_register = []() -> bool { return cvm::registry::regist<type>( #module, id); }; \
+    auto type##_register = []() -> bool { return cvm::registry::regist<type>( #module, id __VA_OPT__(,) __VA_ARGS__); }; \
     bool type##_SUCCESS = type##_register(); \
   }

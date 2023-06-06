@@ -27,18 +27,18 @@ package ${packets.name};
     %for field in reversed(packet.fields):
         logic[${field.width-1}:0] ${field.name};
     %endfor
-    } ${packet.name};
+    } ${packet.port}_${packet.name};
 
     typedef struct packed {
-        ${packet.name} data;
+        ${packet.port}_${packet.name} data;
         logic valid;
-    } ${packet.name}_with_valid;
+    } ${packet.port}_${packet.name}_with_valid;
 %endfor
 
 %for domain,domain_packets in by_domain.items():
     typedef struct packed {
     %for packet in domain_packets:
-        ${packet.name}_with_valid[${packets.ports[packet.port]}-1:0][${packet.num}-1:0] ${packet.name}s;
+        ${packet.port}_${packet.name}_with_valid[${packets.ports[packet.port]}-1:0][${packet.num}-1:0] ${packet.port}_${packet.name}s;
     %endfor
     } domain_${domain};
 %endfor
@@ -86,20 +86,20 @@ module ${packets.name}_domain_${domain}(
 
 %for packet in domain_packets:
 
-    localparam int NUM_PORTS_${packet.name} = $size(tx.${packet.name}s);
+    localparam int NUM_PORTS_${packet.port}_${packet.name} = $size(tx.${packet.port}_${packet.name}s);
 
-    localparam int DATA_${packet.name}_BITS = $bits(${packets.name}::${packet.name});
-    localparam int MESSAGE_${packet.name}_BYTES = (DATA_${packet.name}_BITS + HEADER_BITS + 7) / 8;
+    localparam int DATA_${packet.port}_${packet.name}_BITS = $bits(${packets.name}::${packet.port}_${packet.name});
+    localparam int MESSAGE_${packet.port}_${packet.name}_BYTES = (DATA_${packet.port}_${packet.name}_BITS + HEADER_BITS + 7) / 8;
 
-    typedef byte unsigned ${packet.name}_message_t[MESSAGE_${packet.name}_BYTES];
+    typedef byte unsigned ${packet.port}_${packet.name}_message_t[MESSAGE_${packet.port}_${packet.name}_BYTES];
 
-    import "DPI-C" ${"context" if packet.context else ""} function void ${packets.name}_message_${packet.name}(${packet.name}_message_t message);
+    import "DPI-C" ${"context" if packet.context else ""} function void ${packets.name}_message_${packet.port}_${packet.name}(${packet.port}_${packet.name}_message_t message);
 
-    function automatic ${packet.name}_message_t ${packet.name}_unpack(${packets.name}::${packet.name} packet);
-        localparam int B = MESSAGE_${packet.name}_BYTES;
+    function automatic ${packet.port}_${packet.name}_message_t ${packet.port}_${packet.name}_unpack(${packets.name}::${packet.port}_${packet.name} packet);
+        localparam int B = MESSAGE_${packet.port}_${packet.name}_BYTES;
         localparam ${packets.name}::message_number N = ${packets.name}::${packet.to_sv_enum()};
 
-        ${packet.name}_message_t message;
+        ${packet.port}_${packet.name}_message_t message;
 
         automatic logic[B*8 - 1:0] short = (8*B)'({packet, N});
 
@@ -116,8 +116,8 @@ module ${packets.name}_domain_${domain}(
 %for packet in domain_packets:
     %for port in range(packets.ports[packet.port]):
         %for i in range(packet.num):
-        if (tx.${packet.name}s[${port}][${i}].valid) begin
-            ${packets.name}_message_${packet.name}(${packet.name}_unpack(tx.${packet.name}s[${port}][${i}].data));
+        if (tx.${packet.port}_${packet.name}s[${port}][${i}].valid) begin
+            ${packets.name}_message_${packet.port}_${packet.name}(${packet.port}_${packet.name}_unpack(tx.${packet.port}_${packet.name}s[${port}][${i}].data));
         end
         %endfor
     %endfor
@@ -146,12 +146,12 @@ endmodule
 %for port, port_packets in by_port.items():
 `define ${packets.name.upper()}_OUTPUT_${port.upper()}                     ${bs}
     %for idx, packet in enumerate(port_packets):
-    output ${packets.name}::${packet.name}_with_valid[${packet.num}-1:0] ${packet.name}s${", \\" if idx != len(port_packets) - 1 else ""}
+    output ${packets.name}::${port}_${packet.name}_with_valid[${packet.num}-1:0] ${packet.name}s${", \\" if idx != len(port_packets) - 1 else ""}
     %endfor
 
 `define ${packets.name.upper()}_SOURCE_${port.upper()}(domain, port_num)   ${bs}
     %for idx, packet in enumerate(port_packets):
-    .${packet.name}s(tx_dom_``domain.${packet.name}s[port_num])${", \\" if idx != len(port_packets) - 1 else ""}
+    .${packet.name}s(tx_dom_``domain.${port}_${packet.name}s[port_num])${", \\" if idx != len(port_packets) - 1 else ""}
     %endfor
 
 %endfor

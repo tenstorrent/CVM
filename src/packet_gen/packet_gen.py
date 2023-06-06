@@ -58,7 +58,7 @@ class Packet:
         return cls(name, values.get("domain", None), values.get("num", 1), values.get("context", False), port, fields)
 
     def to_c_enum(self):
-        return 'MSG_NUMBER_' + self.name
+        return 'MSG_NUMBER_' + self.port + '_' + self.name
 
     def to_sv_enum(self):
         return self.to_c_enum()
@@ -92,7 +92,9 @@ class Packets:
         ports = dict()
         with open(filename, "r") as stream:
             for port, values in yaml.safe_load(stream).items():
-                ports[port] = values.get("num", 1)
+                #FIXME: can't think of a good fix for this, there would need to be ifdefs in SV/C++ for code that depends on a packet to be generated
+                # even though it might not be needed
+                ports[port] = values.get("num", 0)
                 packets += [Packet.load(packet_name, packet_values, port) for packet_name, packet_values in values.items() if packet_name != "num"]
         return cls(name, packets, ports)
 

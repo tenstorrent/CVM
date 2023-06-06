@@ -11,21 +11,21 @@ class checker {
             auto loc = cvm::topology::get_from_hierarchy("TOP.CLUSTER.CORE", 0);
             check<uint32_t>("CORE.width", cvm::topology::attr(loc, "WIDTH").second, 2);
             check<std::string>("CORE.name", cvm::topology::name(loc), "CORE");
-            cvm::registry::messenger.connect<transactions::pkt>(
+            cvm::registry::messenger.connect<transactions::dut::pkt>(
                 loc,
-                [this] (const transactions::pkt& ret) {
+                [this] (const transactions::dut::pkt& ret) {
                     return this->check(ret);
                 }
              );
-            cvm::registry::messenger.connect<transactions::pkt2>(
+            cvm::registry::messenger.connect<transactions::dut2::pkt2>(
                 loc,
-                [this] (const transactions::pkt2& ret) {
+                [this] (const transactions::dut2::pkt2& ret) {
                     return this->check(ret);
                 }
              );
-            cvm::registry::messenger.connect<transactions::ctx>(
+            cvm::registry::messenger.connect<transactions::dut::ctx>(
                 loc,
-                [] (const transactions::ctx& ret) {
+                [] (const transactions::dut::ctx& ret) {
                     transactions_finish();
                 }
              );
@@ -40,14 +40,14 @@ class checker {
                 ASSERT_EQ(actual, expected);
             }
 
-        void check(const transactions::pkt& pkt) {
+        void check(const transactions::dut::pkt& pkt) {
             check("num", pkt.num, decltype(pkt.num)(count_ % 8));
             check("x256", pkt.x256, decltype(pkt.x256)(1) << 255 | decltype(pkt.x256)(count_ / 8));
             check("x54", pkt.x54, decltype(pkt.x54)(1) << 53 | decltype(pkt.x54)(count_ / 8));
             count_++;
         }
 
-        void check(const transactions::pkt2& pkt2) {
+        void check(const transactions::dut2::pkt2& pkt2) {
             check("dummy2", pkt2.dummy2, decltype(pkt2.dummy2)(3));
         }
 

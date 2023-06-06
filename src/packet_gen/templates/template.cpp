@@ -9,8 +9,8 @@ extern "C" void ${packets.name}_message(const std::uint8_t* message) {
     switch(message_number) {
     %for packet in packets.packets:
         case ${packets.name}::${packet.to_c_enum()}: {
-            ${packets.name}::${packet.name} ${packet.name}(message, ${packets.enum_width()});
-            cvm::registry::messenger.signal<${packets.name}::${packet.name}>(${packet.name}.location, ${packet.name});
+            ${packets.name}::${packet.port}::${packet.name} ${packet.name}(message, ${packets.enum_width()});
+            cvm::registry::messenger.signal<${packets.name}::${packet.port}::${packet.name}>(${packet.name}.location, ${packet.name});
             break;
         }
     %endfor
@@ -22,7 +22,7 @@ extern "C" void ${packets.name}_message(const std::uint8_t* message) {
 }
 
 %for packet in packets.packets:
-extern "C" void ${packets.name}_message_${packet.name}(const std::uint8_t* message) {
+extern "C" void ${packets.name}_message_${packet.port}_${packet.name}(const std::uint8_t* message) {
     ${packets.name}_message(message);
 }
 %endfor

@@ -17,44 +17,14 @@ callbackss::~callbackss() {
 }
 
 void
-callbackss::push(svScope scope, const cb& func) {
-  std::lock_guard<std::mutex> lock(m_);
-  que_.emplace(scope, func);
-  c_.notify_one();
-}
-
-void
-callbackss::push(svScope scope, cb&& func) {
-  std::lock_guard<std::mutex> lock(m_);
-  que_.emplace(scope, std::move(func));
-  c_.notify_one();
-}
-
-void
-callbackss::pull() {
+callbackss::flush() {
   std::unique_lock<std::mutex> lock(m_);
-  while (que_.empty()) {
+  while (FLAGS_cb_async and que_.empty()) {
     c_.wait_for(lock, 100ms);
     if (this->finished()) return;
   }
-  auto [scope, func] = std::move(que_.front());
-  que_.pop();
-  svSetScope(scope);
-  func();
-}
-
-void
-callbackss::flush() {
-  if (FLAGS_cb_async)
-    return;
-
-  std::lock_guard<std::mutex> lock(m_);
-  while (!que_.empty()) {
-    auto [scope, func] = std::move(que_.front());
-    que_.pop();
-    svSetScope(scope);
-    func();
-  }
+  std::for_each(que_.begin(), que_.end(), [](scoped_cb cb) { svSetScope(std::get<0>(cb)); std::get<1>(cb)(); });
+  que_.clear();
 }
 
 void
@@ -69,9 +39,8 @@ callbackss::clear() {
   quit_ = false;
   if (FLAGS_cb_async) {
     async_ = std::thread([&] () {
-      while(not this->finished()) { this->pull(); }});
+      while(not this->finished()) { this->flush(); }});
   }
-  while (!que_.empty()) {
-    que_.pop();
-  }
+
+  que_.clear();
 }

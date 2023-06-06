@@ -39,7 +39,7 @@ callbackss::clear() {
   quit_ = false;
   if (FLAGS_cb_async) {
     async_ = std::thread([&] () {
-      while(not this->finished()) { this->flush(); }});
+      while(!this->finished()) { this->flush(); }});
   }
 
   que_.clear();

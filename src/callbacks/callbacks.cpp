@@ -19,7 +19,7 @@ callbackss::~callbackss() {
 void
 callbackss::flush() {
   std::unique_lock<std::mutex> lock(m_);
-  while (FLAGS_cb_async and que_.empty()) {
+  while (FLAGS_cb_async && que_.empty()) {
     c_.wait_for(lock, 100ms);
     if (this->finished()) return;
   }

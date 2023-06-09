@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cassert>
 #include <bitset>
+#include <vector>
 
 namespace cvm {
 
@@ -33,7 +34,7 @@ namespace cvm {
 
         template <typename T>
             static constexpr T mask(size_t msb, size_t lsb) {
-                if constexpr(is_bitset_v<T>)
+                if constexpr (is_bitset_v<T>)
                     assert(T().size() > msb);
                 else
                     assert(8*sizeof(T) > msb);
@@ -43,6 +44,51 @@ namespace cvm {
         template <typename T>
             static constexpr T slice(const T& t, size_t msb, size_t lsb) {
                 return (t & mask<T>(msb, lsb)) >> lsb;
+            }
+
+        template <typename T, typename U = std::vector<uint8_t>, typename std::enable_if<std::is_fundamental_v<typename U::value_type> &&
+                                                                                !std::is_same_v<U, std::vector<bool>>, bool>::type = true>
+            static constexpr U slice(const T& t) {
+                U u{};
+                auto el_size = 8*sizeof(typename U::value_type);
+                if constexpr (is_bitset_v<T>) {
+                    for (size_t i = 0; (i + el_size) <= t.size(); i += el_size) {
+                        auto msb = i + el_size - 1;
+                        auto lsb = i;
+                        auto res = slice(t, msb, lsb);
+                        u.push_back(res.to_ulong());
+                    }
+                }
+                else {
+                    for (size_t i = 0; (i + el_size) <= 8*sizeof(t); i += el_size) {
+                        auto msb = i + el_size - 1;
+                        auto lsb = i;
+                        auto res = slice(t, msb, lsb);
+                        u.push_back(res);
+                    }
+                }
+                return u;
+            }
+
+        template <typename T, typename U = std::vector<bool>, typename std::enable_if<std::is_fundamental_v<typename U::value_type> &&
+                                                                              std::is_same_v<U, std::vector<bool>>, bool>::type = true>
+            static constexpr U slice(const T& t) {
+                U u{};
+                if constexpr (is_bitset_v<T>) {
+                    for (size_t i = 0; i < t.size(); i++) {
+                        auto msb = i, lsb = i;
+                        auto res = slice(t, msb, lsb);
+                        u.push_back(res.to_ulong());
+                    }
+                }
+                else {
+                    for (size_t i = 0; i < 8*sizeof(t); i++) {
+                        auto msb = i, lsb = i;
+                        auto res = slice(t, msb, lsb);
+                        u.push_back(res);
+                    }
+                }
+                return u;
             }
 
         template <typename V, typename T>

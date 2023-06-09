@@ -47,7 +47,7 @@ namespace cvm {
             }
 
         template <typename T, typename U = std::vector<uint8_t>, typename std::enable_if<std::is_fundamental_v<typename U::value_type> &&
-                                                                                !std::is_same<U, std::vector<bool>>{}, bool>::type = true>
+                                                                                !std::is_same_v<U, std::vector<bool>>, bool>::type = true>
             static constexpr U slice(const T& t) {
                 U u{};
                 auto el_size = 8*sizeof(typename U::value_type);
@@ -70,8 +70,8 @@ namespace cvm {
                 return u;
             }
 
-        template <typename T, typename U = std::vector<bool>, typename std::enable_if<std::is_fundamental<typename U::value_type>{} &&
-                                                                              std::is_same<U, std::vector<bool>>{}, bool>::type = true>
+        template <typename T, typename U = std::vector<bool>, typename std::enable_if<std::is_fundamental_v<typename U::value_type> &&
+                                                                              std::is_same_v<U, std::vector<bool>>, bool>::type = true>
             static constexpr U slice(const T& t) {
                 U u{};
                 if constexpr (is_bitset_v<T>) {

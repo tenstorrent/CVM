@@ -11,9 +11,7 @@ callbackss::callbackss() {
 }
 
 callbackss::~callbackss() {
-  quit_ = true;
-  if (async_.joinable())
-    async_.join();
+  clear();
 }
 
 void
@@ -28,19 +26,20 @@ callbackss::flush() {
 }
 
 void
-callbackss::clear() {
-  std::lock_guard<std::mutex> lock(m_);
-
-  // if async, will spawn a separate thread to issue callbacks
-  quit_ = true;
-  if (async_.joinable())
-    async_.join();
-
+callbackss::build() {
   quit_ = false;
   if (FLAGS_cb_async) {
     async_ = std::thread([&] () {
       while(!this->finished()) { this->flush(); }});
   }
+}
+
+void
+callbackss::clear() {
+  // if async, will spawn a separate thread to issue callbacks
+  quit_ = true;
+  if (async_.joinable())
+    async_.join();
 
   que_.clear();
 }

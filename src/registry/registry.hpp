@@ -79,6 +79,7 @@ namespace cvm {
       }
 
       static void build() {
+        callbacks.build();
         for (const auto& construct : constructors())
           construct();
       }

@@ -32,6 +32,8 @@ namespace cvm {
 
       void flush();
 
+      void build();
+
       void clear();
 
       inline bool finished()

@@ -7,6 +7,7 @@
 #include <typeinfo>
 #include <typeindex>
 #include "cvm/topology.hpp"
+#include "cvm/logger.hpp"
 
 namespace cvm {
 
@@ -21,7 +22,10 @@ namespace cvm {
               // assume topology
               template<typename T>
               void connect(cvm::topology::loc_t loc, const std::function<void(const T&)>& l) {
-                  assert(loc != cvm::topology::null);
+                  if (loc == cvm::topology::null) {
+                    cvm::log(cvm::ERROR, "attempting to connect to null location");
+                    return;
+                  }
                   auto& per = signals_[std::type_index(typeid(T))];
                   per[loc].push_back([l] (const void* p) {
                       auto pT = static_cast<const T*>(p);
@@ -30,7 +34,10 @@ namespace cvm {
 
               template<typename T>
               void signal(cvm::topology::loc_t loc, const T& t) {
-                  assert(loc != cvm::topology::null);
+                  if (loc == cvm::topology::null) {
+                    cvm::log(cvm::ERROR, "attempting to signal to null location");
+                    return;
+                  }
                   auto& per = signals_[std::type_index(typeid(T))];
                   auto it = per.find(loc);
                   if (it != per.end()) {

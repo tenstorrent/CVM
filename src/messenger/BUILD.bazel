@@ -3,6 +3,7 @@ cc_library(
     hdrs = ["messenger.hpp"],
     deps = [
         "@cvm//:topology",
+        "@cvm//:logger",
     ],
     strip_include_prefix = "//src/messenger",
     include_prefix = "cvm",

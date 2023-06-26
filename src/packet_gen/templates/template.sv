@@ -117,7 +117,8 @@ module ${packets.name}_domain_${domain}(
     %for port in range(packets.ports[packet.port]):
         %for i in range(packet.num):
         if (tx.${packet.port}_${packet.name}s[${port}][${i}].valid) begin
-            ${packets.name}_message_${packet.port}_${packet.name}(${packet.port}_${packet.name}_unpack(tx.${packet.port}_${packet.name}s[${port}][${i}].data));
+            automatic ${packet.port}_${packet.name}_message_t pkt = ${packet.port}_${packet.name}_unpack(tx.${packet.port}_${packet.name}s[${port}][${i}].data);
+            ${packets.name}_message_${packet.port}_${packet.name}(pkt);
         end
         %endfor
     %endfor

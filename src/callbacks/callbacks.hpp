@@ -12,12 +12,12 @@ namespace cvm {
 
   // unified way for modules to add callbacks from C/C++ land
   // callbacks should be a void function
-  class callbackss {
+  class callbacks {
     public:
 
-      callbackss();
+      callbacks();
 
-      ~callbackss();
+      ~callbacks();
 
       typedef std::function<void()> cb;
 

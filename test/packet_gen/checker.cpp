@@ -14,21 +14,21 @@ class checker {
             cvm::registry::messenger.connect<transactions::dut::pkt>(
                 loc,
                 [this] (const transactions::dut::pkt& ret) {
-                    return this->check(ret);
+                    this->check(ret);
                 }
-             );
+            );
             cvm::registry::messenger.connect<transactions::dut2::pkt2>(
                 loc,
                 [this] (const transactions::dut2::pkt2& ret) {
-                    return this->check(ret);
+                    this->check(ret);
                 }
-             );
+            );
             cvm::registry::messenger.connect<transactions::dut::ctx>(
                 loc,
                 [] (const transactions::dut::ctx& ret) {
                     transactions_finish();
                 }
-             );
+            );
         }
 
     private:

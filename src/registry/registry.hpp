@@ -33,8 +33,8 @@ namespace cvm {
       //   |          |          |
       // checker    checker    checker
       inline static int all = -1;
-      inline static messengerr messenger;
-      inline static callbackss callbacks;
+      inline static messenger messenger;
+      inline static callbacks callbacks;
 
       // generic interface
       // register classes during static init

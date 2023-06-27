@@ -91,6 +91,26 @@ The publisher does something similar, but passes the actual message
 
 where they can assume all subscribers will receive this message, but not necessarily know which ones.
 
+#### coroutines
+
+Alternatively, the user can use coroutines as listeners like so
+
+`cvm::registry::messenger.fork(some cvm::messenger::task, args)`
+
+This can be though of as the equivalent of "spawning" a thread which will automatically block execution with `co_await` statements. Along with this, messenger provides the concept of `waits` with both
+
+`wait<transaction_type_t>(location)` which waits for the next occurence of a message and
+
+`wait<transaction_type_t>(channel)` which waits on a messenger-managed queue of transactions. The channel is automatically populated with new transactions matching the transaction type even when the function is suspended. Channels are created with `cvm::registry::messenger.channel<transaction_type_t>(location)` and the user should capture the return value to pass to the `wait` function.
+
+WARNING: don't use a capture list in lambda coroutines, this is dangerous - https://clang.llvm.org/extra/clang-tidy/checks/cppcoreguidelines/avoid-capturing-lambda-coroutines.html
+
+some guides on C++ coroutines,
++ https://en.cppreference.com/w/cpp/language/coroutines
++ https://itnext.io/c-20-coroutines-complete-guide-7c3fc08db89d
++ https://lewissbaker.github.io/2017/11/17/understanding-operator-co-await
++ https://lewissbaker.github.io/2022/08/27/understanding-the-compiler-transform
+
 ### callbacks
 
 This is used for issuing callbacks from C++ to SV through DPI, by passing the relevant DPI function's `svScope` as well as a `std::function` with `void()` type.
@@ -99,7 +119,7 @@ This is used for issuing callbacks from C++ to SV through DPI, by passing the re
 
 ## packet gen
 
-Unified way to issue function calls like callbacks from C++ -> SV, but for SV -> C++. The user defines the "packets" like in `test/packet_gen/transactions.yml`, the top level represents "ports" which is a useful concept for when there is a single yml file for multiple transaction types that needs to be shared with multiple modules. `packet_gen` itself generates boilerplate for C++ and SV code. These are accessible in SV using
+Unified way to issue function calls like `callbacks` from C++ -> SV, but for SV -> C++. The user defines the "packets" in `test/packet_gen/transactions.yml`, the top level represents "ports" which is a useful concept for when there is a single yml file for multiple transaction types that needs to be shared with multiple modules. `packet_gen` itself generates boilerplate for C++ and SV code. These are accessible in SV using
 
 + `packet_gen_name_DOMAIN` - instantiates an SV module which issues callbacks as well as all packet `logic` signals
 + `packet_gen_name_OUTPUT_port` - macro to indicate output source of a packet (used within a module which doesn't have the `packet_gen` module instantiation itself)

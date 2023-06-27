@@ -7,15 +7,15 @@ DEFINE_bool(cb_async, false, "use asynchronous callbacks");
 
 using namespace cvm;
 
-callbackss::callbackss() {
+callbacks::callbacks() {
 }
 
-callbackss::~callbackss() {
+callbacks::~callbacks() {
   clear();
 }
 
 void
-callbackss::flush() {
+callbacks::flush() {
   std::unique_lock<std::mutex> lock(m_);
   while (FLAGS_cb_async && que_.empty()) {
     c_.wait_for(lock, 100ms);
@@ -26,7 +26,7 @@ callbackss::flush() {
 }
 
 void
-callbackss::build() {
+callbacks::build() {
   quit_ = false;
   if (FLAGS_cb_async) {
     async_ = std::thread([&] () {
@@ -35,7 +35,7 @@ callbackss::build() {
 }
 
 void
-callbackss::clear() {
+callbacks::clear() {
   // if async, will spawn a separate thread to issue callbacks
   quit_ = true;
   if (async_.joinable())

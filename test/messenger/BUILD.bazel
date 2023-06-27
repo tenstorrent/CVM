@@ -1,0 +1,10 @@
+cc_test(
+    name = "messenger_test",
+    size = "small",
+    srcs = ["test.cpp"],
+    deps = [
+        "//:messenger",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+

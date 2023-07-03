@@ -20,7 +20,7 @@ namespace cvm {
         private:
 
             static verbosity_level verbosity;
-            static std::unordered_map<verbosity_level, std::function<void()>> handlers;
+            static std::unordered_map<verbosity_level, std::vector<std::function<void()>>> handlers;
 
         public:
 
@@ -33,7 +33,7 @@ namespace cvm {
 
             static void set_handler(verbosity_level v, std::function<void()> handler) {
 
-                handlers[v] = handler;
+                handlers[v].push_back(handler);
 
             }
 
@@ -50,7 +50,8 @@ namespace cvm {
                     auto it = handlers.find(v);
                     if (it != handlers.end()) {
 
-                      (it->second)();
+                      for (const auto& handler: it->second)
+                        handler();
 
                     }
 
@@ -68,7 +69,8 @@ namespace cvm {
                     auto it = handlers.find(v);
                     if (it != handlers.end()) {
 
-                      (it->second)();
+                      for (const auto& handler: it->second)
+                        handler();
 
                     }
 

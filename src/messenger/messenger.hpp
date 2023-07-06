@@ -10,7 +10,8 @@
 #include <memory>
 #include <queue>
 #include <cassert>
-#include <iostream>
+#include <thread>
+#include <mutex>
 #include "cvm/topology.hpp"
 
 namespace cvm {
@@ -188,7 +189,7 @@ namespace cvm {
               class pool : public pool_base {
                   public:
 
-                      pool(std::vector<task<void>>& handlers) : tasks_(handlers) {};
+                      virtual ~pool() {}
 
                       typedef std::function<void(const T&)> listener;
                       void add_long_running(cvm::topology::loc_t loc, const listener& handle) {
@@ -199,7 +200,7 @@ namespace cvm {
                           consumers_[loc].emplace_back(handle, t);
                       }
 
-                      void run(cvm::topology::loc_t loc, T t) {
+                      bool run(cvm::topology::loc_t loc, T t) {
                           // first append to all existing channels
                           for (auto& channel : channels_)
                               if (std::get<0>(channel) == loc)
@@ -220,10 +221,7 @@ namespace cvm {
                                       clean |= std::get<0>(consumer).done();
                               });
 
-                          // not necessary all the time - need to use a GC?
-                          if (clean)
-                              tasks_.erase(std::remove_if(tasks_.begin(), tasks_.end(),
-                                  [] (const auto& handler) { return handler.done(); }), tasks_.end());
+                          return clean;
                       }
 
                       task<T> wait(cvm::topology::loc_t loc) {
@@ -277,8 +275,6 @@ namespace cvm {
 
                   private:
 
-                      std::vector<task<void>>& tasks_;
-
                       typedef std::vector<listener> long_runnings;
                       std::unordered_map<cvm::topology::loc_t, long_runnings> long_runnings_;
 
@@ -295,7 +291,7 @@ namespace cvm {
                       assert(false && "attempting to connect to null location");
                       return;
                   }
-                  message_pool<T>().add_long_running(loc, l);
+                  message_pool<T>()->add_long_running(loc, l);
                   return;
               }
 
@@ -304,8 +300,10 @@ namespace cvm {
               void fork(U l, Args&&... args) {
                   auto forked = (*l)(std::forward<Args>(args)...);
                   forked.resume();
-                  if (!forked.done())
+                  if (!forked.done()) {
+                      std::lock_guard<std::mutex> guard(tasks_mutex_);
                       tasks_.emplace_back(std::move(forked));
+                  }
                   return;
               }
 
@@ -316,49 +314,69 @@ namespace cvm {
                       assert(false && "attempting to signal to null location");
                       return;
                   }
-                  message_pool<T>().run(loc, std::move(t));
+                  bool clean = message_pool<T>()->run(loc, std::move(t));
+
+                  // not necessary all the time - need to use a GC?
+                  if (clean) {
+                      std::lock_guard<std::mutex> guard(tasks_mutex_);
+                      tasks_.erase(std::remove_if(tasks_.begin(), tasks_.end(),
+                          [] (const auto& handler) { return handler.done(); }), tasks_.end());
+                  }
+
                   return;
               }
 
               template <typename T>
               task<T> wait(cvm::topology::loc_t loc) {
-                  T t = co_await message_pool<T>().wait(loc);
+                  T t = co_await message_pool<T>()->wait(loc);
                   co_return t;
               }
 
               template <typename T>
               task<T> wait(typename pool<T>::channel_info info) {
-                  T t = co_await message_pool<T>().wait(info);
+                  T t = co_await message_pool<T>()->wait(info);
                   co_return t;
               }
 
               template <typename T>
               auto channel(cvm::topology::loc_t loc) {
-                  return message_pool<T>().create_channel(loc);
+                  return message_pool<T>()->create_channel(loc);
               }
 
               template <typename T>
               void del(typename pool<T>::channel_info info) {
-                  message_pool<T>().delete_channel(info);
+                  message_pool<T>()->delete_channel(info);
                   return;
               }
 
               void clear() {
-                  tasks_.clear();
-                  pools_.clear();
+                  {
+                      std::lock_guard<std::mutex> tasks_guard(tasks_mutex_);
+                      tasks_.clear();
+                  }
+                  {
+                      std::lock_guard<std::mutex> pools_guard(pools_mutex_);
+                      pools_.clear();
+                  }
               }
 
           private:
 
               template <typename T>
-              auto& message_pool() {
+              std::shared_ptr<pool<T>> message_pool() {
                   auto key = std::type_index(typeid(T));
-                  if (pools_.find(key) == pools_.end())
-                      pools_[key] = std::unique_ptr<pool_base>(new pool<T>(tasks_));
-                  return *(dynamic_cast<pool<T>*>(pools_[key].get()));
+                  std::lock_guard<std::mutex> guard(pools_mutex_);
+                  auto it = pools_.find(key);
+                  if (it == pools_.end()) {
+                      std::shared_ptr<pool_base> p(new pool<T>());
+                      it = pools_.emplace(key, std::move(p)).first;
+                  }
+                  return std::dynamic_pointer_cast<pool<T>>(it->second);
               }
 
               std::vector<task<void>> tasks_;
-              std::unordered_map<std::type_index, std::unique_ptr<pool_base>> pools_;
+              std::mutex tasks_mutex_;
+              std::unordered_map<std::type_index, std::shared_ptr<pool_base>> pools_;
+              std::mutex pools_mutex_;
       };
 }

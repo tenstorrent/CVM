@@ -89,18 +89,23 @@ TEST(Logger, Handler) {
     cvm::set_logger_handler(cvm::ERROR, [&handler]() { return handler.handle(); });
     EXPECT_CALL(handler, handle()).Times(1);
 
-    int pfd = open("stdout.log", O_WRONLY | O_CREAT, 0777);
+    MockHandler prefix;
+    cvm::set_logger_prefix([]() -> std::string_view { return "b "; });
+
+    int pfd = open("handler.log", O_WRONLY | O_CREAT, 0777);
     int saved = dup(1);
 
     close(1);
     dup(pfd);
     close(pfd);
 
-    cvm::log(cvm::ERROR, "a 1\n");
+    cvm::log(cvm::ERROR, "2\nc 3\n");
 
     fflush(stdout);
 
     // restore it back
     dup2(saved, 1);
     close(saved);
+
+    check("handler.log");
 }

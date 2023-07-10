@@ -349,6 +349,8 @@ namespace cvm {
                   return;
               }
 
+              void build() {}
+
               void clear() {
                   {
                       std::lock_guard<std::mutex> tasks_guard(tasks_mutex_);

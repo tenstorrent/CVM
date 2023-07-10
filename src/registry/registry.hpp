@@ -19,6 +19,16 @@ namespace cvm {
         return constructs_;
       }
 
+      static auto& configures() {
+        static std::vector<std::function<void()>> configures_;
+        return configures_;
+      }
+
+      static auto& checks() {
+        static std::vector<std::function<void()>> checks_;
+        return checks_;
+      }
+
       static auto& destructors() {
         static std::vector<std::function<void()>> destructs_;
         return destructs_;
@@ -36,52 +46,76 @@ namespace cvm {
       inline static messenger messenger;
       inline static callbacks callbacks;
 
-      // generic interface
       // register classes during static init
-      template<typename T, typename... Args>
+      template<typename T, bool A, typename... Args>
       static bool regist(const std::string& module, int id, Args&&... args) {
         static std::list<T> objs_;
 
-        bool from_hierarchy = module.find('.') != std::string::npos;
+        if constexpr (!A) {
+          bool from_hierarchy = module.find('.') != std::string::npos;
 
-        if (id == all) {
-          std::vector<cvm::topology::loc_t> locs;
-          if (from_hierarchy)
-            locs = cvm::topology::get_from_hierarchy(module);
-          else
-            locs = cvm::topology::get_from_type(module);
+          if (id == all) {
+            std::vector<cvm::topology::loc_t> locs;
+            if (from_hierarchy)
+              locs = cvm::topology::get_from_hierarchy(module);
+            else
+              locs = cvm::topology::get_from_type(module);
 
-          if (locs.empty())
-            return false;
+            if (locs.empty())
+              return false;
 
-          constructors().push_back(
-            [locs, ...args = std::forward<Args>(args)] () {
-              for (const auto& loc : locs)
-                objs_.emplace_back(loc, objs_.size(), args...); });
+            constructors().push_back(
+              [locs, ...args = std::forward<Args>(args)] () {
+                for (const auto& loc : locs)
+                  objs_.emplace_back(loc, objs_.size(), args...); });
+          }
+          else {
+            cvm::topology::loc_t loc;
+
+            if (from_hierarchy)
+              loc = cvm::topology::get_from_hierarchy(module, id);
+            else
+              loc = cvm::topology::get_from_type(module, id);
+
+            if (loc == cvm::topology::null)
+              return false;
+
+            constructors().push_back(
+              [&, loc, ...args = std::forward<Args>(args)] () { objs_.emplace_back(loc, objs_.size(), args...); });
+          }
         }
         else {
-          cvm::topology::loc_t loc;
-
-          if (from_hierarchy)
-            loc = cvm::topology::get_from_hierarchy(module, id);
-          else
-            loc = cvm::topology::get_from_type(module, id);
-
-          if (loc == cvm::topology::null)
-            return false;
-
           constructors().push_back(
-            [loc, ...args = std::forward<Args>(args)] () { objs_.emplace_back(loc, objs_.size(), args...); });
+            [&, ...args = std::forward<Args>(args)] () { objs_.emplace_back(args...); });
         }
 
-        destructors().push_back([] () { return objs_.clear(); });
+        if constexpr (requires(T& t) { t.configure(); }) {
+          configures().push_back([&] () { for (auto& t : objs_) { t.configure(); }});
+        }
+
+        if constexpr (requires(T& t) { t.check(); }) {
+          checks().push_back([&] () { for (auto& t : objs_) t.check(); });
+        }
+
+        destructors().push_back([&] () { return objs_.clear(); });
         return true;
       }
 
       static void build() {
+        messenger.build();
         callbacks.build();
         for (const auto& construct : constructors())
           construct();
+      }
+
+      static void configure() {
+        for (const auto& configure : configures())
+          configure();
+      }
+
+      static void check() {
+        for (const auto& check : checks())
+          check();
       }
 
       static void shutdown() {
@@ -97,6 +131,12 @@ namespace cvm {
 // presumably, objects will subscribe to transactions in constructor
 #define REGISTRY_register(type, module, id, ...) \
   namespace _registry { \
-    auto type##_register = []() -> bool { return cvm::registry::regist<type>( #module, id __VA_OPT__(,) __VA_ARGS__); }; \
+    auto type##_register = []() -> bool { return cvm::registry::regist<type, false>( #module, id __VA_OPT__(,) __VA_ARGS__); }; \
+    bool type##_SUCCESS = type##_register(); \
+  }
+
+#define REGISTRY_register_topology_agn(type, ...) \
+  namespace _registry { \
+    auto type##_register = []() -> bool { return cvm::registry::regist<type, true>( "", 0 __VA_OPT__(,) __VA_ARGS__); }; \
     bool type##_SUCCESS = type##_register(); \
   }

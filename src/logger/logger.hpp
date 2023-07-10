@@ -2,6 +2,7 @@
 #include <fmt/os.h>
 #include <unordered_map>
 #include <functional>
+#include <string_view>
 
 namespace cvm {
 
@@ -20,7 +21,8 @@ namespace cvm {
         private:
 
             static verbosity_level verbosity;
-            static std::unordered_map<verbosity_level, std::vector<std::function<void()>>> handlers;
+            static std::unordered_map<verbosity_level, std::function<void()>> handlers;
+            static std::function<std::string_view()> prefix;
 
         public:
 
@@ -31,9 +33,16 @@ namespace cvm {
             }
 
 
-            static void set_handler(verbosity_level v, std::function<void()> handler) {
+            static void set_handler(verbosity_level v, const std::function<void()>& handler) {
 
-                handlers[v].push_back(handler);
+                handlers[v] = handler;
+
+            }
+
+
+            static void set_prefix(const std::function<std::string_view()>& pre) {
+
+                prefix = pre;
 
             }
 
@@ -43,6 +52,7 @@ namespace cvm {
 
                     if (v <= verbosity) {
 
+                        fmt::print(prefix());
                         fmt::print(std::forward<Args>(args)...);
 
                     }
@@ -50,8 +60,7 @@ namespace cvm {
                     auto it = handlers.find(v);
                     if (it != handlers.end()) {
 
-                      for (const auto& handler: it->second)
-                        handler();
+                        (it->second)();
 
                     }
 
@@ -62,6 +71,7 @@ namespace cvm {
 
                     if (v <= verbosity) {
 
+                        out.print(prefix());
                         out.print(std::forward<Args>(args)...);
 
                     }
@@ -69,8 +79,7 @@ namespace cvm {
                     auto it = handlers.find(v);
                     if (it != handlers.end()) {
 
-                      for (const auto& handler: it->second)
-                        handler();
+                        (it->second)();
 
                     }
 
@@ -122,5 +131,11 @@ namespace cvm {
     template <typename... Args>
         void set_logger_handler(Args&&... args) {
             logger::set_handler(std::forward<Args>(args)...);
+        }
+
+
+    template <typename... Args>
+        void set_logger_prefix(Args&&... args) {
+            logger::set_prefix(std::forward<Args>(args)...);
         }
 }

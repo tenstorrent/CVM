@@ -13,30 +13,34 @@ topology_gen(
 )
 
 verilog_library(
-    name = "dummy_sv",
-    srcs = ["dummy.sv"],
+    name = "top_sv",
+    srcs = ["top.sv"],
 )
 
 verilog_flist(
-    name = "dummy.f",
-    srcs = [":dummy_sv"],
+    name = "top.f",
+    srcs = [":top_sv"],
 )
 
 verilator_cc_library(
-    name = "registry_test_veri_lib",
-    mtop = "registry_test",
-    vopts = ["--assert"],
-    flist = "dummy.f",
+    name = "top_veri_lib",
+    mtop = "top",
+    vopts = [
+        "--assert",
+        "-Wno-DECLFILENAME",
+        "+define+TB_EXTERNAL_CLOCK",
+    ],
+    flist = "top.f",
 )
 
 cc_binary(
     name = "registry_test",
-    srcs = ["dummy.cpp", "dummy2.cpp", "dummy3.cpp"],
+    srcs = ["sim_main.cpp", "dummy.cpp", "dummy2.cpp", "dummy3.cpp", "dummy4.cpp"],
     deps = [
       "@cvm//:topology",
       "@cvm//:registry",
       "@com_google_googletest//:gtest_main",
-      "registry_test_veri_lib",
+      "top_veri_lib",
       "topology_cc",
     ],
     linkopts = ["-lz"],

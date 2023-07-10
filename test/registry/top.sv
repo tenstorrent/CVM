@@ -1,4 +1,4 @@
-module registry_test();
+module top();
 
     import "DPI-C" function void cvm_registry_reset();
 

@@ -14,6 +14,8 @@ REGISTRY_register(dummy, TOP.CLUSTER.CORE, 0)
 
 extern "C" void cvm_registry_reset() {
     cvm::registry::build();
+    cvm::registry::configure();
+    cvm::registry::check();
     cvm::registry::shutdown();
 };
 

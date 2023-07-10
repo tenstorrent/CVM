@@ -24,6 +24,12 @@ cc_library(
     visibility = ["//visibility:public"],
 )
 
+verilog_library(
+    name = "logger_sv",
+    deps = ["//src/logger:logger_sv"],
+    visibility = ["//visibility:public"],
+)
+
 cc_library(
     name = "messenger",
     deps = ["//src/messenger:messenger"],

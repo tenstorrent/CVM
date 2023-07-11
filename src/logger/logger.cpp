@@ -2,16 +2,16 @@
 #include "cvm/plusargs.hpp"
 #include <unordered_map>
 
-static bool validate_verbosity(const char* flagname, const std::string& value) {
-    std::unordered_map<std::string,cvm::verbosity_level> levels{
-        {"NONE"  , cvm::NONE  },
-        {"LOW"   , cvm::LOW   },
-        {"MEDIUM", cvm::MEDIUM},
-        {"HIGH"  , cvm::HIGH  },
-        {"FULL"  , cvm::FULL  },
-        {"DEBUG" , cvm::DEBUG },
-    };
+static const std::unordered_map<std::string,cvm::verbosity_level> levels{
+    {"NONE"  , cvm::NONE  },
+    {"LOW"   , cvm::LOW   },
+    {"MEDIUM", cvm::MEDIUM},
+    {"HIGH"  , cvm::HIGH  },
+    {"FULL"  , cvm::FULL  },
+    {"DEBUG" , cvm::DEBUG },
+};
 
+static bool validate_verbosity(const char* flagname, const std::string& value) {
     auto it = levels.find(value);
     if (it == levels.end()) {
         cvm::log(cvm::NONE, "Invalid value for +{}={}\n", flagname, value);
@@ -32,4 +32,10 @@ std::function<std::string_view()> cvm::logger::prefix = [] () { return ""; };
 
 void cvm::file_logger::flush() {
     output_file.flush();
+}
+
+extern "C" {
+    uint32_t cvm_logger_get_verbosity(const char* v) {
+        return levels.at(std::string(v));
+    }
 }

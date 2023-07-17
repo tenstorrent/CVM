@@ -85,6 +85,8 @@ Used to broadcast information to/from C++ classes. There are two steps to this, 
 
 to indicate they are listening at location id `location` for the transactions `transaction_type_t` (just any C++ type, generally a struct), and to execute some kind of function upon receiving this message. The lambda should be able to accept the transaction as a const reference (e.g. `const transaction_type_t& transaction`) where presumably the listener will do some processing based on the message.
 
+The user can optionally add a lightweight filter on a transaction to avoid spurious wakeups.
+
 The publisher does something similar, but passes the actual message
 
 `cvm::registry:messenger.signal<transaction_type_t>(location, transaction_type_t{})`
@@ -101,7 +103,9 @@ This can be though of as the equivalent of "spawning" a thread which will automa
 
 `wait<transaction_type_t>(location)` which waits for the next occurence of a message and
 
-`wait<transaction_type_t>(channel)` which waits on a messenger-managed queue of transactions. The channel is automatically populated with new transactions matching the transaction type even when the function is suspended. Channels are created with `cvm::registry::messenger.channel<transaction_type_t>(location)` and the user should capture the return value to pass to the `wait` function.
+`wait<transaction_type_t>(channel)` which waits on a messenger-managed queue of transactions. The channel is automatically populated with new transactions matching the transaction type even when the function is suspended. Channels are created with `cvm::registry::messenger.channel<transaction_type_t>(location)` and the user should capture the return value to pass to the `wait` function. Similar to normal `connect`s, the channel can also consume a filter on transactions. This is more efficient since we can avoid extra `resume` -> `await` operations if a transaction does not apply to a particular coroutine.
+
+Generally, there should only be one coroutine waiting on any particular channel for safety/correctness.
 
 WARNING: don't use a capture list in lambda coroutines, this is dangerous - https://clang.llvm.org/extra/clang-tidy/checks/cppcoreguidelines/avoid-capturing-lambda-coroutines.html
 

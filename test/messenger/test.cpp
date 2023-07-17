@@ -106,3 +106,24 @@ TEST(Messenger, Channel) {
   EXPECT_EQ(popped, 4);
   EXPECT_EQ(nested2, true);
 }
+
+cvm::messenger messenger5;
+unsigned hit = 0;
+
+cvm::messenger::task<void> long_running5(cvm::messenger::pool<transaction1>::channel_info channel) {
+  while (1) {
+    co_await messenger5.wait<transaction1>(channel);
+    hit++;
+  }
+}
+
+TEST(Messenger, Filter) {
+  auto channel = messenger5.channel<transaction1>(5, [](const transaction1& t) { return t.i == 1; });
+  messenger5.signal(5, transaction1{0});
+  messenger5.fork(long_running5, channel);
+  messenger5.signal(5, transaction1{0});
+  messenger5.signal(5, transaction1{1});
+  messenger5.channel_filter<transaction1>(channel, [](const transaction1& t) { return t.i == 2; });
+  messenger5.signal(5, transaction1{2});
+  EXPECT_EQ(hit, 2);
+}

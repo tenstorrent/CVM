@@ -8,10 +8,12 @@
 #include <coroutine>
 #include <optional>
 #include <memory>
-#include <queue>
+#include <deque>
 #include <cassert>
 #include <thread>
 #include <mutex>
+#include <iostream>
+#include <ranges>
 #include "cvm/topology.hpp"
 
 namespace cvm {
@@ -192,33 +194,49 @@ namespace cvm {
                       virtual ~pool() {}
 
                       typedef std::function<void(const T&)> listener;
-                      void add_long_running(cvm::topology::loc_t loc, const listener& handle) {
-                          long_runnings_[loc].emplace_back(handle);
-                      }
-
-                      void add_consumer(cvm::topology::loc_t loc, std::coroutine_handle<> handle, T* t = nullptr) {
-                          consumers_[loc].emplace_back(handle, t);
+                      void add_long_running(cvm::topology::loc_t loc, const listener& handle, const std::function<bool(const T&)>& filter) {
+                          long_runnings_[loc].emplace_back(handle, filter);
                       }
 
                       bool run(cvm::topology::loc_t loc, T t) {
-                          // first append to all existing channels
-                          for (auto& channel : channels_)
-                              if (std::get<0>(channel) == loc)
-                                  std::get<1>(channel).emplace(t);
+                          std::vector<std::coroutine_handle<>> handles;
 
-                          const auto& connected = long_runnings_[loc];
-                          std::for_each(connected.begin(), connected.end(), [&t] (const auto& handler) { handler(t); });
+                          // first append to all existing channels and moments. register handles which need to be resumed
+                          std::for_each(moments_[loc].begin(), moments_[loc].end(),
+                              [&t, &handles] (auto& moment) {
+                                  *(moment.val) = t;
+                                  assert(moment.handle && "moment waiting on null coroutine");
+                                  handles.emplace_back(std::move(moment.handle));
+                              });
 
+                          moments_[loc].clear();
+
+                          std::for_each(channels_[loc].begin(), channels_[loc].end(),
+                              [&t, &handles] (auto& channel) {
+                                  // we only proceed if t passes filter
+                                  if (!(channel.filter) || (channel.filter)(t)) {
+                                      channel.vals.emplace_back(t);
+                                      if (channel.handle) {
+                                          handles.emplace_back(std::move(channel.handle));
+                                          channel.handle = nullptr;
+                                      }
+                                  }
+                              });
+
+                          // resume awaiting tasks and listeners
                           bool clean = false;
-                          auto our_consumers = consumers_[loc];
-                          consumers_[loc].clear();
-                          std::for_each(our_consumers.begin(), our_consumers.end(),
-                              [&t, &clean] (auto& consumer) {
-                                      if (std::get<1>(consumer))
-                                          *(std::get<1>(consumer)) = t;
+                          std::for_each(handles.begin(), handles.end(),
+                              [&clean] (const auto& handle) {
+                                  handle.resume();
+                                  clean |= handle.done();
+                              });
 
-                                      std::get<0>(consumer).resume();
-                                      clean |= std::get<0>(consumer).done();
+                          auto& connected = long_runnings_[loc];
+                          std::for_each(connected.begin(), connected.end(),
+                              [&t] (auto& handle) {
+                                  if (!(handle.filter) || (handle.filter)(t)) {
+                                      (handle.l)(t);
+                                  }
                               });
 
                           return clean;
@@ -228,70 +246,99 @@ namespace cvm {
                           struct awaiter {
                               pool<T>& self;
                               cvm::topology::loc_t loc;
+
                               T t;
-                              bool await_ready() { return false; };
-                              void await_suspend(std::coroutine_handle<> awaiting) noexcept { self.add_consumer(loc, awaiting, &t); }
-                              T await_resume() { return t; };
+                              size_t id;
+
+                              bool await_ready() noexcept { return false; };
+                              void await_suspend(std::coroutine_handle<> awaiting) noexcept { self.moments_[loc].emplace_back(&t, awaiting); };
+                              T await_resume() noexcept { return t; };
                           };
 
-                          T t = co_await awaiter{*this, loc, {}};
-                          co_return t;
+                          co_return co_await awaiter{*this, loc};
                       }
 
                       // messenger managed channel
-                      struct channel_info{ size_t id; };
-                      auto create_channel(cvm::topology::loc_t loc) {
-                          channels_.emplace_back(loc, std::queue<T>{});
-                          return channel_info{channels_.size() - 1};
+                      struct channel_info{ size_t id; cvm::topology::loc_t loc; };
+                      auto create_channel(cvm::topology::loc_t loc, const std::function<bool(const T&)>& filter) {
+                          channels_[loc].emplace_back(nullptr, filter);
+                          return channel_info{channels_[loc].size() - 1, loc};
+                      }
+
+                      void update_channel_filter(channel_info info, const std::function<bool(const T& t)>& filter) {
+                          if (info.id >= channels_[info.loc].size())
+                              assert(false && "channel id is invalid");
+                          else
+                              channels_[info.loc][info.id].filter = filter;
                       }
 
                       task<T> wait(channel_info info) {
                           struct awaiter {
                               pool<T>& self;
-                              size_t id;
+                              channel_info info;
 
-                              bool await_ready() { return !std::get<1>(self.channels_[id]).empty(); }
-                              void await_suspend(std::coroutine_handle<> awaiting) noexcept { self.add_consumer(std::get<0>(self.channels_[id]), awaiting); }
+                              bool await_ready() noexcept {
+                                  // we can support this if we store a vector of awaiters instead
+                                  // slow?
+                                  auto& awaiter = self.channels_[info.loc][info.id].handle;
+                                  assert(!awaiter && "multiple tasks waiting on same channel");
+                                  auto& channel = self.channels_[info.loc][info.id].vals;
+                                  return !channel.empty();
+                              };
+                              void await_suspend(std::coroutine_handle<> awaiting) noexcept {
+                                  self.channels_[info.loc][info.id].handle = awaiting;
+                              };
                               T await_resume() noexcept {
-                                  auto& q = std::get<1>(self.channels_[id]);
-                                  auto val = q.front();
-                                  q.pop();
+                                  auto& q = self.channels_[info.loc][info.id].vals;
+                                  auto val = std::move(q.front()); q.pop_front();
                                   return val;
                               };
                           };
 
-                          if (info.id >= channels_.size())
+                          if (info.id >= channels_[info.loc].size())
                               assert(false && "channel id is invalid");
-                          else {
-                              T t = co_await awaiter{*this, info.id};
-                              co_return t;
-                          }
+                          else
+                              co_return co_await awaiter{*this, info};
                       }
 
                       void delete_channel(channel_info info) {
-                          channels_.erase(channels_.begin() + info.id);
+                          channels_[info.loc].erase(channels_.begin() + info.id);
                           return;
                       }
 
                   private:
 
-                      typedef std::vector<listener> long_runnings;
-                      std::unordered_map<cvm::topology::loc_t, long_runnings> long_runnings_;
+                      struct long_running {
+                          long_running(listener l, std::function<bool(const T&)> filter) : l(l), filter(filter) {};
+                          listener l;
+                          std::function<bool(const T&)> filter;
+                      };
+                      std::unordered_map<cvm::topology::loc_t, std::vector<long_running>> long_runnings_;
 
-                      typedef std::tuple<std::coroutine_handle<>, T*> consumer;
-                      std::unordered_map<cvm::topology::loc_t, std::vector<consumer>> consumers_;
+                      struct moment {
+                          moment(T* val, std::coroutine_handle<> handle) : val(val), handle(handle) {};
+                          T* val;
+                          std::coroutine_handle<> handle;
+                      };
+                      std::unordered_map<cvm::topology::loc_t, std::vector<moment>> moments_;
 
-                      typedef std::tuple<cvm::topology::loc_t, std::queue<T>> channel;
-                      std::vector<channel> channels_;
+                      struct channel {
+                          channel(std::coroutine_handle<> handle, std::function<bool(const T&)> filter) : handle(handle), filter(filter) {};
+                          std::deque<T> vals;
+                          std::coroutine_handle<> handle;
+                          std::function<bool(const T&)> filter;
+                      };
+                      std::unordered_map<cvm::topology::loc_t, std::vector<channel>> channels_;
               };
 
+              // TODO: use variadic templates
               template <typename T>
-              void connect(cvm::topology::loc_t loc, const typename pool<T>::listener& l) {
+              void connect(cvm::topology::loc_t loc, const typename pool<T>::listener& l, const std::function<bool(const T& t)>& filter = nullptr) {
                   if (loc == cvm::topology::null) {
                       assert(false && "attempting to connect to null location");
                       return;
                   }
-                  message_pool<T>()->add_long_running(loc, l);
+                  message_pool<T>()->add_long_running(loc, l, filter);
                   return;
               }
 
@@ -307,9 +354,8 @@ namespace cvm {
                   return;
               }
 
-              // We take transaction by value, because coroutine may outlive reference
               template <typename T>
-              void signal(cvm::topology::loc_t loc, const T t) {
+              void signal(cvm::topology::loc_t loc, const T& t) {
                   if (loc == cvm::topology::null) {
                       assert(false && "attempting to signal to null location");
                       return;
@@ -328,19 +374,22 @@ namespace cvm {
 
               template <typename T>
               task<T> wait(cvm::topology::loc_t loc) {
-                  T t = co_await message_pool<T>()->wait(loc);
-                  co_return t;
+                  co_return co_await message_pool<T>()->wait(loc);
               }
 
               template <typename T>
               task<T> wait(typename pool<T>::channel_info info) {
-                  T t = co_await message_pool<T>()->wait(info);
-                  co_return t;
+                  co_return co_await message_pool<T>()->wait(info);
               }
 
               template <typename T>
-              auto channel(cvm::topology::loc_t loc) {
-                  return message_pool<T>()->create_channel(loc);
+              auto channel_filter(typename pool<T>::channel_info info, const std::function<bool(const T& t)>& filter) {
+                  return message_pool<T>()->update_channel_filter(info, filter);
+              }
+
+              template <typename T>
+              auto channel(cvm::topology::loc_t loc, const std::function<bool(const T& t)>& filter = nullptr) {
+                  return message_pool<T>()->create_channel(loc, filter);
               }
 
               template <typename T>

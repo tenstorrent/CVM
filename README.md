@@ -103,9 +103,7 @@ This can be though of as the equivalent of "spawning" a thread which will automa
 
 `wait<transaction_type_t>(location)` which waits for the next occurence of a message and
 
-`wait<transaction_type_t>(channel)` which waits on a messenger-managed queue of transactions. The channel is automatically populated with new transactions matching the transaction type even when the function is suspended. Channels are created with `cvm::registry::messenger.channel<transaction_type_t>(location)` and the user should capture the return value to pass to the `wait` function. Similar to normal `connect`s, the channel can also consume a filter on transactions. This is more efficient since we can avoid extra `resume` -> `await` operations if a transaction does not apply to a particular coroutine.
-
-Generally, there should only be one coroutine waiting on any particular channel for safety/correctness.
+`wait<transaction_type_t>(channel)` which waits on a messenger-managed queue of transactions. The channel is automatically populated with any new transactions matching the transaction type even when the function is suspended (new, as in after channel creation). Channels are created with `cvm::registry::messenger.channel<transaction_type_t>(location)` and the user should capture the return value to pass to the `wait` function. Similar to normal `connect`s, the channel can also consume a filter on transaction `co_awaits`. This is more efficient since we can avoid extra `resume` -> `await` operations if a transaction does not apply to a particular coroutine. The filter can be thought of as a C++ std::views, which does not modify the underlying contents of the channel.
 
 WARNING: don't use a capture list in lambda coroutines, this is dangerous - https://clang.llvm.org/extra/clang-tidy/checks/cppcoreguidelines/avoid-capturing-lambda-coroutines.html
 

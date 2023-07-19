@@ -211,17 +211,33 @@ namespace cvm {
 
                           moments_[loc].clear();
 
+                          // can have multiple channels
                           std::for_each(channels_[loc].begin(), channels_[loc].end(),
                               [&t, &handles] (auto& channel) {
-                                  // we only proceed if t passes filter
-                                  if (!(channel.filter) || (channel.filter)(t)) {
-                                      channel.vals.emplace_back(t);
-                                      if (channel.handle) {
-                                          handles.emplace_back(std::move(channel.handle));
-                                          channel.handle = nullptr;
+                                  auto ready = channel.handles.end();
+                                  for (auto it = channel.handles.begin(); it != channel.handles.end(); ++it) {
+                                      auto& handle = *it;
+                                      if (handle.first && (!(handle.second) || ((handle.second)(t)))) {
+                                          assert((ready == channel.handles.end()) && "multiple filters passing for a channel");
+                                          ready = it;
+                                          handles.emplace_back(std::move(handle.first));
+
+                                          // resuming immediately, push to the front
+                                          channel.vals.emplace_front(t);
                                       }
                                   }
-                              });
+
+                                  if (ready != channel.handles.end()) {
+                                      // fast vector erase of handle
+                                      auto back = channel.handles.end() - 1;
+                                      if (ready != back)
+                                          *ready = std::move(*back);
+                                      channel.handles.pop_back();
+                                  }
+                                  else // later will swap
+                                      channel.vals.emplace_back(t);
+                          });
+
 
                           // resume awaiting tasks and listeners
                           bool clean = false;
@@ -260,37 +276,38 @@ namespace cvm {
 
                       // messenger managed channel
                       struct channel_info{ size_t id; cvm::topology::loc_t loc; };
-                      auto create_channel(cvm::topology::loc_t loc, const std::function<bool(const T&)>& filter) {
-                          channels_[loc].emplace_back(nullptr, filter);
+                      auto create_channel(cvm::topology::loc_t loc) {
+                          channels_[loc].emplace_back();
                           return channel_info{channels_[loc].size() - 1, loc};
                       }
 
-                      void update_channel_filter(channel_info info, const std::function<bool(const T& t)>& filter) {
-                          if (info.id >= channels_[info.loc].size())
-                              assert(false && "channel id is invalid");
-                          else
-                              channels_[info.loc][info.id].filter = filter;
-                      }
-
-                      task<T> wait(channel_info info) {
+                      task<T> wait(channel_info info, const std::function<bool(const T&)>& filter) {
                           struct awaiter {
                               pool<T>& self;
                               channel_info info;
+                              std::function<bool(const T&)> filter;
 
                               bool await_ready() noexcept {
-                                  // we can support this if we store a vector of awaiters instead
-                                  // slow?
-                                  auto& awaiter = self.channels_[info.loc][info.id].handle;
-                                  assert(!awaiter && "multiple tasks waiting on same channel");
                                   auto& channel = self.channels_[info.loc][info.id].vals;
-                                  return !channel.empty();
+                                  if (filter) {
+                                      for (auto it = channel.begin(); it != channel.end(); ++it)
+                                          if ((filter)(*it)) {
+                                              if (it != channel.begin())
+                                                  std::iter_swap(channel.begin(), it);
+                                              return true;
+                                          }
+                                      return false;
+                                  }
+                                  else
+                                      return !channel.empty();
                               };
                               void await_suspend(std::coroutine_handle<> awaiting) noexcept {
-                                  self.channels_[info.loc][info.id].handle = awaiting;
+                                  self.channels_[info.loc][info.id].handles.emplace_back(awaiting, std::move(filter));
                               };
                               T await_resume() noexcept {
-                                  auto& q = self.channels_[info.loc][info.id].vals;
-                                  auto val = std::move(q.front()); q.pop_front();
+                                  auto& channel = self.channels_[info.loc][info.id].vals;
+                                  auto val = std::move(channel.front());
+                                  channel.pop_front();
                                   return val;
                               };
                           };
@@ -298,7 +315,7 @@ namespace cvm {
                           if (info.id >= channels_[info.loc].size())
                               assert(false && "channel id is invalid");
                           else
-                              co_return co_await awaiter{*this, info};
+                              co_return co_await awaiter{*this, info, filter};
                       }
 
                       void delete_channel(channel_info info) {
@@ -310,6 +327,7 @@ namespace cvm {
 
                       struct long_running {
                           long_running(listener l, std::function<bool(const T&)> filter) : l(l), filter(filter) {};
+
                           listener l;
                           std::function<bool(const T&)> filter;
                       };
@@ -317,16 +335,17 @@ namespace cvm {
 
                       struct moment {
                           moment(T* val, std::coroutine_handle<> handle) : val(val), handle(handle) {};
+
                           T* val;
                           std::coroutine_handle<> handle;
                       };
                       std::unordered_map<cvm::topology::loc_t, std::vector<moment>> moments_;
 
                       struct channel {
-                          channel(std::coroutine_handle<> handle, std::function<bool(const T&)> filter) : handle(handle), filter(filter) {};
+                          channel() = default;
+
                           std::deque<T> vals;
-                          std::coroutine_handle<> handle;
-                          std::function<bool(const T&)> filter;
+                          std::vector<std::pair<std::coroutine_handle<>, std::function<bool(const T&)>>> handles;
                       };
                       std::unordered_map<cvm::topology::loc_t, std::vector<channel>> channels_;
               };
@@ -378,18 +397,13 @@ namespace cvm {
               }
 
               template <typename T>
-              task<T> wait(typename pool<T>::channel_info info) {
-                  co_return co_await message_pool<T>()->wait(info);
+              task<T> wait(typename pool<T>::channel_info info, const std::function<bool(const T&)>& filter = nullptr) {
+                  co_return co_await message_pool<T>()->wait(info, filter);
               }
 
               template <typename T>
-              auto channel_filter(typename pool<T>::channel_info info, const std::function<bool(const T& t)>& filter) {
-                  return message_pool<T>()->update_channel_filter(info, filter);
-              }
-
-              template <typename T>
-              auto channel(cvm::topology::loc_t loc, const std::function<bool(const T& t)>& filter = nullptr) {
-                  return message_pool<T>()->create_channel(loc, filter);
+              auto channel(cvm::topology::loc_t loc) {
+                  return message_pool<T>()->create_channel(loc);
               }
 
               template <typename T>

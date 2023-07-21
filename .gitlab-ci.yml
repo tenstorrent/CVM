@@ -28,4 +28,4 @@ test:
 notify_rv_tester:
     <<: *notify-template
     trigger:
-        project: riscv/rv_tester
+        project: riscv/dv/rv_tester

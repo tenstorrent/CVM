@@ -16,21 +16,32 @@ callbacks::~callbacks() {
 
 void
 callbacks::flush() {
-  std::unique_lock<std::mutex> lock(m_);
-  while (FLAGS_cb_async && que_.empty()) {
-    c_.wait_for(lock, 100ms);
-    if (this->finished()) return;
+  while(1) {
+    scoped_cb cb;
+    {
+      // zebu can deadlock if we keep the mutex while calling the DPI export
+      // zebu may wait for any DPI imports to return before allowing DPI exports to proceed
+      // so a DPI export call could be blocked by zebu waiting on a DPI import to finish, meanwhile the DPI import is blocked on this mutex
+      std::unique_lock<std::mutex> lock(m_);
+
+      while (que_.empty()) {
+        if (!FLAGS_cb_async || this->finished()) return;
+        c_.wait_for(lock, 100ms);
+      }
+
+      cb = std::move(que_.front());
+      que_.erase(que_.begin());
+    }
+    svSetScope(std::get<0>(cb));
+    std::get<1>(cb)();
   }
-  std::for_each(que_.begin(), que_.end(), [](scoped_cb cb) { svSetScope(std::get<0>(cb)); std::get<1>(cb)(); });
-  que_.clear();
 }
 
 void
 callbacks::build() {
   quit_ = false;
   if (FLAGS_cb_async) {
-    async_ = std::thread([&] () {
-      while(!this->finished()) { this->flush(); }});
+    async_ = std::thread(std::bind(&callbacks::flush, this));
   }
 }
 

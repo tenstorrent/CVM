@@ -42,7 +42,7 @@ namespace cvm {
     private:
 
       std::condition_variable c_;
-      mutable std::mutex m_;
+      std::mutex m_;
 
       typedef std::tuple<svScope, cb> scoped_cb;
       std::vector<scoped_cb> que_;

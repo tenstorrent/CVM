@@ -93,7 +93,7 @@ module ${packets.name}_domain_${domain}(
 
     typedef byte unsigned ${packet.port}_${packet.name}_message_t[MESSAGE_${packet.port}_${packet.name}_BYTES];
 
-    import "DPI-C" ${"context" if packet.context else ""} function void ${packets.name}_message_${packet.port}_${packet.name}(${packet.port}_${packet.name}_message_t message);
+    import "DPI-C" ${"context" if packet.context else ""} function ${"int" if packet.dummy_return else "void"} ${packets.name}_message_${packet.port}_${packet.name}(${packet.port}_${packet.name}_message_t message);
 
     function automatic ${packet.port}_${packet.name}_message_t ${packet.port}_${packet.name}_unpack(${packets.name}::${packet.port}_${packet.name} packet);
         localparam int B = MESSAGE_${packet.port}_${packet.name}_BYTES;
@@ -118,7 +118,7 @@ module ${packets.name}_domain_${domain}(
         %for i in range(packet.num):
         if (tx.${packet.port}_${packet.name}s[${port}][${i}].valid) begin
             automatic ${packet.port}_${packet.name}_message_t pkt = ${packet.port}_${packet.name}_unpack(tx.${packet.port}_${packet.name}s[${port}][${i}].data);
-            ${packets.name}_message_${packet.port}_${packet.name}(pkt);
+            ${"automatic int dummy = " if packet.dummy_return else ""}${packets.name}_message_${packet.port}_${packet.name}(pkt);
         end
         %endfor
     %endfor
@@ -140,9 +140,10 @@ endmodule
 <%
   by_port = {}
   for port in packets.ports:
-      for packet in domain_packets:
-          if packet.port == port:
-              by_port[port] = by_port.get(port, list()) + [packet]
+      for domain_packets in by_domain.values():
+          for packet in domain_packets:
+              if packet.port == port:
+                  by_port[port] = by_port.get(port, list()) + [packet]
 %>
 %for port, port_packets in by_port.items():
 `define ${packets.name.upper()}_OUTPUT_${port.upper()}                     ${bs}

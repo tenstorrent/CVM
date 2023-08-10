@@ -1,8 +1,10 @@
 cc_library(
     name = "messenger",
     hdrs = ["messenger.hpp"],
+    srcs = ["messenger.cpp"],
     deps = [
         "//:topology",
+        "//:plusargs",
     ],
     strip_include_prefix = "//src/messenger",
     include_prefix = "cvm",

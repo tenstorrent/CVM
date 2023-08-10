@@ -12,9 +12,12 @@
 #include <cassert>
 #include <thread>
 #include <mutex>
-#include <iostream>
+#include <condition_variable>
 #include <ranges>
 #include "cvm/topology.hpp"
+#include "cvm/plusargs.hpp"
+
+DECLARE_bool(signal_async);
 
 namespace cvm {
 
@@ -379,14 +382,25 @@ namespace cvm {
                       assert(false && "attempting to signal to null location");
                       return;
                   }
-                  bool clean = message_pool<T>()->run(loc, std::move(t));
 
-                  // not necessary all the time - need to use a GC?
-                  if (clean) {
-                      std::lock_guard<std::mutex> guard(tasks_mutex_);
-                      tasks_.erase(std::remove_if(tasks_.begin(), tasks_.end(),
-                          [] (const auto& handler) { return handler.done(); }), tasks_.end());
+                  std::function<void(void)> f = [this, loc, t = std::move(t)] () {
+                      bool clean = message_pool<T>()->run(loc, std::move(t));
+
+                      // not necessary all the time - need to use a GC?
+                      if (clean) {
+                          std::lock_guard<std::mutex> guard(tasks_mutex_);
+                          tasks_.erase(std::remove_if(tasks_.begin(), tasks_.end(),
+                                      [] (const auto& handler) { return handler.done(); }), tasks_.end());
+                      }
+                  };
+
+                  {
+                      std::lock_guard<std::mutex> sl(signal_mutex_);
+                      signal_queue_.emplace_back(std::move(f));
                   }
+                  signal_condition_.notify_one();
+
+                  if (!FLAGS_signal_async) flush();
 
                   return;
               }
@@ -412,18 +426,9 @@ namespace cvm {
                   return;
               }
 
-              void build() {}
-
-              void clear() {
-                  {
-                      std::lock_guard<std::mutex> tasks_guard(tasks_mutex_);
-                      tasks_.clear();
-                  }
-                  {
-                      std::lock_guard<std::mutex> pools_guard(pools_mutex_);
-                      pools_.clear();
-                  }
-              }
+              void build();
+              void clear();
+              void flush();
 
           private:
 
@@ -443,5 +448,11 @@ namespace cvm {
               std::mutex tasks_mutex_;
               std::unordered_map<std::type_index, std::shared_ptr<pool_base>> pools_;
               std::mutex pools_mutex_;
+
+              std::mutex signal_mutex_;
+              std::thread signal_thread_;
+              std::vector<std::function<void(void)>> signal_queue_;
+              std::condition_variable signal_condition_;
+              std::atomic<bool> quit_ = false;
       };
 }

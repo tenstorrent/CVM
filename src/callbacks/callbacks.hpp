@@ -25,8 +25,10 @@ namespace cvm {
                 typename = std::enable_if<std::is_same<T, cb>::value>>
       void push(svScope scope, T&& func)
       {
-        std::lock_guard<std::mutex> lock(m_);
-        que_.emplace_back(scope, std::forward<T>(func));
+        {
+          std::lock_guard<std::mutex> lock(m_);
+          que_.emplace_back(scope, std::forward<T>(func));
+        }
         c_.notify_one();
       }
 

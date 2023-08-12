@@ -14,8 +14,8 @@
 #include <mutex>
 #include <condition_variable>
 #include <ranges>
+#include <gflags/gflags.h>
 #include "cvm/topology.hpp"
-#include "cvm/plusargs.hpp"
 
 DECLARE_bool(signal_async);
 

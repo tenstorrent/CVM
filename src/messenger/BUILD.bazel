@@ -4,7 +4,7 @@ cc_library(
     srcs = ["messenger.cpp"],
     deps = [
         "//:topology",
-        "//:plusargs",
+        "@com_github_gflags_gflags//:gflags",
     ],
     strip_include_prefix = "//src/messenger",
     include_prefix = "cvm",

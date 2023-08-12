@@ -451,7 +451,7 @@ namespace cvm {
 
               std::mutex signal_mutex_;
               std::thread signal_thread_;
-              std::vector<std::function<void(void)>> signal_queue_;
+              std::deque<std::function<void(void)>> signal_queue_;
               std::condition_variable signal_condition_;
               std::atomic<bool> quit_ = false;
       };

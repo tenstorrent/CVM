@@ -34,6 +34,9 @@ void cvm::messenger::build() {
 
 void cvm::messenger::clear() {
     quit_ = true;
+    if (signal_thread_.joinable()) {
+        signal_thread_.join();
+    }
     {
         std::lock_guard<std::mutex> tasks_guard(tasks_mutex_);
         tasks_.clear();
@@ -42,11 +45,8 @@ void cvm::messenger::clear() {
         std::lock_guard<std::mutex> pools_guard(pools_mutex_);
         pools_.clear();
     }
-    if (signal_thread_.joinable()) {
-        signal_thread_.join();
-    }
     {
-        std::lock_guard<std::mutex> signal_queue_guarg(signal_mutex_);
+        std::lock_guard<std::mutex> signal_queue_guard(signal_mutex_);
         signal_queue_.clear();
     }
 }

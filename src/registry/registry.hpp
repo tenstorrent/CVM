@@ -102,6 +102,11 @@ namespace cvm {
       }
 
       static void build() {
+        // in case something was signalled between the last clear and this build
+        // eg, if emulation has a DPI that's called after shutdown but before build
+        messenger.clear();
+        callbacks.clear();
+
         messenger.build();
         callbacks.build();
         for (const auto& construct : constructors())

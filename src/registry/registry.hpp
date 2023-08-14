@@ -119,6 +119,9 @@ namespace cvm {
       }
 
       static void shutdown() {
+        // messenger.clear() needs to be called before callbacks.clear()
+        // messenger may cause new callbacks to be pushed
+        // callbacks shouldn't have an (immediate) effect on messenger
         messenger.clear();
         callbacks.clear();
         for (const auto& destruct : destructors())

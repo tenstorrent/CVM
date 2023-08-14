@@ -52,5 +52,8 @@ callbacks::clear() {
   if (async_.joinable())
     async_.join();
 
-  que_.clear();
+  {
+    std::lock_guard<std::mutex> lock(m_);
+    que_.clear();
+  }
 }

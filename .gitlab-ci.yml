@@ -1,18 +1,8 @@
-image:
-    name: aus-gitlab.local.tenstorrent.com:5005/riscv/risc-p-cores/risc-p-cores/dev:27700ba4afaf78ea2e5e432a0032234db5b0837d4da1fdb906e9dbdcc5fe661b
-
-.notify-template: &notify-template
-    stage: notify
-    rules:
-        - if: '$CI_PIPELINE_SOURCE == "pipeline"'
-          when: never
-        - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
-    variables:
-        UPDATE_REPO_POINTER: "True"
-        SKIP_BUILD: "True"
-        SHA_UPDATE_REPO: "cvm"
-        SHA_UPDATE_POINTER: $CI_COMMIT_SHA
-        GIT_STRATEGY: none
+include:
+  - local: 'infra/container/gitlab-container.yml'
+  - project: 'riscv/dv/gitlab-definitions'
+    ref: main
+    file: 'common-definitions.yml'
 
 stages:
     - test
@@ -20,12 +10,16 @@ stages:
 
 test:
     stage: test
+    extends:
+        - .smoke-rules-all-branches-template
     script:
         - bazel --output_user_root=./bazel_output_user_root test //test/... --test_output=all
     after_script:
         - chmod +w -R ./bazel_output_user_root
 
 notify_rv_tester:
-    <<: *notify-template
+    stage: notify
+    extends:
+        - .notify-template
     trigger:
         project: riscv/dv/rv_tester

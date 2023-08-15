@@ -47,6 +47,7 @@ class Packet:
     domain: int
     num: int
     context: bool
+    dummy_return: str # this is to force certain compilers (eg, zebu) to immediately calls this DPI for lower latency
     port: str
     fields: list[Field]
 
@@ -55,7 +56,7 @@ class Packet:
         # packets always need topology location
         fields = [Field.load("location", { "width" : 32 })]
         fields += [Field.load(name, v) for name,v in values['fields'].items()]
-        return cls(name, values.get("domain", None), values.get("num", 1), values.get("context", False), port, fields)
+        return cls(name, values.get("domain", None), values.get("num", 1), values.get("context", False), values.get("dummy_return", ""), port, fields)
 
     def to_c_enum(self):
         return 'MSG_NUMBER_' + self.port + '_' + self.name

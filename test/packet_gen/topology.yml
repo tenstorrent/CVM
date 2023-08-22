@@ -13,6 +13,7 @@ top:
           - foo
       attrs:
         width: 2
+        s: [1, 2, 3]
     z:
       count: 1
       type:

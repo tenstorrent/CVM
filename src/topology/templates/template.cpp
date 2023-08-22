@@ -6,17 +6,21 @@
 
 struct wrapper {
   wrapper() {
-%for type in topo.types:
-    std::vector<cvm::topology::loc_t> locs_${type};
+%for typ in topo.types:
+    std::vector<cvm::topology::loc_t> locs_${typ};
 %endfor
 %for location in topo.locations:
     std::vector<cvm::topology::loc_t> locs_${location.name}_${location.path_id};
     std::unordered_map<std::string, uint32_t> attrs_${location.name}_${location.path_id};
+    std::unordered_map<std::string, std::vector<uint32_t>> list_attrs_${location.name}_${location.path_id};
     attrs_${location.name}_${location.path_id}["SHARD"] = ${location.shard};
     attrs_${location.name}_${location.path_id}["TOTAL"] = ${len(location.instances)};
     %for (name, value) in location.attributes:
-      %if value.isnumeric():
+      %if type(value) is int:
     attrs_${location.name}_${location.path_id}["${name.upper()}"] = ${value};
+      %elif type(value) is list:
+      <% value = [str(v) for v in value] %>
+    list_attrs_${location.name}_${location.path_id}["${name.upper()}"] = {${','.join(value)}};
       %endif
     %endfor
   %for instance in location.instances:
@@ -27,13 +31,14 @@ struct wrapper {
     names[${instance.loc}] = "${location.name.upper()}";
   %if location.attributes:
     attrs[${instance.loc}] = attrs_${location.name}_${location.path_id};
+    list_attrs[${instance.loc}] = list_attrs_${location.name}_${location.path_id};
   %endif
   %endfor
     str_hierarchy.insert({"${location.path}", locs_${location.name}_${location.path_id}});
     int_hierarchy.insert({${location.path_id}, locs_${location.name}_${location.path_id}});
 %endfor
-%for type in topo.types:
-    str_type["${type.upper()}"] = locs_${type};
+%for typ in topo.types:
+    str_type["${typ.upper()}"] = locs_${typ};
 %endfor
   }
 
@@ -41,6 +46,7 @@ struct wrapper {
   std::unordered_map<uint32_t,    std::vector<cvm::topology::loc_t>> int_hierarchy;
   std::unordered_map<std::string, std::vector<cvm::topology::loc_t>> str_type;
   std::unordered_map<cvm::topology::loc_t, std::unordered_map<std::string, uint32_t>> attrs;
+  std::unordered_map<cvm::topology::loc_t, std::unordered_map<std::string, std::vector<uint32_t>>> list_attrs;
   std::unordered_map<cvm::topology::loc_t, std::string> names;
 };
 
@@ -103,6 +109,15 @@ namespace cvm {
       }
       catch (...) {
         return std::make_pair(false, uint32_t(0));
+      }
+    }
+
+    std::pair<bool, std::vector<uint32_t>> list_attr(cvm::topology::loc_t loc, const std::string& attribute) {
+      try {
+        return std::make_pair(true, wrap().list_attrs.at(loc).at(attribute));
+      }
+      catch (...) {
+        return std::make_pair(false, std::vector<uint32_t>{});
       }
     }
 

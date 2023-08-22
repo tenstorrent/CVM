@@ -14,6 +14,7 @@ namespace cvm {
     loc_t get_from_type(const std::string& type, unsigned id);
     loc_t get_from_hierarchy(const std::string& hierarchy, unsigned id);
     std::pair<bool, uint32_t> attr(loc_t loc, const std::string& attribute);
+    std::pair<bool, std::vector<uint32_t>> list_attr(cvm::topology::loc_t loc, const std::string& attribute);
     std::string name(loc_t loc);
   }
 }

@@ -81,8 +81,8 @@ class Packets:
             for variable in variables:
                 pattern = variable.split('.')
                 val = query.query(".".join(pattern[:-1]), pattern[-1])
-                if type(val) != int:
-                  raise Exception(f"attribute {variable} must be number")
+                if type(val) != int and type(val) != list:
+                    raise Exception(f"attribute {variable} must be number or list")
                 expr = expr.replace(variable, str(val))
             return eval(expr)
 

@@ -13,8 +13,10 @@ package topology_pkg;
     ${child}_${topo.location(child).path_id}_t ${child.upper()};
   %endfor
   %for (name, value) in location.attributes:
-    %if value.isnumeric():
+    %if type(value) is int:
     int unsigned ${name.upper()};
+    %elif type(value) is list:
+    bit [${len(value) - 1}:0][31:0] ${name.upper()};
     %endif
   %endfor
   } ${location.name}_${location.path_id}_t;
@@ -32,8 +34,11 @@ package topology_pkg;
 , ${recurse(topo.location(child))}\
   %endfor
   %for name, value in next.attributes:
-    %if value.isnumeric():
+    %if type(value) is int:
 , ${value}\
+    %elif type(value) is list:
+    <% value = ["'d" + str(v) for v in value] %>
+, '{${','.join(value)}}\
     %endif
   %endfor
 }\

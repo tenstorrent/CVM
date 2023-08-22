@@ -25,3 +25,5 @@ dut2:
       fields:
           dummy2:
             width: 2
+          dummy3:
+            width: ${sum(TOP.CLUSTER.CORE.S)}

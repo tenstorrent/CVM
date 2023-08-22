@@ -129,7 +129,7 @@ class TopologyGen:
     count = children["count"]*uppers
 
     if "attrs" in children:
-      attributes = list(Attribute(key, str(val)) for key, val in children["attrs"].items())
+      attributes = list(Attribute(key, val) for key, val in children["attrs"].items())
     else:
       attributes = list()
 

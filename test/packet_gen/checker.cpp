@@ -10,6 +10,7 @@ class checker {
         checker() {
             auto loc = cvm::topology::get_from_hierarchy("TOP.CLUSTER.CORE", 0);
             check<uint32_t>("CORE.width", cvm::topology::attr(loc, "WIDTH").second, 2);
+            check<uint32_t>("CORE.s", cvm::topology::list_attr(loc, "S").second.at(0), 1);
             check<std::string>("CORE.name", cvm::topology::name(loc), "CORE");
             cvm::registry::messenger.connect<transactions::dut::pkt>(
                 loc,

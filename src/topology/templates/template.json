@@ -4,9 +4,13 @@
     "SHARD" : ${location.shard},
     "TOTAL" : ${len(location.instances)}${"," if location.attributes else ""}
   %for attr_idx, (name, value) in enumerate(location.attributes):
-    %if value.isnumeric():
-    "${name.upper()}" : ${value}${"," if attr_idx != len(location.attributes) - 1 else ""}
+    %if type(value) is int:
+    "${name.upper()}" : ${value}\
+    %elif type(value) is list:
+    <% value = [str(v) for v in value] %>
+    "${name.upper()}" : [${','.join(value)}]\
     %endif
+${"," if attr_idx != len(location.attributes) - 1 else ""}
   %endfor
   }${"," if idx != len(topo.locations) - 1 else ""}
 %endfor

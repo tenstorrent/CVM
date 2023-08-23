@@ -30,20 +30,20 @@ def cvm_dependencies():
         url = "https://aus-gitlab.local.tenstorrent.com/riscv/bazel_rules_hdl/-/archive/{commit}/bazel_rules_hdl-{commit}.tar.bz2".format(commit=rules_hdl_hash),
     )
 
-    rules_verilator_hash="75eea8daa648bc297427930289673ac1a3a7c1bb"
+    rules_verilator_hash="2e5893943990b74985c23bf385caff2ec113009a"
     maybe(
         http_archive,
         name = "rules_verilator",
-        sha256 = "ecfc54b739d564dbdbfb230c159cba16c68fee2106f014f2f872372dddd82867",
+        sha256 = "53d44ab29b4079f412fcd38264b5b0542ba3eac8b2781ee98fed79b081ce0329",
         strip_prefix = "rules_verilator-{commit}".format(commit=rules_verilator_hash),
         url = "https://aus-gitlab.local.tenstorrent.com/riscv/rules_verilator/-/archive/{commit}/rules_verilator-{commit}.tar.bz2".format(commit=rules_verilator_hash),
     )
 
-    rules_vcs_hash="b76677b84ac59aa7daaf0003e6e0167aaeb75d20"
+    rules_vcs_hash="f674ef648b9d3a15c4a312f6186191f6b9d1dca3"
     maybe(
         http_archive,
         name = "rules_vcs",
-        sha256 = "2705e6b6f06368216641d1cbbe9bd87e078b64ee15ef7f08915783107971e237",
+        sha256 = "7a8fafb1dcab6d76b20d54e65153ed9f992ea073c1a817312dd1f4c5f4ba7c3a",
         strip_prefix = "rules_vcs-{commit}".format(commit=rules_vcs_hash),
         url = "https://aus-gitlab.local.tenstorrent.com/riscv/rules_vcs/-/archive/{commit}/rules_vcs-{commit}.tar.bz2".format(commit=rules_vcs_hash),
     )

@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <vector>
 #include <string>
+#include <regex>
 #include "vpi_user.h"
 
 void cvm::plusargs::parse() {
@@ -13,7 +14,9 @@ void cvm::plusargs::parse() {
     for (int i = 0; i < info.argc; i++) {
         if (info.argv[i][0] == '+') {
             std::string a = std::string("--") + std::string(info.argv[i] + 1);
-            std::replace(a.begin(), a.end(), '+', '_');
+            if (!std::regex_search(a, std::regex(R"(\+\d+)"))) {
+                std::replace(a.begin(), a.end(), '+', '_');
+            }
             argvv.push_back(a);
         } else {
             argvv.push_back(info.argv[i]);

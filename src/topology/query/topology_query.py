@@ -7,8 +7,8 @@ import json
 class Query:
 
   def __init__(self, json_path: str):
-    f = open(json_path, 'r')
-    self.info = json.load(f)
+    with open(json_path, 'r') as f:
+      self.info = json.load(f)
 
   def module_exists(self, module: str):
     return module in self.info
@@ -24,3 +24,20 @@ class Query:
       return self.info[module][attr]
     except:
       raise RuntimeError(f"Undefined module or attr: {module}, {attr}")
+
+  class Hierarchy: pass
+
+  def hierarchy(self):
+
+    base = Query.Hierarchy()
+
+    for k,v in self.info.items():
+      h = base
+      for p in k.split('.'):
+        if not hasattr(h, p):
+          setattr(h, p, Query.Hierarchy())
+        h = getattr(h, p)
+        for k2, v2 in v.items():
+          setattr(h, k2, v2)
+
+    return base

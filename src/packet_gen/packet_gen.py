@@ -10,6 +10,7 @@ import math
 import pathlib
 from topology_query import Query
 import re
+import io
 
 from mako.template import Template
 from mako.runtime import Context
@@ -73,30 +74,24 @@ class Packets:
     @classmethod
     def load_file(cls, name, filename, topology):
         query = Query(topology)
-        sub_matcher = re.compile(r'\$\{(.*)\}')
-        def sub_constructor(loader, node):
-            value = node.value
-            expr = sub_matcher.match(value).group()[2:-1]
-            variables = re.findall(r'\w+(?:\.\w+)+', expr)
-            for variable in variables:
-                pattern = variable.split('.')
-                val = query.query(".".join(pattern[:-1]), pattern[-1])
-                if type(val) != int and type(val) != list:
-                    raise Exception(f"attribute {variable} must be number or list")
-                expr = expr.replace(variable, str(val))
-            return eval(expr)
-
-        yaml.add_implicit_resolver('!sub', sub_matcher, None, yaml.SafeLoader)
-        yaml.add_constructor('!sub', sub_constructor, yaml.SafeLoader)
+        hierarchy = query.hierarchy()
 
         packets = []
         ports = dict()
-        with open(filename, "r") as stream:
-            for port, values in yaml.safe_load(stream).items():
-                #FIXME: can't think of a good fix for this, there would need to be ifdefs in SV/C++ for code that depends on a packet to be generated
-                # even though it might not be needed
-                ports[port] = values.get("num", 0)
-                packets += [Packet.load(packet_name, packet_values, port) for packet_name, packet_values in values.items() if packet_name != "num"]
+
+        rendered = io.StringIO()
+        ctx = Context(rendered, **{k: getattr(hierarchy, k) for k in dir(hierarchy) if not k.startswith('__')})
+        template = Template(filename = filename)
+        try:
+            template.render_context(ctx)
+        except:
+            raise Exception(exceptions.text_error_template().render()) from None
+
+        for port, values in yaml.safe_load(rendered.getvalue()).items():
+            #FIXME: can't think of a good fix for this, there would need to be ifdefs in SV/C++ for code that depends on a packet to be generated
+            # even though it might not be needed
+            ports[port] = values.get("num", 0)
+            packets += [Packet.load(packet_name, packet_values, port) for packet_name, packet_values in values.items() if packet_name != "num"]
         return cls(name, packets, ports)
 
     def clog2(self, num):

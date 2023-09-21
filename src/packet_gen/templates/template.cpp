@@ -8,11 +8,13 @@ extern "C" void ${packets.name}_message(const std::uint8_t* message) {
 
     switch(message_number) {
     %for packet in packets.packets:
-        case ${packets.name}::${packet.to_c_enum()}: {
-            ${packets.name}::${packet.port}::${packet.name} ${packet.name}(message, ${packets.enum_width()});
-            cvm::registry::messenger.signal<${packets.name}::${packet.port}::${packet.name}>(${packet.name}.location, ${packet.name});
+    %for subpacket in packet:
+        case ${packets.name}::${subpacket.to_c_enum()}: {
+            ${packets.name}::${subpacket.port}::${subpacket.name}<${subpacket.subidx}> ${subpacket.name}(message, ${packets.enum_width()});
+            cvm::registry::messenger.signal(${subpacket.name}.location, ${subpacket.name});
             break;
         }
+    %endfor
     %endfor
         default: {
             assert(0 && "unexpected message number");
@@ -22,7 +24,9 @@ extern "C" void ${packets.name}_message(const std::uint8_t* message) {
 }
 
 %for packet in packets.packets:
-extern "C" ${"int" if packet.dummy_return else "void"} ${packets.name}_message_${packet.port}_${packet.name}(const std::uint8_t* message) {
-    ${packets.name}_message(message);${" return 0;" if packet.dummy_return else ""}
+%for subpacket in packet:
+extern "C" ${"int" if subpacket.dummy_return else "void"} ${packets.name}_message_${subpacket.port}_${subpacket.name}_${subpacket.subidx}(const std::uint8_t* message) {
+    ${packets.name}_message(message);${" return 0;" if subpacket.dummy_return else ""}
 }
+%endfor
 %endfor

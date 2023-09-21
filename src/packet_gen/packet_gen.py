@@ -19,27 +19,26 @@ from mako import exceptions
 @dataclass
 class Field:
     name: str
-    width: int
+    widths: list[int]
 
     @classmethod
     def load(cls, name, values):
-        return cls(name, values['width'])
-
-    def get_c_width(self):
-        if self.width <= 8: return 8
-        elif self.width <= 16: return 16
-        elif self.width <= 32: return 32
-        elif self.width <= 64: return 64
-
-        return None
+        try:
+            assert isinstance(values['widths'], list)
+            return cls(name, values['widths'])
+        except KeyError or AssertionError:
+            assert isinstance(values['width'], int)
+            return cls(name, [values['width']])
 
     def get_c_type(self):
+        assert len(self.widths) == 1
 
-        width = self.get_c_width()
-        if width:
-            return f"std::uint{width}_t"
-
-        return f"std::bitset<{self.width}>"
+        w = self.widths[0] # we cheat a bit here, and guarantee len(widths) == 1 for template
+        if w <= 8: return "std::uint8_t"
+        elif w <= 16: return "std::uint16_t"
+        elif w <= 32: return "std::uint32_t"
+        elif w <= 64: return "std::uint64_t"
+        return f"std::bitset<{w}>"
 
 
 @dataclass
@@ -51,16 +50,23 @@ class Packet:
     dummy_return: str # this is to force certain compilers (eg, zebu) to immediately calls this DPI for lower latency
     port: str
     fields: list[Field]
+    subidx: int
 
     @classmethod
     def load(cls, name, values, port):
+        fields = [Field.load(name, v) for name,v in values['fields'].items()]
+        num_subpackets = len(fields[0].widths)
+        assert all(len(f.widths) == num_subpackets for f in fields) and "Need same number of widths for all fields"
         # packets always need topology location
-        fields = [Field.load("location", { "width" : 32 })]
-        fields += [Field.load(name, v) for name,v in values['fields'].items()]
-        return cls(name, values.get("domain", None), values.get("num", 1), values.get("context", False), values.get("dummy_return", ""), port, fields)
+        fields.insert(0, Field.load("location", { "widths" : [32] * num_subpackets }))
+
+        elaborated = []
+        for i in range(num_subpackets):
+            elaborated.append([Field(f.name, [f.widths[i]]) for f in fields])
+        return [cls(name, values.get("domain", None), values.get("num", 1), values.get("context", False), values.get("dummy_return", ""), port, e, i) for i, e in enumerate(elaborated)]
 
     def to_c_enum(self):
-        return 'MSG_NUMBER_' + self.port + '_' + self.name
+        return 'MSG_NUMBER_' + self.port + '_' + self.name + '_' + str(self.subidx)
 
     def to_sv_enum(self):
         return self.to_c_enum()
@@ -68,7 +74,7 @@ class Packet:
 @dataclass
 class Packets:
     name: str
-    packets: list[Packet]
+    packets: list[list[Packet]]
     ports: dict
 
     @classmethod
@@ -91,16 +97,32 @@ class Packets:
             #FIXME: can't think of a good fix for this, there would need to be ifdefs in SV/C++ for code that depends on a packet to be generated
             # even though it might not be needed
             ports[port] = values.get("num", 0)
-            packets += [Packet.load(packet_name, packet_values, port) for packet_name, packet_values in values.items() if packet_name != "num"]
+            num_subpackets = 0
+            for packet_name, packet_values in values.items():
+                if packet_name != "num":
+                    p = Packet.load(packet_name, packet_values, port)
+                    if num_subpackets == 0:
+                        num_subpackets = len(p)
+                    else:
+                        assert len(p) == num_subpackets and "Must specify same number of widths among all packets in a port"
+                    packets.append(p)
         return cls(name, packets, ports)
 
     def clog2(self, num):
 
         return math.ceil(math.log2(num))
 
+    def total_packets(self):
+
+        sum = 0
+        for packet in self.packets:
+            sum += len(packet)
+
+        return sum
+
     def enum_width(self):
 
-        c = self.clog2(len(self.packets))
+        c = self.clog2(self.total_packets())
         if c == 0:
             c = 1
         return c

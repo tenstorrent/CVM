@@ -24,6 +24,6 @@ dut2:
       domain: 1
       fields:
           dummy2:
-            width: 2
+            widths: [2, 32]
           dummy3:
-            width: ${sum(TOP.CLUSTER.CORE.S)}
+            widths: [${sum(TOP.CLUSTER.CORE.S)}, 45]

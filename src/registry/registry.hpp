@@ -4,7 +4,6 @@
 #include <list>
 #include <functional>
 #include <typeinfo>
-#include <tuple>
 #include "cvm/messenger.hpp"
 #include "cvm/callbacks.hpp"
 #include "cvm/topology.hpp"

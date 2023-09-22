@@ -17,16 +17,16 @@ namespace ${packets.name} {
     } message_number;
 
 <%
-  namespaces = list()
+  namespaces = dict()
 %>
 
 %for packet in packets.packets:
 %for subpacket in packet:
-%if subpacket.name not in namespaces:
+%if subpacket.name not in namespaces.setdefault(subpacket.port, list()):
     namespace ${subpacket.port} {
         template <int N = 0> struct ${subpacket.name};
     };
-<% namespaces.append(subpacket.name) %>
+<% namespaces[subpacket.port].append(subpacket.name) %>
 %endif
     namespace ${subpacket.port} {
         template <>

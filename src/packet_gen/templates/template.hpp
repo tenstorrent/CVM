@@ -24,7 +24,11 @@ namespace ${packets.name} {
 %for subpacket in packet:
 %if subpacket.name not in namespaces.setdefault(subpacket.port, list()):
     namespace ${subpacket.port} {
-        template <int N = 0> struct ${subpacket.name};
+        template <int N = 0>
+        struct ${subpacket.name}
+        {
+            ${subpacket.name}(...) = delete;
+        };
     };
 <% namespaces[subpacket.port].append(subpacket.name) %>
 %endif

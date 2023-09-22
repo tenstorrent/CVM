@@ -3,7 +3,7 @@
 
 int x = 0, y = 0;
 
-template <typename T>
+template <typename T, typename U>
 class dummy4 {
   public:
     dummy4() {};
@@ -19,11 +19,11 @@ class dummy4 {
     }
 };
 
-REGISTRY_register_topology_agn(dummy4<int>)
-REGISTRY_register_topology_agn(dummy4<float>)
+REGISTRY_register_topology_agn((dummy4<int, int>))
+REGISTRY_register_topology_agn((dummy4<float, float>))
 
 TEST(Registry, Dummy4) {
-    EXPECT_EQ(cvm::registry::is_registered<dummy4<int>>(), true);
+    EXPECT_EQ((cvm::registry::is_registered<dummy4<int, int>>()), true);
     EXPECT_EQ(x, 1);
     EXPECT_EQ(y, 1);
 }

@@ -12,5 +12,5 @@ class dummy3 {
 REGISTRY_register(dummy3, CORE, (cvm::registry::all), 5)
 
 TEST(Registry, Dummy3) {
-    EXPECT_EQ(_registry::dummy3_SUCCESS, true);
+    EXPECT_EQ(cvm::registry::is_registered<dummy3>(), true);
 }

@@ -1,10 +1,10 @@
 package topology_pkg;
 
 <%
-  reversed = topo.locations[::-1]
+  reversed_locations = topo.locations[::-1]
 %>
 
-%for location in reversed:
+%for location in reversed_locations:
   typedef struct packed {
     int unsigned ID;
     int unsigned SHARD;
@@ -37,8 +37,8 @@ package topology_pkg;
     %if type(value) is int:
 , ${value}\
     %elif type(value) is list:
-    <% value = ["'d" + str(v) for v in value] %>
-, '{${','.join(value)}}\
+    <% reverse = reversed(["'d" + str(v) for v in value]) %>
+, '{${','.join(reverse)}}\
     %endif
   %endfor
 }\

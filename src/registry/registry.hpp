@@ -143,7 +143,7 @@ namespace cvm {
 
       template <typename T>
       static bool is_registered() {
-        return std::count(registered().begin(), registered().end(), typeid(T).name());
+        return registered().count(typeid(T).name());
       }
   };
 }

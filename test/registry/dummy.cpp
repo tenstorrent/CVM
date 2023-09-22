@@ -20,5 +20,5 @@ extern "C" void cvm_registry_reset() {
 };
 
 TEST(Registry, Dummy) {
-    EXPECT_EQ(_registry::dummy_SUCCESS, true);
+    EXPECT_EQ(cvm::registry::is_registered<dummy>(), true);
 }

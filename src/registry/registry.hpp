@@ -3,6 +3,8 @@
 #include <cassert>
 #include <list>
 #include <functional>
+#include <typeinfo>
+#include <unordered_set>
 #include "cvm/messenger.hpp"
 #include "cvm/callbacks.hpp"
 #include "cvm/topology.hpp"
@@ -32,6 +34,11 @@ namespace cvm {
       static auto& destructors() {
         static std::vector<std::function<void()>> destructs_;
         return destructs_;
+      }
+
+      static auto& registered() {
+        static std::unordered_set<std::string> registered_;
+        return registered_;
       }
 
     public:
@@ -98,6 +105,7 @@ namespace cvm {
         }
 
         destructors().push_back([&] () { return objs_.clear(); });
+        registered().emplace(typeid(T).name());
         return true;
       }
 
@@ -132,19 +140,32 @@ namespace cvm {
         for (const auto& destruct : destructors())
           destruct();
       }
+
+      template <typename T>
+      static bool is_registered() {
+        return registered().count(typeid(T).name());
+      }
+  };
+}
+
+#define REGISTRY_CONCAT_IMPL(x, y) x##y
+#define REGISTRY_CONCAT(x, y) REGISTRY_CONCAT_IMPL(x, y)
+
+namespace _registry {
+  template<typename> struct RemoveBrackets;
+  template<typename T> struct RemoveBrackets<void (T)> {
+      typedef T Type;
   };
 }
 
 // this should be used in source file
 // presumably, objects will subscribe to transactions in constructor
 #define REGISTRY_register(type, module, id, ...) \
-  namespace _registry { \
-    auto type##_register = []() -> bool { return cvm::registry::regist<type, false>( #module, id __VA_OPT__(,) __VA_ARGS__); }; \
-    bool type##_SUCCESS = type##_register(); \
-  }
+    namespace _registry { \
+      static bool REGISTRY_CONCAT(_, __COUNTER__) = std::invoke([]() -> bool { return cvm::registry::regist<RemoveBrackets<void (type)>::Type, false>( #module, id __VA_OPT__(,) __VA_ARGS__); }); \
+    }
 
 #define REGISTRY_register_topology_agn(type, ...) \
-  namespace _registry { \
-    auto type##_register = []() -> bool { return cvm::registry::regist<type, true>( "", 0 __VA_OPT__(,) __VA_ARGS__); }; \
-    bool type##_SUCCESS = type##_register(); \
-  }
+    namespace _registry { \
+      static bool REGISTRY_CONCAT(_, __COUNTER__) = std::invoke([]() -> bool { return cvm::registry::regist<RemoveBrackets<void (type)>::Type, true>( "", 0 __VA_OPT__(,) __VA_ARGS__); }); \
+    }

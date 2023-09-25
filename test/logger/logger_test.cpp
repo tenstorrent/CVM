@@ -109,3 +109,14 @@ TEST(Logger, Handler) {
 
     check("handler.log");
 }
+
+TEST(Logger, Exists) {
+    cvm::file_logger log("exists.log");
+    ASSERT_EQ(access("exists.log", F_OK), -1);
+    cvm::set_verbosity(cvm::MEDIUM);
+    log(cvm::HIGH, "hello");
+    ASSERT_EQ(access("exists.log", F_OK), -1);
+    cvm::set_verbosity(cvm::HIGH);
+    log(cvm::HIGH, "hello");
+    ASSERT_EQ(access("exists.log", F_OK), 0);
+}

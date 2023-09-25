@@ -3,6 +3,7 @@
 #include <unordered_map>
 #include <functional>
 #include <string_view>
+#include <memory>
 
 namespace cvm {
 
@@ -16,6 +17,7 @@ namespace cvm {
         DEBUG  = 500,
     };
 
+
     class logger {
 
         private:
@@ -25,6 +27,12 @@ namespace cvm {
             static std::function<std::string_view()> prefix;
 
         public:
+
+            static bool check_verbosity(verbosity_level v) {
+
+                return v <= verbosity;
+
+            }
 
             static void set_verbosity(verbosity_level v) {
 
@@ -50,7 +58,7 @@ namespace cvm {
             template <typename... Args>
                 logger(verbosity_level v, Args&&... args) {
 
-                    if (v <= verbosity) {
+                    if (check_verbosity(v)) {
 
                         fmt::print(prefix());
                         fmt::print(std::forward<Args>(args)...);
@@ -69,7 +77,7 @@ namespace cvm {
             template <typename... Args>
                 logger(fmt::ostream& out, verbosity_level v, Args&&... args) {
 
-                    if (v <= verbosity) {
+                    if (check_verbosity(v)) {
 
                         out.print(prefix());
                         out.print(std::forward<Args>(args)...);
@@ -90,17 +98,21 @@ namespace cvm {
 
         private:
 
-            fmt::ostream output_file;
+            const std::string filename;
+            std::unique_ptr<fmt::ostream> output_file;
 
         public:
 
             file_logger(const std::string& filename) :
-                output_file(fmt::output_file(filename)) {}
+                filename(filename) {}
 
             template <typename... Args>
-                void log(Args&&... args) {
+                void log(verbosity_level v, Args&&... args) {
 
-                    logger(output_file, std::forward<Args>(args)...);
+                    if (logger::check_verbosity(v) && !output_file)
+                        output_file = std::make_unique<fmt::ostream>(fmt::output_file(filename));
+
+                    logger(*output_file, v, std::forward<Args>(args)...);
 
                 }
 

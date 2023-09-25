@@ -31,7 +31,8 @@ std::unordered_map<cvm::verbosity_level, std::function<void()>> cvm::logger::han
 std::function<std::string_view()> cvm::logger::prefix = [] () { return ""; };
 
 void cvm::file_logger::flush() {
-    output_file.flush();
+    if (output_file)
+        output_file->flush();
 }
 
 extern "C" {

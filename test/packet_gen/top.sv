@@ -1,7 +1,9 @@
-module dut(
+module dut #(
+    `TRANSACTIONS_DUT_OUTPUT_PARAMS
+) (
     input clk,
     input rst,
-    `TRANSACTIONS_OUTPUT_DUT
+    `TRANSACTIONS_DUT_OUTPUT_PORTS
 );
 
     logic [7:0] count;
@@ -30,10 +32,12 @@ module dut(
 
 endmodule
 
-module dut2(
+module dut2 #(
+    `TRANSACTIONS_DUT2_OUTPUT_PARAMS
+) (
     input clk,
     input rst,
-    `TRANSACTIONS_OUTPUT_DUT2
+    `TRANSACTIONS_DUT2_OUTPUT_PORTS
 );
 
     int unsigned loc = cvm_topology::nil;
@@ -72,17 +76,29 @@ module top(
     logic rst;
     assign rst = clock_count < 5;
 
-    dut dut(
+    dut #(
+        `TRANSACTIONS_DUT_SOURCE_PARAMS(0)
+    ) dut (
         .clk,
         .rst,
-        `TRANSACTIONS_SOURCE_DUT(1, 0)
+        `TRANSACTIONS_DUT_SOURCE_PORTS(1, 0, 0)
     );
 
     for (genvar p = 0; p < 2; p++) begin
-        dut2 dut(
+        dut2 #(
+            `TRANSACTIONS_DUT2_SOURCE_PARAMS(0)
+        ) dut2 (
             .clk,
             .rst,
-            `TRANSACTIONS_SOURCE_DUT2(1, p)
+            `TRANSACTIONS_DUT2_SOURCE_PORTS(1, p, 0)
+        );
+
+        dut2 #(
+            `TRANSACTIONS_DUT2_SOURCE_PARAMS(1)
+        ) dut3 (
+            .clk,
+            .rst,
+            `TRANSACTIONS_DUT2_SOURCE_PORTS(1, p, 1)
         );
     end
 

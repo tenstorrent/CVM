@@ -20,13 +20,16 @@ namespace cvm {
         inline static constexpr bool is_bitset_v = is_bitset<T>::value;
 
         template <typename T>
-            static constexpr T mask(size_t bits) {
-                size_t size;
+            static constexpr size_t width() {
                 if constexpr (is_bitset_v<T>)
-                    size = T().size();
+                    return T().size();
                 else
-                    size = 8*sizeof(T);
+                    return 8*sizeof(T);
+            }
 
+        template <typename T>
+            static constexpr T mask(size_t bits) {
+                size_t size = width<T>();
                 assert(size >= bits);
                 if (size == bits) return ~T(0);
                 return ~(~T(0) << bits);
@@ -34,10 +37,8 @@ namespace cvm {
 
         template <typename T>
             static constexpr T mask(size_t msb, size_t lsb) {
-                if constexpr (is_bitset_v<T>)
-                    assert(T().size() > msb);
-                else
-                    assert(8*sizeof(T) > msb);
+                size_t size = width<T>();
+                assert(size > msb);
                 return mask<T>(msb - lsb + 1) << lsb;
             }
 

@@ -75,7 +75,7 @@ class Packet:
 class Packets:
     name: str
     packets: list[list[Packet]]
-    ports: dict
+    ports: dict[str, list[int]]
 
     @classmethod
     def load_file(cls, name, filename, topology):
@@ -96,15 +96,16 @@ class Packets:
         for port, values in yaml.safe_load(rendered.getvalue()).items():
             #FIXME: can't think of a good fix for this, there would need to be ifdefs in SV/C++ for code that depends on a packet to be generated
             # even though it might not be needed
-            ports[port] = values.get("num", 0)
-            num_subpackets = 0
+            num = values.get("num", [0])
+            if isinstance(num, int):
+                ports[port] = [num]
+            else:
+                ports[port] = num
+
             for packet_name, packet_values in values.items():
-                if packet_name != "num":
+                if packet_name != "num": # ignore "num"
                     p = Packet.load(packet_name, packet_values, port)
-                    if num_subpackets == 0:
-                        num_subpackets = len(p)
-                    else:
-                        assert len(p) == num_subpackets and "Must specify same number of widths among all packets in a port"
+                    assert len(p) == len(ports[port]) and "Must specify same number of widths among all packets in a port"
                     packets.append(p)
         return cls(name, packets, ports)
 

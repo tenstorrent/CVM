@@ -19,7 +19,7 @@ dut:
               width: 1
 
 dut2:
-  num: 2
+  num: [2, 1]
   pkt2:
       domain: 1
       fields:

@@ -23,6 +23,7 @@ namespace ${packets.name} {
 %for packet in packets.packets:
 %for subpacket in packet:
 %if subpacket.name not in namespaces.setdefault(subpacket.port, list()):
+    // we can't template namespaces
     namespace ${subpacket.port} {
         template <int N = 0>
         struct ${subpacket.name}

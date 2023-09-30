@@ -45,7 +45,7 @@ package ${packets.name};
 %for domain,domain_packets in by_domain.items():
     typedef struct packed {
     %for packet in domain_packets:
-        ${packet.port}_${packet.name}_${packet.subidx}_with_valid[${packets.ports[packet.port]}-1:0][${packet.num}-1:0] ${packet.port}_${packet.name}_${packet.subidx}s;
+        ${packet.port}_${packet.name}_${packet.subidx}_with_valid[${packets.ports[packet.port][packet.subidx]}-1:0][${packet.num}-1:0] ${packet.port}_${packet.name}_${packet.subidx}s;
     %endfor
     } domain_${domain};
 %endfor
@@ -121,7 +121,7 @@ module ${packets.name}_domain_${domain}(
 
     always @(posedge clk) begin
 %for packet in domain_packets:
-    %for port in range(packets.ports[packet.port]):
+    %for port in range(packets.ports[packet.port][packet.subidx]):
         %for i in range(packet.num):
         if (tx.${packet.port}_${packet.name}_${packet.subidx}s[${port}][${i}].valid) begin
             automatic ${packet.port}_${packet.name}_${packet.subidx}_message_t pkt = ${packet.port}_${packet.name}_${packet.subidx}_unpack(tx.${packet.port}_${packet.name}_${packet.subidx}s[${port}][${i}].data);

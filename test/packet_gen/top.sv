@@ -92,7 +92,9 @@ module top(
             .rst,
             `TRANSACTIONS_DUT2_SOURCE_PORTS(1, p, 0)
         );
+    end
 
+    for (genvar p = 0; p < 1; p++) begin
         dut2 #(
             `TRANSACTIONS_DUT2_SOURCE_PARAMS(1)
         ) dut3 (

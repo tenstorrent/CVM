@@ -4,6 +4,7 @@
 using namespace std::chrono_literals;
 
 DEFINE_bool(cb_async, false, "use asynchronous callbacks");
+DEFINE_uint64(cb_async_join_timeout_ms, 5000, "time to wait for async thread to join");
 
 using namespace cvm;
 
@@ -11,11 +12,14 @@ callbacks::callbacks() {
 }
 
 callbacks::~callbacks() {
-  clear();
+  while (!clear());
 }
 
 void
 callbacks::flush() {
+
+  std::unique_lock<std::timed_mutex> flush_lock(flush_mutex_);
+
   while(1) {
     scoped_cb cb;
     {
@@ -35,6 +39,7 @@ callbacks::flush() {
     svSetScope(std::get<0>(cb));
     std::get<1>(cb)();
   }
+
 }
 
 void
@@ -45,15 +50,22 @@ callbacks::build() {
   }
 }
 
-void
+bool
 callbacks::clear() {
   // if async, will spawn a separate thread to issue callbacks
   quit_ = true;
-  if (async_.joinable())
+  if (async_.joinable()) {
+    std::unique_lock<std::timed_mutex> lock(flush_mutex_, 1ms * FLAGS_cb_async_join_timeout_ms);
+    if (!lock) {
+      return false;
+    }
     async_.join();
+  }
 
   {
     std::lock_guard<std::mutex> lock(m_);
     que_.clear();
   }
+
+  return true;
 }

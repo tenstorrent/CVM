@@ -36,7 +36,7 @@ namespace cvm {
 
       void build();
 
-      void clear();
+      bool clear();
 
       inline bool finished()
       { return quit_ == true; }
@@ -51,5 +51,6 @@ namespace cvm {
 
       std::thread async_;
       std::atomic<bool> quit_ = false;
+      std::timed_mutex flush_mutex_;
   };
 }

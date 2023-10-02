@@ -131,14 +131,15 @@ namespace cvm {
           check();
       }
 
-      static void shutdown() {
+      static bool shutdown() {
         // messenger.clear() needs to be called before callbacks.clear()
         // messenger may cause new callbacks to be pushed
         // callbacks shouldn't have an (immediate) effect on messenger
         messenger.clear();
-        callbacks.clear();
+        if (!callbacks.clear()) return false;
         for (const auto& destruct : destructors())
           destruct();
+        return true;
       }
 
       template <typename T>

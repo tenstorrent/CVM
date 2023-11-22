@@ -377,7 +377,7 @@ namespace cvm {
               }
 
               template <typename T>
-              void signal(cvm::topology::loc_t loc, const T& t) {
+              void signal(cvm::topology::loc_t loc, const T& t, bool front = false) {
                   if (loc == cvm::topology::null) {
                       assert(false && "attempting to signal to null location");
                       return;
@@ -396,7 +396,11 @@ namespace cvm {
 
                   {
                       std::lock_guard<std::mutex> sl(signal_mutex_);
-                      signal_queue_.emplace_back(std::move(f));
+                      if (front) {
+                          signal_queue_.emplace_front(std::move(f));
+                      } else {
+                          signal_queue_.emplace_back(std::move(f));
+                      }
                   }
                   signal_condition_.notify_one();
 

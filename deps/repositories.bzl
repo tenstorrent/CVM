@@ -58,13 +58,13 @@ def cvm_dependencies():
         url = "https://aus-gitlab.local.tenstorrent.com/riscv/forks/rules_python/-/archive/{VERSION}/rules_python-{VERSION}.tar.bz2".format(VERSION=rules_python_version),
     )
 
-    gflags_version = "2.2.2"
+    com_github_gflags_gflags_hash="8df06cdb4a997b5b7ae186537cda18ecb43ea9cc"
     maybe(
         http_archive,
         name = "com_github_gflags_gflags",
-        sha256 = "018f1973b45e90cc4e8c8bb2f685072ff3b20638f7830b8de19f164e10a7b97f",
-        url = "https://aus-gitlab.local.tenstorrent.com/riscv/forks/gflags/-/archive/v{VERSION}/gflags-v{VERSION}.tar.bz2".format(VERSION=gflags_version),
-        strip_prefix = "gflags-v{}".format(gflags_version),
+        sha256 = "46e90f6ed081ad08c31f3a643a0182e28a162d12a48d81a85804363fccbdda3a",
+        url = "https://aus-gitlab.local.tenstorrent.com/opensrc/opensrc-gflags/-/archive/{commit}/opensrc-gflags-{commit}.tar.bz2".format(commit=com_github_gflags_gflags_hash),
+        strip_prefix = "opensrc-gflags-{commit}".format(commit=com_github_gflags_gflags_hash),
     )
 
     maybe(

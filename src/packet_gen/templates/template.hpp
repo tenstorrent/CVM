@@ -48,10 +48,10 @@ namespace ${packets.name} {
                 ${field.name}(${field.name})${[",", ""][(i+1)//len(subpacket.fields)]}
                 %endfor
                 {}
-            constexpr ${subpacket.name}(const std::uint8_t* bytes, const size_t offset) :
-<% start = 0 %>\
+            constexpr ${subpacket.name}(const std::uint8_t* bytes) :
+<% start = packets.enum_width() %>\
             % for i,field in enumerate(subpacket.fields):
-                ${field.name}(cvm::bitmanip::array_slice<decltype(${field.name})>(bytes, ${field.widths[0] + start - 1} + offset, ${start} + offset))${[",", ""][(i+1)//len(subpacket.fields)]}
+                ${field.name}(cvm::bitmanip::array_slice<decltype(${field.name}), ${field.widths[0] + start - 1}, ${start}>(bytes))${[",", ""][(i+1)//len(subpacket.fields)]}
 <% start += field.widths[0] %>\
             %endfor
                 {}

@@ -4,13 +4,13 @@
 
 extern "C" void ${packets.name}_message(const std::uint8_t* message) {
 
-    ${packets.name}::message_number message_number = ${packets.name}::message_number(cvm::bitmanip::array_slice<std::underlying_type<${packets.name}::message_number>::type>(message, ${packets.enum_width()-1}, 0));
+    ${packets.name}::message_number message_number = ${packets.name}::message_number(cvm::bitmanip::array_slice<std::underlying_type<${packets.name}::message_number>::type, ${packets.enum_width()-1}, 0>(message));
 
     switch(message_number) {
     %for packet in packets.packets:
     %for subpacket in packet:
         case ${packets.name}::${subpacket.to_c_enum()}: {
-            ${packets.name}::${subpacket.port}::${subpacket.name}<${subpacket.subidx}> ${subpacket.name}(message, ${packets.enum_width()});
+            ${packets.name}::${subpacket.port}::${subpacket.name}<${subpacket.subidx}> ${subpacket.name}(message);
             cvm::registry::messenger.signal(${subpacket.name}.location, ${subpacket.name});
             break;
         }

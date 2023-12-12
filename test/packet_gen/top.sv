@@ -6,7 +6,7 @@ module dut #(
     `TRANSACTIONS_DUT_OUTPUT_PORTS
 );
 
-    logic [7:0] count;
+    logic [31:0] count;
     always @(posedge clk) count <= rst ? '0 : (count + 1);
 
     int unsigned loc = cvm_topology::nil;
@@ -105,7 +105,10 @@ module top(
     end
 
     import "DPI-C" function void start_checker();
+    import "DPI-C" function void end_checker();
     initial start_checker();
+    final   end_checker();
+
 
 endmodule
 

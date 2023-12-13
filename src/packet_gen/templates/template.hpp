@@ -2,6 +2,7 @@
 
 #include <cinttypes>
 #include <bitset>
+#include <array>
 #include "cvm/bitmanip.hpp"
 
 namespace ${packets.name} {
@@ -48,10 +49,13 @@ namespace ${packets.name} {
                 ${field.name}(${field.name})${[",", ""][(i+1)//len(subpacket.fields)]}
                 %endfor
                 {}
-            constexpr ${subpacket.name}(const std::uint8_t* bytes) :
+            static constexpr std::size_t packed_bits  = ${packets.enum_width() + sum(field.widths[0] for field in subpacket.fields)};
+            static constexpr std::size_t packed_bytes = (packed_bits + 7)/8;
+
+            constexpr ${subpacket.name}(const std::array<std::uint8_t, packed_bytes>& bytes) :
 <% start = packets.enum_width() %>\
             % for i,field in enumerate(subpacket.fields):
-                ${field.name}(cvm::bitmanip::array_slice<decltype(${field.name}), ${field.widths[0] + start - 1}, ${start}>(bytes))${[",", ""][(i+1)//len(subpacket.fields)]}
+                ${field.name}(cvm::bitmanip::array_slice<decltype(${field.name}), ${field.widths[0] + start - 1}, ${start}>(bytes.data()))${[",", ""][(i+1)//len(subpacket.fields)]}
 <% start += field.widths[0] %>\
             %endfor
                 {}

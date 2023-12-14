@@ -32,6 +32,8 @@ void cvm::messenger::build() {
     }
 }
 
+void report_durations();
+
 void cvm::messenger::clear() {
     quit_ = true;
     if (signal_thread_.joinable()) {
@@ -49,4 +51,5 @@ void cvm::messenger::clear() {
         std::lock_guard<std::mutex> signal_queue_guard(signal_mutex_);
         signal_queue_.clear();
     }
+    report_durations();
 }

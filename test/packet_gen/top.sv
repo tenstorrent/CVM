@@ -26,7 +26,7 @@ module dut #(
         end
     end
 
-    assign ctxs[0].valid           = count == 1000000;
+    assign ctxs[0].valid           = count == 10;
     assign ctxs[0].data.location   = loc;
     assign ctxs[0].data.dummy      = 1'b1;
 

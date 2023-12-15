@@ -58,7 +58,7 @@ class Packet:
         num_subpackets = len(fields[0].widths)
         assert all(len(f.widths) == num_subpackets for f in fields) and "Need same number of widths for all fields"
         # packets always need topology location
-        fields.insert(0, Field.load("location", { "widths" : [Packets.location_width()] * num_subpackets }))
+        fields.insert(0, Field.load("location", { "widths" : [32] * num_subpackets }))
 
         elaborated = []
         for i in range(num_subpackets):
@@ -139,11 +139,6 @@ class Packets:
         if c == 0:
             c = 1
         return c
-
-    @staticmethod
-    # FIXME compress this
-    def location_width():
-        return 32
 
 class PacketsGen:
 

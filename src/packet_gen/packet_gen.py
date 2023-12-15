@@ -74,6 +74,7 @@ class Packet:
 @dataclass
 class Packets:
     name: str
+    domains: dict[int, dict[str, str]] # only contains domains that have special attrs
     packets: list[list[Packet]]
     ports: dict[str, list[int]]
 
@@ -84,6 +85,7 @@ class Packets:
 
         packets = []
         ports = dict()
+        domains = dict()
 
         rendered = io.StringIO()
         ctx = Context(rendered, **{k: getattr(hierarchy, k) for k in dir(hierarchy) if not k.startswith('__')})
@@ -94,6 +96,16 @@ class Packets:
             raise Exception(exceptions.text_error_template().render()) from None
 
         for port, values in yaml.safe_load(rendered.getvalue()).items():
+
+            if port.startswith("__"): # special fields
+                f = port[2:]
+                if f == "domains":
+                    domains = values
+                else:
+                    raise Exception(f"Unrecognized key {port}. Names starting with '__' are not recognized as ports")
+                continue
+
+
             #FIXME: can't think of a good fix for this, there would need to be ifdefs in SV/C++ for code that depends on a packet to be generated
             # even though it might not be needed
             num = values.get("num", [0])
@@ -107,7 +119,7 @@ class Packets:
                     p = Packet.load(packet_name, packet_values, port)
                     assert len(p) == len(ports[port]) and "Must specify same number of widths among all packets in a port"
                     packets.append(p)
-        return cls(name, packets, ports)
+        return cls(name, domains, packets, ports)
 
     def clog2(self, num):
 

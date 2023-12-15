@@ -7,7 +7,8 @@ class checker {
 
     public:
 
-        checker(cvm::topology::loc_t loc, unsigned int /*id*/) {
+        checker() {
+            auto loc = cvm::topology::get_from_hierarchy("TOP.CLUSTER.CORE", 0);
             check<uint32_t>("CORE.width", cvm::topology::attr(loc, "WIDTH").second, 2);
             check<uint32_t>("CORE.s", cvm::topology::list_attr(loc, "S").second.at(0), 1);
             check<std::string>("CORE.name", cvm::topology::name(loc), "CORE");
@@ -63,15 +64,7 @@ class checker {
 
 };
 
-REGISTRY_register(checker, TOP.CLUSTER.CORE, 0)
-
 extern "C" void start_checker() {
-    cvm::registry::build();
-    cvm::registry::configure();
-    cvm::registry::check();
-}
-
-extern "C" void end_checker() {
-    cvm::registry::shutdown();
+    static checker mon;
 }
 

@@ -26,7 +26,7 @@ extern "C" void ${packets.name}_message(const std::uint8_t* message) {
 %for packet in packets.packets:
 %for subpacket in packet:
 extern "C" ${"int" if subpacket.dummy_return else "void"} ${packets.name}_message_${subpacket.port}_${subpacket.name}_${subpacket.subidx}(const std::uint8_t* message) {
-    ${packets.name}_message(message);${" return 0;" if subpacket.dummy_return else ""}
+    ${packets.name}_message(message);
 }
 %endfor
 %endfor

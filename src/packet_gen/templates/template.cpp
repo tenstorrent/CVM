@@ -56,7 +56,6 @@ extern "C" ${"int" if subpacket.dummy_return else "void"} ${packets.name}_messag
         count++;
     }
     }
-    ${" return 0;" if subpacket.dummy_return else ""}
 }
 %endfor
 %endfor

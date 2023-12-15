@@ -100,7 +100,7 @@ module ${packets.name}_domain_${domain}(
 
     typedef byte unsigned ${packet.port}_${packet.name}_${packet.subidx}_message_t[MESSAGE_${packet.port}_${packet.name}_${packet.subidx}_BYTES];
 
-    import "DPI-C" ${"context" if packet.context else ""} function ${"int" if packet.dummy_return else "void"} ${packets.name}_message_${packet.port}_${packet.name}_${packet.subidx}(${packet.port}_${packet.name}_${packet.subidx}_message_t message);
+    import "DPI-C" ${"context" if packet.context else ""} function void ${packets.name}_message_${packet.port}_${packet.name}_${packet.subidx}(${packet.port}_${packet.name}_${packet.subidx}_message_t message);
 
     function automatic ${packet.port}_${packet.name}_${packet.subidx}_message_t ${packet.port}_${packet.name}_${packet.subidx}_unpack(${packets.name}::${packet.port}_${packet.name}_${packet.subidx} packet);
         localparam int B = MESSAGE_${packet.port}_${packet.name}_${packet.subidx}_BYTES;
@@ -119,13 +119,14 @@ module ${packets.name}_domain_${domain}(
     endfunction
 %endfor
 
+    ${packets.domains.get(domain, {}).get('always_block_header', '')}
     always @(posedge clk) begin
 %for packet in domain_packets:
     %for port in range(packets.ports[packet.port][packet.subidx]):
         %for i in range(packet.num):
         if (tx.${packet.port}_${packet.name}_${packet.subidx}s[${port}][${i}].valid) begin
             automatic ${packet.port}_${packet.name}_${packet.subidx}_message_t pkt = ${packet.port}_${packet.name}_${packet.subidx}_unpack(tx.${packet.port}_${packet.name}_${packet.subidx}s[${port}][${i}].data);
-            ${"automatic int dummy = " if packet.dummy_return else ""}${packets.name}_message_${packet.port}_${packet.name}_${packet.subidx}(pkt);
+            ${packets.name}_message_${packet.port}_${packet.name}_${packet.subidx}(pkt);
         end
         %endfor
     %endfor

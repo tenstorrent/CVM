@@ -3,6 +3,7 @@
 #include <vector>
 #include <fstream>
 #include <utility>
+#include <cstdint>
 
 namespace cvm {
   namespace topology {

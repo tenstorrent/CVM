@@ -132,3 +132,10 @@ as well as the packet types defined in the yml itself in both SV and C++.
 A packet needs a `valid` field to be set to indicate when to issue a message on a posedge clock (call DPI function) as well as the source's location since this relies on topology/messenger. To work properly, the C++ class listening on this SV message will have used a `cvm::registry::messenger.connect` on the `packet_gen` transaction type.
 
 It's possible to have multiple `packet_gen` rules in a build, but this also means the relevant DPI function calls will be in different `always` blocks, which may hurt reproducibility.
+
+### Qualify
+A field in a packet can have a `qualify`. The field within the packet will only be sent from SV to C++ when the qualify term is true. If not true, the C++ struct will have zeros for those fields.
+
+For simple qualify terms, the name of the signal in the packet can be used. For more complex terms, a string can be passed, with `{data}` as the placeholder for the packet path.
+
+For now, fields using the same qualify should be contiguous. This requirement may be relaxed in the future if desired. However the output verilog will be more optimal if they are contiguous.

@@ -6,7 +6,7 @@ module dut #(
     `TRANSACTIONS_DUT_OUTPUT_PORTS
 );
 
-    logic [7:0] count;
+    logic [31:0] count;
     always @(posedge clk) count <= rst ? '0 : (count + 1);
 
     int unsigned loc = cvm_topology::nil;
@@ -18,11 +18,19 @@ module dut #(
 
     for (genvar i = 0; i < 8; i++) begin
         always @(posedge clk) begin
-            pkts[i].valid         <= count > 0;
-            pkts[i].data.location <= loc;
-            pkts[i].data.num      <= i;
-            pkts[i].data.x256     <= 256'(1) << 255 | (256'(count)-1);
-            pkts[i].data.x54      <=  54'(1) <<  53 | (54'(count)-1);
+            automatic logic[31:0] c = count - 1;
+            pkts[i].valid          <= count > 0;
+            pkts[i].data.location  <= loc;
+            pkts[i].data.num       <= i;
+            pkts[i].data.x256      <= 256'(1) << 255 | 256'(c);
+            pkts[i].data.x54       <=  54'(1) <<  53 | 54'(c);
+            pkts[i].data.valid1    <= c == 4;
+            pkts[i].data.optional1 <= 8'(c);
+            pkts[i].data.valid2    <= c == 5;
+            pkts[i].data.optional2 <= 8'(c);
+            pkts[i].data.valid3a   <= 64'(c == 6 || c == 7);
+            pkts[i].data.valid3b   <= 64'(c == 7);
+            pkts[i].data.optional3 <= 512'(c);
         end
     end
 

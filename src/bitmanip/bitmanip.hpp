@@ -43,6 +43,15 @@ namespace cvm {
             }
 
         template <typename T>
+            static constexpr bool index(const T& t, size_t bit) {
+                if constexpr (is_bitset_v<T>) {
+                    return t[bit];
+                } else {
+                    return (t >> bit) & 1;
+                }
+            }
+
+        template <typename T>
             static constexpr T slice(const T& t, size_t msb, size_t lsb) {
                 return (t & mask<T>(msb, lsb)) >> lsb;
             }

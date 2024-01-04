@@ -44,13 +44,25 @@ class checker {
 
         template<typename T>
             void check(const std::string& name, const T& actual, const T& expected) {
-                ASSERT_EQ(actual, expected);
+                ASSERT_EQ(actual, expected) << name;
             }
 
         void check(const transactions::dut::pkt<>& pkt) {
+            auto c = count_ / 8;
             check("num", pkt.num, decltype(pkt.num)(count_ % 8));
-            check("x256", pkt.x256, decltype(pkt.x256)(1) << 255 | decltype(pkt.x256)(count_ / 8));
-            check("x54", pkt.x54, decltype(pkt.x54)(1) << 53 | decltype(pkt.x54)(count_ / 8));
+            check("x256", pkt.x256, decltype(pkt.x256)(1) << 255 | decltype(pkt.x256)(c));
+            check("x54", pkt.x54, decltype(pkt.x54)(1) << 53 | decltype(pkt.x54)(c));
+
+            check("_packet_gen_valid", pkt._packet_gen_valid, decltype(pkt._packet_gen_valid)(int(c == 4) | int(c == 5) << 1 | int(c == 6 || c == 7) << 2));
+
+            check("valid1"   , pkt.valid1   , decltype(pkt.valid1   )(c == 4));
+            check("optional1", pkt.optional1, decltype(pkt.optional1)(c == 4 ? 4 : 0));
+            check("valid2"   , pkt.valid2   , decltype(pkt.valid2   )(c == 5));
+            check("optional2", pkt.optional2, decltype(pkt.optional2)(c == 5 ? 5 : 0));
+            check("valid3a"  , pkt.valid3a  , decltype(pkt.valid3a  )(c == 6 || c == 7));
+            check("valid3b"  , pkt.valid3b  , decltype(pkt.valid3b  )(c == 7));
+            check("optional3", pkt.optional3, decltype(pkt.optional3)((c == 6 || c == 7) ? c : 0));
+
             count_++;
         }
 

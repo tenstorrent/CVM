@@ -49,10 +49,24 @@ namespace ${packets.name} {
                 %endfor
                 {}
             constexpr ${subpacket.name}(const std::uint8_t* bytes, const size_t offset) :
-<% start = 0 %>\
+<%
+    start = 0
+    valid_groups = subpacket.valid_groups()
+    valid_groups_values = list(valid_groups.values()) + [[1<<31, 1<<31]]
+    valid_index = 0
+%>\
             % for i,field in enumerate(subpacket.fields):
-                ${field.name}(cvm::bitmanip::array_slice<decltype(${field.name})>(bytes, ${field.widths[0] + start - 1} + offset, ${start} + offset))${[",", ""][(i+1)//len(subpacket.fields)]}
-<% start += field.widths[0] %>\
+                <%
+                if start > valid_groups_values[valid_index][1]:
+                    valid_index += 1
+                valids_offset = "+".join(f"(!cvm::bitmanip::index(_packet_gen_valid, {i}) ? ({valid[1]} - {valid[0]} + 1) : 0)" for i,valid in enumerate(valid_groups_values[:valid_index]))
+                qualify = ""
+                if start >= valid_groups_values[valid_index][0] and start <= valid_groups_values[valid_index][1]:
+                    qualify = f"!cvm::bitmanip::index(_packet_gen_valid, {valid_index}) ? 0 : "
+
+                %>\
+                ${field.name}(${qualify}cvm::bitmanip::array_slice<decltype(${field.name})>(bytes, ${field.width + start - 1} + offset - (${valids_offset or 0}), ${start} + offset - (${valids_offset or 0})))${[",", ""][(i+1)//len(subpacket.fields)]}
+<% start += field.width %>\
             %endfor
                 {}
         };

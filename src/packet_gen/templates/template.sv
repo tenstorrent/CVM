@@ -82,9 +82,11 @@ module ${packets.name}_domain_${domain}(
                 ${packets.name}::${packet.port}_${packet.name}_${packet.subidx} data;
                 ${packets.name}::message_number header;
             } pkt_t;
-            automatic int b = 0;
 <% odata = f"tx.{packet.port}_{packet.name}_{packet.subidx}s[{port}][{i}].data" %>\
             automatic pkt_t pkt = '{data: ${odata}, header: ${packets.name}::${packet.to_sv_enum()}};
+            automatic logic[$clog2($bits(pkt.data)+1)-1:0] b = 0;
+            localparam int BW = $clog2(($bits(pkt)+7)/8);
+            automatic logic[BW-1:0] bytes_to_transfer = 0;
 <% valid_groups = packet.valid_groups(); packet_size = sum(field.width for field in packet.fields)%>\
             %for index, valid in reversed(list(enumerate(valid_groups))):
 <%lsb, msb = valid_groups[valid]%>\
@@ -99,17 +101,24 @@ module ${packets.name}_domain_${domain}(
                 b += ${msb}-${lsb}+1;
             end
             %endfor
-            unique case (($bits(pkt)-b+7)/8)
+            bytes_to_transfer = BW'(($bits(pkt)-32'(b)+7)/8);
+            unique case(bytes_to_transfer) inside
+<% prev = -1 %>\
             % for bytes in packet.valid_groups_bytes(packets.enum_width()):
-                ${bytes}: begin
+                [BW'(${prev+1}):BW'(${bytes})]: begin // Need to limit the number of lines with DPI calls otherwise zebu blows up FWC resources. Even if only one of them is guaranteed to be called at a time.
                     automatic byte unsigned unpacked[${bytes}];
-                    for (int i = 0; i < ${bytes}; i++) begin
-                        unpacked[i] = 8'(pkt >> (8*i));
+                    for (int i = 0; i < ${bytes}; i++) begin // zebu can't handle using bytes_to_transfer as the loop bound, it can't unroll it
+                        if (i < bytes_to_transfer) begin
+                            unpacked[i] = 8'(pkt >> (8*i));
+                        end
                     end
                     ${packets.name}_message_${packet.port}_${packet.name}_${packet.subidx}_bytes${bytes}(unpacked);
                 end
+<% prev = bytes %>
             % endfor
-                default: assert(1'b0) else $error("No valid function found for ${packet.port}_${packet.name}_${packet.subidx} to send %0d bytes", ($bits(pkt)-b+7)/8);
+                default: begin
+                    assert(1'b0) else $error("No valid function found for ${packet.port}_${packet.name}_${packet.subidx} to send %0d bytes", bytes_to_transfer);
+                end
             endcase
         end
         %endfor

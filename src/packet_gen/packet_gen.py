@@ -11,7 +11,7 @@ import pathlib
 from topology_query import Query
 import re
 import io
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 
 from mako.template import Template
 from mako.runtime import Context
@@ -85,13 +85,26 @@ class Packet:
             lsb += field.width
         return d
 
+    # This is the sweet spot on zebu ep1 fwc gen2
+    VALID_GROUP_BUCKET_SIZE = 48
+
     def valid_groups_bytes(self, padding):
         valid_groups = self.valid_groups()
         bits = set([sum(field.width for field in self.fields) + padding])
         for lsb,msb in valid_groups.values():
             w = msb - lsb + 1
             bits |= set(s - w for s in bits)
-        return sorted(list(set((b + 7)//8 for b in bits)))
+
+        buckets = defaultdict(set)
+        for n in bits:
+            buckets[(n + Packet.VALID_GROUP_BUCKET_SIZE*8-1)//(Packet.VALID_GROUP_BUCKET_SIZE*8)].add((n + 7)//8)
+
+        return OrderedDict(
+            sorted(
+                [[max(b), sorted(list(b))] for b in buckets.values()],
+                key = lambda x: x[0]
+            ),
+        )
 
 @dataclass
 class Packets:

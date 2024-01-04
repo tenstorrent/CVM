@@ -42,12 +42,13 @@ namespace cvm {
                 return mask<T>(msb - lsb + 1) << lsb;
             }
 
-        template <typename T>
-            static constexpr bool index(const T& t, size_t bit) {
+        template <size_t I, typename T>
+            static constexpr bool index(const T& t) {
+                static_assert(I < width<T>());
                 if constexpr (is_bitset_v<T>) {
-                    return t[bit];
+                    return t[I];
                 } else {
-                    return (t >> bit) & 1;
+                    return (t >> I) & 1;
                 }
             }
 

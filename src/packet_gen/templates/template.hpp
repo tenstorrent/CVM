@@ -59,10 +59,10 @@ namespace ${packets.name} {
                 <%
                 if start > valid_groups_values[valid_index][1]:
                     valid_index += 1
-                valids_offset = "+".join(f"(!cvm::bitmanip::index(_packet_gen_valid, {i}) ? ({valid[1]} - {valid[0]} + 1) : 0)" for i,valid in enumerate(valid_groups_values[:valid_index]))
+                valids_offset = "+".join(f"(!cvm::bitmanip::index<{i}>(_packet_gen_valid) ? ({valid[1]} - {valid[0]} + 1) : 0)" for i,valid in enumerate(valid_groups_values[:valid_index]))
                 qualify = ""
                 if start >= valid_groups_values[valid_index][0] and start <= valid_groups_values[valid_index][1]:
-                    qualify = f"!cvm::bitmanip::index(_packet_gen_valid, {valid_index}) ? 0 : "
+                    qualify = f"!cvm::bitmanip::index<{valid_index}>(_packet_gen_valid) ? 0 : "
 
                 %>\
                 ${field.name}(${qualify}cvm::bitmanip::array_slice<decltype(${field.name})>(bytes, ${field.width + start - 1} + offset - (${valids_offset or 0}), ${start} + offset - (${valids_offset or 0})))${[",", ""][(i+1)//len(subpacket.fields)]}

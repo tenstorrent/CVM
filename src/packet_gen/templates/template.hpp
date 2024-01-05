@@ -2,6 +2,7 @@
 
 #include <cinttypes>
 #include <bitset>
+#include <array>
 #include "cvm/bitmanip.hpp"
 
 namespace ${packets.name} {
@@ -48,7 +49,10 @@ namespace ${packets.name} {
                 ${field.name}(${field.name})${[",", ""][(i+1)//len(subpacket.fields)]}
                 %endfor
                 {}
-            constexpr ${subpacket.name}(const std::uint8_t* bytes, const size_t offset) :
+            static constexpr std::size_t packed_bits  = ${packets.enum_width() + sum(field.width for field in subpacket.fields)};
+            static constexpr std::size_t packed_bytes = (packed_bits + 7)/8;
+
+            constexpr ${subpacket.name}(const std::array<std::uint8_t, packed_bytes>& bytes) :
 <%
     start = 0
     valid_groups = subpacket.valid_groups()
@@ -65,7 +69,7 @@ namespace ${packets.name} {
                     qualify = f"!cvm::bitmanip::index<{valid_index}>(_packet_gen_valid) ? 0 : "
 
                 %>\
-                ${field.name}(${qualify}cvm::bitmanip::array_slice<decltype(${field.name})>(bytes, ${field.width + start - 1} + offset - (${valids_offset or 0}), ${start} + offset - (${valids_offset or 0})))${[",", ""][(i+1)//len(subpacket.fields)]}
+                ${field.name}(${qualify}cvm::bitmanip::array_slice<decltype(${field.name})>(bytes.data(), ${field.width + packets.enum_width() + start - 1} - (${valids_offset or 0}), ${packets.enum_width() + start} - (${valids_offset or 0})))${[",", ""][(i+1)//len(subpacket.fields)]}
 <% start += field.width %>\
             %endfor
                 {}

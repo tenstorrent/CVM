@@ -113,7 +113,9 @@ module top(
     end
 
     import "DPI-C" function void start_checker();
+    import "DPI-C" function void end_checker();
     initial start_checker();
+    final   end_checker();
 
 endmodule
 

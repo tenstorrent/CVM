@@ -85,7 +85,7 @@ module ${packets.name}_domain_${domain}(
 <% odata = f"tx.{packet.port}_{packet.name}_{packet.subidx}s[{port}][{i}].data" %>\
             automatic pkt_t pkt = '{data: ${odata}, header: ${packets.name}::${packet.to_sv_enum()}};
             automatic logic[$clog2($bits(pkt.data)+1)-1:0] b = 0;
-            localparam int BW = $clog2(($bits(pkt)+7)/8);
+            localparam int BW = $clog2((($bits(pkt)+7)/8)+1);
             automatic logic[BW-1:0] bytes_to_transfer = 0;
 <% valid_groups = packet.valid_groups(); packet_size = sum(field.width for field in packet.fields)%>\
             %for index, valid in reversed(list(enumerate(valid_groups))):

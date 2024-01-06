@@ -376,35 +376,6 @@ namespace cvm {
                   return;
               }
 
-              template <typename T, typename... Args>
-              void signal_emplace(cvm::topology::loc_t loc, Args&&... args) {
-                  if (loc == cvm::topology::null) {
-                      assert(false && "attempting to signal to null location");
-                      return;
-                  }
-
-                  std::function<void(void)> f = [this, loc, ... args = std::move(std::forward<Args>(args))] () mutable {
-                      bool clean = message_pool<T>()->run(loc, T(std::forward<Args>(args)...));
-
-                      // not necessary all the time - need to use a GC?
-                      if (clean) {
-                          std::lock_guard<std::mutex> guard(tasks_mutex_);
-                          tasks_.erase(std::remove_if(tasks_.begin(), tasks_.end(),
-                                      [] (const auto& handler) { return handler.done(); }), tasks_.end());
-                      }
-                  };
-
-                  {
-                      std::lock_guard<std::mutex> sl(signal_mutex_);
-                      signal_queue_.emplace_back(std::move(f));
-                  }
-                  signal_condition_.notify_one();
-
-                  if (!FLAGS_signal_async) flush();
-
-                  return;
-              }
-
               template <typename T>
               void signal(cvm::topology::loc_t loc, const T& t, bool front = false) {
                   if (loc == cvm::topology::null) {

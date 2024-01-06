@@ -56,7 +56,7 @@ class Packet:
         # packets always need topology location
         elaborated = []
         for i in range(num_subpackets):
-            p = [Field.load("location", {"width": Packets.location_width()})]
+            p = [Field.load("location", {"width": 32})]
             p += [Field.load(name, v, i) for name,v in values['fields'].items()]
             quals = len(set(field.qualify for field in p if field.qualify is not None))
             if quals:
@@ -174,11 +174,6 @@ class Packets:
         if c == 0:
             c = 1
         return c
-
-    @staticmethod
-    # FIXME compress this
-    def location_width():
-        return 32
 
 class PacketsGen:
 

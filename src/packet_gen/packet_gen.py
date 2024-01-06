@@ -11,6 +11,7 @@ import pathlib
 from topology_query import Query
 import re
 import io
+from collections import OrderedDict, defaultdict
 
 from mako.template import Template
 from mako.runtime import Context
@@ -19,21 +20,18 @@ from mako import exceptions
 @dataclass
 class Field:
     name: str
-    widths: list[int]
+    width: int
+    qualify: str
 
     @classmethod
-    def load(cls, name, values):
-        try:
-            assert isinstance(values['widths'], list)
-            return cls(name, values['widths'])
-        except KeyError or AssertionError:
-            assert isinstance(values['width'], int)
-            return cls(name, [values['width']])
+    def load(cls, name, values, subidx = 0):
+        width = values.get('widths', [values.get('width')])[subidx]
+        qualify = values.get('qualify')
+        return cls(name, width, qualify)
 
     def get_c_type(self):
-        assert len(self.widths) == 1
 
-        w = self.widths[0] # we cheat a bit here, and guarantee len(widths) == 1 for template
+        w = self.width
         if w <= 8: return "std::uint8_t"
         elif w <= 16: return "std::uint16_t"
         elif w <= 32: return "std::uint32_t"
@@ -47,29 +45,66 @@ class Packet:
     domain: int
     num: int
     context: bool
-    dummy_return: str # this is to force certain compilers (eg, zebu) to immediately calls this DPI for lower latency
     port: str
     fields: list[Field]
     subidx: int
 
     @classmethod
     def load(cls, name, values, port):
-        fields = [Field.load(name, v) for name,v in values['fields'].items()]
-        num_subpackets = len(fields[0].widths)
-        assert all(len(f.widths) == num_subpackets for f in fields) and "Need same number of widths for all fields"
+        num_subpackets = len(next(iter(values['fields'].values())).get('widths', [0]))
+        assert all(len(v.get('widths', [0])) == num_subpackets for v in values['fields'].values()) and "Need same number of widths for all fields"
         # packets always need topology location
-        fields.insert(0, Field.load("location", { "widths" : [32] * num_subpackets }))
-
         elaborated = []
         for i in range(num_subpackets):
-            elaborated.append([Field(f.name, [f.widths[i]]) for f in fields])
-        return [cls(name, values.get("domain", None), values.get("num", 1), values.get("context", False), values.get("dummy_return", ""), port, e, i) for i, e in enumerate(elaborated)]
+            p = [Field.load("location", {"width": 32})]
+            p += [Field.load(name, v, i) for name,v in values['fields'].items()]
+            quals = len(set(field.qualify for field in p if field.qualify is not None))
+            if quals:
+                p.insert(0, Field.load("_packet_gen_valid", {"width": quals}))
+
+            elaborated.append(p)
+        return [cls(name, values.get("domain", None), values.get("num", 1), values.get("context", False), port, e, i) for i, e in enumerate(elaborated)]
 
     def to_c_enum(self):
         return 'MSG_NUMBER_' + self.port + '_' + self.name + '_' + str(self.subidx)
 
     def to_sv_enum(self):
         return self.to_c_enum()
+
+    def valid_groups(self):
+        d = OrderedDict()
+        lsb = 0
+        for field in self.fields:
+            if field.qualify:
+                if field.qualify in d:
+                    if d[field.qualify][1] != lsb-1:
+                        raise Exception(f"Fields with the same qualify should be contiguous, field '{field.name}' with qualification '{field.qualify}' not contiguous from previous field with same qualification ending at bit {d[field.qualify][1]}")
+                else:
+                    d[field.qualify] = [lsb, lsb-1]
+                d[field.qualify][1] += field.width
+            lsb += field.width
+        return d
+
+    # This is the sweet spot on zebu ep1 fwc gen2
+    VALID_GROUP_BUCKET_SIZE = 48
+
+    def valid_groups_bytes(self, padding):
+        valid_groups = self.valid_groups()
+        bits = set([sum(field.width for field in self.fields) + padding])
+        for lsb,msb in valid_groups.values():
+            w = msb - lsb + 1
+            bits |= set(s - w for s in bits)
+
+        buckets = defaultdict(set)
+        for n in bits:
+            buckets[(n + Packet.VALID_GROUP_BUCKET_SIZE*8-1)//(Packet.VALID_GROUP_BUCKET_SIZE*8)].add((n + 7)//8)
+
+        return OrderedDict(
+            sorted(
+                [[max(b), sorted(list(b))] for b in buckets.values()],
+                key = lambda x: x[0]
+            ),
+        )
 
 @dataclass
 class Packets:

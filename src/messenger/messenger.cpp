@@ -21,8 +21,8 @@ void cvm::messenger::flush() {
             s.swap(signal_storage_);
         }
 
-        for(auto& f : q) {
-            if(f(*this, s)) {
+        for(auto& [idx, f] : q) {
+            if(f(idx, *this, s)) {
                 // not necessary all the time - need to use a GC?
                 clean_tasks();
             }

@@ -386,13 +386,15 @@ namespace cvm {
                   }
 
                   static const auto key = std::type_index(typeid(T));
-                  typedef std::deque<std::pair<cvm::topology::loc_t, T>> storage_t;
+                  typedef std::vector<std::pair<cvm::topology::loc_t, T>> storage_t;
 
-                  static constexpr auto f = [](messenger& m, decltype(signal_storage_)& s) {
+                  static constexpr auto f = [](std::size_t idx, messenger& m, decltype(signal_storage_)& s) {
                       storage_t& storage = std::any_cast<storage_t&>(s[key]);
-                      auto [loc, t] = std::move(storage.front());
-                      storage.erase(storage.begin());
-                      return m.message_pool<T>()->run(loc, std::move(t));
+                      auto [loc, t] = std::move(storage[idx]);
+                      if (idx == storage.size()-1) {
+                          storage.clear();
+                      }
+                      return m.message_pool<T>()->run(std::move(loc), std::move(t));
                   };
 
                   {
@@ -404,11 +406,11 @@ namespace cvm {
                       storage_t& storage = std::any_cast<storage_t&>(sit->second);
 
                       if (front) {
-                          storage.emplace_front(loc, std::move(t));
-                          signal_queue_.emplace(signal_queue_.begin(), std::move(f));
+                          storage.emplace(storage.begin(), std::move(loc), std::move(t));
+                          signal_queue_.emplace(signal_queue_.begin(), std::move(0), std::move(f));
                       } else {
-                          storage.emplace_back(loc, std::move(t));
-                          signal_queue_.emplace_back(std::move(f));
+                          storage.emplace_back(std::move(loc), std::move(t));
+                          signal_queue_.emplace_back(std::move(storage.size()-1), std::move(f));
                       }
                   }
                   signal_condition_.notify_one();
@@ -471,7 +473,7 @@ namespace cvm {
               std::mutex signal_mutex_;
               std::thread signal_thread_;
               std::unordered_map<std::type_index, std::any> signal_storage_;
-              std::vector<std::function<bool(messenger&, decltype(signal_storage_)&)>> signal_queue_;
+              std::vector<std::pair<std::size_t, std::function<bool(std::size_t, messenger&, decltype(signal_storage_)&)>>> signal_queue_;
               std::condition_variable signal_condition_;
               std::atomic<bool> quit_ = false;
       };

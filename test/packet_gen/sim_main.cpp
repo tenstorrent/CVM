@@ -10,6 +10,6 @@ TEST(Transactions, Checker) {
         top.eval();
         top.clk = !top.clk;
     }
-    top.final();
+
 }
 

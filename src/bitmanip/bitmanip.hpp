@@ -42,6 +42,16 @@ namespace cvm {
                 return mask<T>(msb - lsb + 1) << lsb;
             }
 
+        template <size_t I, typename T>
+            static constexpr bool index(const T& t) {
+                static_assert(I < width<T>());
+                if constexpr (is_bitset_v<T>) {
+                    return t[I];
+                } else {
+                    return (t >> I) & 1;
+                }
+            }
+
         template <typename T>
             static constexpr T slice(const T& t, size_t msb, size_t lsb) {
                 return (t & mask<T>(msb, lsb)) >> lsb;

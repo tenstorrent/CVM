@@ -8,6 +8,27 @@ dut:
               width: ${TOP.CLUSTER.CORE.WIDTH * 27}
           x256:
               width: 256
+          valid1:
+              qualify: valid1
+              width: 1
+          optional1:
+              qualify: valid1
+              width: 8
+          valid2:
+              qualify: valid2
+              width: 1
+          optional2:
+              qualify: valid2
+              width: 8
+          valid3a:
+              qualify: "{data}.valid3a != '0 || {data}.valid3b != '0"
+              width: 64
+          valid3b:
+              qualify: "{data}.valid3a != '0 || {data}.valid3b != '0"
+              width: 64
+          optional3:
+              qualify: "{data}.valid3a != '0 || {data}.valid3b != '0"
+              width: 512
           num:
               width: 3
 

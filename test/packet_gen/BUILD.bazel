@@ -43,9 +43,12 @@ verilator_cc_library(
     name = "top_veri_lib",
     mtop = "top",
     vopts = [
+        "--assert",
         "-Wno-DECLFILENAME",
         "+define+TB_EXTERNAL_CLOCK",
     ],
+    # Disable warnings on Verilator-generated code
+    copts = ["-w"],
     flist = "top.f",
 )
 

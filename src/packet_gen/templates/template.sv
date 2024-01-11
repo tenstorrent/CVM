@@ -31,7 +31,7 @@ package ${packets.name};
 
     typedef struct packed {
     %for field in reversed(subpacket.fields):
-        logic[${field.widths[0]-1}:0] ${field.name};
+        logic[${field.width-1}:0] ${field.name};
     %endfor
     } ${subpacket.port}_${subpacket.name}_${subpacket.subidx};
 
@@ -52,29 +52,6 @@ package ${packets.name};
 
 endpackage
 
-module ${packets.name}_write_message #(
-    type T = logic,
-    type E =   int,
-    E    N =    '0,
-
-    localparam int  M = $bits(E) + $bits(T),
-    localparam int  B = (M+7)/8
-) (
-    input  clk,
-    input  [$bits(T)-1:0] i,
-    output byte unsigned message [B]
-);
-
-    always_comb begin
-        automatic logic[B*8 - 1:0] short = (8*B)'({i, N});
-
-        for (int b = 0; b < B; b++) begin
-            message[b] = short[8*b +: 8];
-        end
-    end
-
-endmodule
-
 % for domain,domain_packets in by_domain.items():
 module ${packets.name}_domain_${domain}(
     input clk,
@@ -89,49 +66,82 @@ module ${packets.name}_domain_${domain}(
     export "DPI-C" function ${packets.name}_finish;
     % endif
 
-    localparam int HEADER_BITS = $bits(${packets.name}::message_number);
+%for packet in domain_packets:
+    % for bytes in packet.valid_groups_bytes(packets.enum_width()):
+    import "DPI-C" ${"context" if packet.context else ""} function void ${packets.name}_message_${packet.port}_${packet.name}_${packet.subidx}_bytes${bytes}(byte unsigned message[${bytes}]);
+    % endfor
+%endfor
 
 %for packet in domain_packets:
-
-    localparam int NUM_PORTS_${packet.port}_${packet.name}_${packet.subidx} = $size(tx.${packet.port}_${packet.name}_${packet.subidx}s);
-
-    localparam int DATA_${packet.port}_${packet.name}_${packet.subidx}_BITS = $bits(${packets.name}::${packet.port}_${packet.name}_${packet.subidx});
-    localparam int MESSAGE_${packet.port}_${packet.name}_${packet.subidx}_BYTES = (DATA_${packet.port}_${packet.name}_${packet.subidx}_BITS + HEADER_BITS + 7) / 8;
-
-    typedef byte unsigned ${packet.port}_${packet.name}_${packet.subidx}_message_t[MESSAGE_${packet.port}_${packet.name}_${packet.subidx}_BYTES];
-
-    import "DPI-C" ${"context" if packet.context else ""} function void ${packets.name}_message_${packet.port}_${packet.name}_${packet.subidx}(${packet.port}_${packet.name}_${packet.subidx}_message_t message);
-
-    function automatic ${packet.port}_${packet.name}_${packet.subidx}_message_t ${packet.port}_${packet.name}_${packet.subidx}_unpack(${packets.name}::${packet.port}_${packet.name}_${packet.subidx} packet);
-        localparam int B = MESSAGE_${packet.port}_${packet.name}_${packet.subidx}_BYTES;
-        localparam ${packets.name}::message_number N = ${packets.name}::${packet.to_sv_enum()};
-
-        ${packet.port}_${packet.name}_${packet.subidx}_message_t message;
-
-        automatic logic[B*8 - 1:0] short = (8*B)'({packet, N});
-
-        for (int b = 0; b < B; b++) begin
-            message[b] = short[8*b +: 8];
-        end
-
-        return message;
-
-    endfunction
+    %for port in range(packets.ports[packet.port][packet.subidx]):
+        %for i in range(packet.num):
+<% prefix = f"{packet.port}_{packet.name}_{packet.subidx}_{port}_{i}"%>\
+    typedef struct packed {
+        ${packets.name}::${packet.port}_${packet.name}_${packet.subidx} data;
+        ${packets.name}::message_number header;
+    } ${prefix}_pkt_t;
+    ${prefix}_pkt_t ${prefix}_pkt;
+    localparam int ${prefix}_BW = $clog2((($bits(${prefix}_pkt)+7)/8)+1);
+    logic[$clog2($bits(${prefix}_pkt.data)+1)-1:0] ${prefix}_b;
+    logic[${prefix}_BW-1:0] ${prefix}_bytes_to_transfer;
+            % for bytes in packet.valid_groups_bytes(packets.enum_width()):
+    byte unsigned ${prefix}_${bytes}_unpacked[${bytes}];
+            %endfor
+        %endfor
+    %endfor
 %endfor
 
     ${packets.domains.get(domain, {}).get('always_block_header', '')}
+    /* verilator lint_off BLKSEQ */
     always @(posedge clk) begin
 %for packet in domain_packets:
     %for port in range(packets.ports[packet.port][packet.subidx]):
         %for i in range(packet.num):
         if (tx.${packet.port}_${packet.name}_${packet.subidx}s[${port}][${i}].valid) begin
-            automatic ${packet.port}_${packet.name}_${packet.subidx}_message_t pkt = ${packet.port}_${packet.name}_${packet.subidx}_unpack(tx.${packet.port}_${packet.name}_${packet.subidx}s[${port}][${i}].data);
-            ${packets.name}_message_${packet.port}_${packet.name}_${packet.subidx}(pkt);
+<% prefix = f"{packet.port}_{packet.name}_{packet.subidx}_{port}_{i}"%>\
+<% odata = f"tx.{packet.port}_{packet.name}_{packet.subidx}s[{port}][{i}].data" %>\
+            ${prefix}_pkt = '{data: ${odata}, header: ${packets.name}::${packet.to_sv_enum()}};
+            ${prefix}_b = '0;
+            ${prefix}_bytes_to_transfer = '0;
+<% valid_groups = packet.valid_groups(); packet_size = sum(field.width for field in packet.fields)%>\
+            %for index, valid in reversed(list(enumerate(valid_groups))):
+<%lsb, msb = valid_groups[valid]%>\
+            ${prefix}_pkt.data._packet_gen_valid[${index}] = ${formatted if (formatted := valid.format(data = odata)) != valid else odata + "." + valid};
+            if (!${prefix}_pkt.data._packet_gen_valid[${index}]) begin
+                ${prefix}_pkt.data = {(${msb}-${lsb}+1)'(0),
+                % if msb < packet_size - 1:
+                    ${prefix}_pkt.data[$bits(${prefix}_pkt.data)-1:${msb}+1],
+                % endif
+                    ${prefix}_pkt.data[${lsb}-1:0]
+                };
+                ${prefix}_b += ${msb}-${lsb}+1;
+            end
+            %endfor
+            ${prefix}_bytes_to_transfer = ${prefix}_BW'(($bits(${prefix}_pkt)-32'(${prefix}_b)+7)/8);
+            unique case(${prefix}_bytes_to_transfer) inside
+<% prev = -1 %>\
+            % for bytes in packet.valid_groups_bytes(packets.enum_width()):
+                [${prefix}_BW'(${prev+1}):${prefix}_BW'(${bytes})]: begin // Need to limit the number of lines with DPI calls otherwise zebu blows up FWC resources. Even if only one of them is guaranteed to be called at a time.
+                    //automatic byte unsigned ${prefix}_unpacked[${bytes}];
+                    for (int i = 0; i < ${bytes}; i++) begin // zebu can't handle using bytes_to_transfer as the loop bound, it can't unroll it
+                        if (i < ${prefix}_bytes_to_transfer) begin
+                            ${prefix}_${bytes}_unpacked[i] = 8'(${prefix}_pkt >> (8*i));
+                        end
+                    end
+                    ${packets.name}_message_${packet.port}_${packet.name}_${packet.subidx}_bytes${bytes}(${prefix}_${bytes}_unpacked);
+                end
+<% prev = bytes %>
+            % endfor
+                default: begin
+                    assert(1'b0) else $error("No valid function found for ${packet.port}_${packet.name}_${packet.subidx} to send %0d bytes", ${prefix}_bytes_to_transfer);
+                end
+            endcase
         end
         %endfor
     %endfor
 %endfor
     end
+    /* verilator lint_on BLKSEQ */
 
 endmodule
 %endfor

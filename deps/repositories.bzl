@@ -30,11 +30,11 @@ def cvm_dependencies():
         url = "https://aus-gitlab.local.tenstorrent.com/riscv/bazel_rules_hdl/-/archive/{commit}/bazel_rules_hdl-{commit}.tar.bz2".format(commit=rules_hdl_hash),
     )
 
-    rules_verilator_hash="2e5893943990b74985c23bf385caff2ec113009a"
+    rules_verilator_hash="eb84b04c04b5aa6e887149214c96f135a55c21cb"
     maybe(
         http_archive,
         name = "rules_verilator",
-        sha256 = "53d44ab29b4079f412fcd38264b5b0542ba3eac8b2781ee98fed79b081ce0329",
+        sha256 = "a52575cca1bc2a5ec87a06d159777647ee3cf7d81bf617db8655865dd8037cf5",
         strip_prefix = "rules_verilator-{commit}".format(commit=rules_verilator_hash),
         url = "https://aus-gitlab.local.tenstorrent.com/riscv/rules_verilator/-/archive/{commit}/rules_verilator-{commit}.tar.bz2".format(commit=rules_verilator_hash),
     )

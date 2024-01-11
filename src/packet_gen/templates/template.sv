@@ -72,52 +72,68 @@ module ${packets.name}_domain_${domain}(
     % endfor
 %endfor
 
+%for packet in domain_packets:
+    %for port in range(packets.ports[packet.port][packet.subidx]):
+        %for i in range(packet.num):
+<% prefix = f"{packet.port}_{packet.name}_{packet.subidx}_{port}_{i}"%>\
+    typedef struct packed {
+        ${packets.name}::${packet.port}_${packet.name}_${packet.subidx} data;
+        ${packets.name}::message_number header;
+    } ${prefix}_pkt_t;
+    ${prefix}_pkt_t ${prefix}_pkt;
+    localparam int ${prefix}_BW = $clog2((($bits(${prefix}_pkt)+7)/8)+1);
+    logic[$clog2($bits(${prefix}_pkt.data)+1)-1:0] ${prefix}_b;
+    logic[${prefix}_BW-1:0] ${prefix}_bytes_to_transfer;
+            % for bytes in packet.valid_groups_bytes(packets.enum_width()):
+    byte unsigned ${prefix}_${bytes}_unpacked[${bytes}];
+            %endfor
+        %endfor
+    %endfor
+%endfor
+
     ${packets.domains.get(domain, {}).get('always_block_header', '')}
+    /* verilator lint_off BLKSEQ */
     always @(posedge clk) begin
 %for packet in domain_packets:
     %for port in range(packets.ports[packet.port][packet.subidx]):
         %for i in range(packet.num):
         if (tx.${packet.port}_${packet.name}_${packet.subidx}s[${port}][${i}].valid) begin
-            typedef struct packed {
-                ${packets.name}::${packet.port}_${packet.name}_${packet.subidx} data;
-                ${packets.name}::message_number header;
-            } pkt_t;
+<% prefix = f"{packet.port}_{packet.name}_{packet.subidx}_{port}_{i}"%>\
 <% odata = f"tx.{packet.port}_{packet.name}_{packet.subidx}s[{port}][{i}].data" %>\
-            automatic pkt_t pkt = '{data: ${odata}, header: ${packets.name}::${packet.to_sv_enum()}};
-            automatic logic[$clog2($bits(pkt.data)+1)-1:0] b = 0;
-            localparam int BW = $clog2((($bits(pkt)+7)/8)+1);
-            automatic logic[BW-1:0] bytes_to_transfer = 0;
+            ${prefix}_pkt = '{data: ${odata}, header: ${packets.name}::${packet.to_sv_enum()}};
+            ${prefix}_b = '0;
+            ${prefix}_bytes_to_transfer = '0;
 <% valid_groups = packet.valid_groups(); packet_size = sum(field.width for field in packet.fields)%>\
             %for index, valid in reversed(list(enumerate(valid_groups))):
 <%lsb, msb = valid_groups[valid]%>\
-            pkt.data._packet_gen_valid[${index}] = ${formatted if (formatted := valid.format(data = odata)) != valid else odata + "." + valid};
-            if (!pkt.data._packet_gen_valid[${index}]) begin
-                pkt.data = {(${msb}-${lsb}+1)'(0),
+            ${prefix}_pkt.data._packet_gen_valid[${index}] = ${formatted if (formatted := valid.format(data = odata)) != valid else odata + "." + valid};
+            if (!${prefix}_pkt.data._packet_gen_valid[${index}]) begin
+                ${prefix}_pkt.data = {(${msb}-${lsb}+1)'(0),
                 % if msb < packet_size - 1:
-                    pkt.data[$bits(pkt.data)-1:${msb}+1],
+                    ${prefix}_pkt.data[$bits(${prefix}_pkt.data)-1:${msb}+1],
                 % endif
-                    pkt.data[${lsb}-1:0]
+                    ${prefix}_pkt.data[${lsb}-1:0]
                 };
-                b += ${msb}-${lsb}+1;
+                ${prefix}_b += ${msb}-${lsb}+1;
             end
             %endfor
-            bytes_to_transfer = BW'(($bits(pkt)-32'(b)+7)/8);
-            unique case(bytes_to_transfer) inside
+            ${prefix}_bytes_to_transfer = ${prefix}_BW'(($bits(${prefix}_pkt)-32'(${prefix}_b)+7)/8);
+            unique case(${prefix}_bytes_to_transfer) inside
 <% prev = -1 %>\
             % for bytes in packet.valid_groups_bytes(packets.enum_width()):
-                [BW'(${prev+1}):BW'(${bytes})]: begin // Need to limit the number of lines with DPI calls otherwise zebu blows up FWC resources. Even if only one of them is guaranteed to be called at a time.
-                    automatic byte unsigned unpacked[${bytes}];
+                [${prefix}_BW'(${prev+1}):${prefix}_BW'(${bytes})]: begin // Need to limit the number of lines with DPI calls otherwise zebu blows up FWC resources. Even if only one of them is guaranteed to be called at a time.
+                    //automatic byte unsigned ${prefix}_unpacked[${bytes}];
                     for (int i = 0; i < ${bytes}; i++) begin // zebu can't handle using bytes_to_transfer as the loop bound, it can't unroll it
-                        if (i < bytes_to_transfer) begin
-                            unpacked[i] = 8'(pkt >> (8*i));
+                        if (i < ${prefix}_bytes_to_transfer) begin
+                            ${prefix}_${bytes}_unpacked[i] = 8'(${prefix}_pkt >> (8*i));
                         end
                     end
-                    ${packets.name}_message_${packet.port}_${packet.name}_${packet.subidx}_bytes${bytes}(unpacked);
+                    ${packets.name}_message_${packet.port}_${packet.name}_${packet.subidx}_bytes${bytes}(${prefix}_${bytes}_unpacked);
                 end
 <% prev = bytes %>
             % endfor
                 default: begin
-                    assert(1'b0) else $error("No valid function found for ${packet.port}_${packet.name}_${packet.subidx} to send %0d bytes", bytes_to_transfer);
+                    assert(1'b0) else $error("No valid function found for ${packet.port}_${packet.name}_${packet.subidx} to send %0d bytes", ${prefix}_bytes_to_transfer);
                 end
             endcase
         end
@@ -125,6 +141,7 @@ module ${packets.name}_domain_${domain}(
     %endfor
 %endfor
     end
+    /* verilator lint_on BLKSEQ */
 
 endmodule
 %endfor

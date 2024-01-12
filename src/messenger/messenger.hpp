@@ -378,23 +378,29 @@ namespace cvm {
               }
 
               template <typename T>
-              void signal(cvm::topology::loc_t loc, const T& t, bool front = false) {
+              void signal(cvm::topology::loc_t loc, const T& m, bool front = false) {
+                  signal<T, T, const T&>(loc, m, front);
+              }
+
+              template <typename T, typename E, typename A = const T&&>
+              void signal(cvm::topology::loc_t loc, A m, bool front = false) {
 
                   if (loc == cvm::topology::null) {
                       assert(false && "attempting to signal to null location");
                       return;
                   }
 
-                  static const auto key = std::type_index(typeid(T));
-                  typedef std::vector<std::pair<cvm::topology::loc_t, T>> storage_t;
+                  static const auto key = std::type_index(typeid(E));
+                  typedef std::vector<std::pair<cvm::topology::loc_t, E>> storage_t;
 
                   static constexpr auto f = [](std::size_t idx, messenger& m, decltype(signal_storage_)& s) {
                       storage_t& storage = std::any_cast<storage_t&>(s[key]);
-                      auto [loc, t] = std::move(storage[idx]);
+                      auto& [loc, a] = storage[idx];
+                      bool clean = m.message_pool<T>()->run(std::move(loc), std::move(a));
                       if (idx == storage.size()-1) {
                           storage.clear();
                       }
-                      return m.message_pool<T>()->run(std::move(loc), std::move(t));
+                      return clean;
                   };
 
                   {
@@ -406,10 +412,10 @@ namespace cvm {
                       storage_t& storage = std::any_cast<storage_t&>(sit->second);
 
                       if (front) {
-                          storage.emplace(storage.begin(), std::move(loc), std::move(t));
+                          storage.emplace(storage.begin(), std::move(loc), std::move(m));
                           signal_queue_.emplace(signal_queue_.begin(), std::move(0), std::move(f));
                       } else {
-                          storage.emplace_back(std::move(loc), std::move(t));
+                          storage.emplace_back(std::move(loc), std::move(m));
                           signal_queue_.emplace_back(std::move(storage.size()-1), std::move(f));
                       }
                   }

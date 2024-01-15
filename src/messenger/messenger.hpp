@@ -14,6 +14,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <ranges>
+#include <any>
 #include <gflags/gflags.h>
 #include "cvm/topology.hpp"
 
@@ -377,29 +378,45 @@ namespace cvm {
               }
 
               template <typename T>
-              void signal(cvm::topology::loc_t loc, const T& t, bool front = false) {
+              void signal(cvm::topology::loc_t loc, const T& m, bool front = false) {
+                  signal<T, T, const T&>(loc, m, front);
+              }
+
+              template <typename T, typename E, typename A = const T&&>
+              void signal(cvm::topology::loc_t loc, A m, bool front = false) {
+
                   if (loc == cvm::topology::null) {
                       assert(false && "attempting to signal to null location");
                       return;
                   }
 
-                  std::function<void(void)> f = [this, loc, t = std::move(t)] () {
-                      bool clean = message_pool<T>()->run(loc, std::move(t));
+                  static const auto key = std::type_index(typeid(E));
+                  typedef std::vector<std::pair<cvm::topology::loc_t, E>> storage_t;
 
-                      // not necessary all the time - need to use a GC?
-                      if (clean) {
-                          std::lock_guard<std::mutex> guard(tasks_mutex_);
-                          tasks_.erase(std::remove_if(tasks_.begin(), tasks_.end(),
-                                      [] (const auto& handler) { return handler.done(); }), tasks_.end());
+                  static constexpr auto f = [](std::size_t idx, messenger& m, decltype(signal_storage_)& s) {
+                      storage_t& storage = std::any_cast<storage_t&>(s[key]);
+                      auto& [loc, a] = storage[idx];
+                      bool clean = m.message_pool<T>()->run(std::move(loc), std::move(a));
+                      if (idx == storage.size()-1) {
+                          storage.clear();
                       }
+                      return clean;
                   };
 
                   {
                       std::lock_guard<std::mutex> sl(signal_mutex_);
+                      auto sit = signal_storage_.find(key);
+                      if (sit == signal_storage_.end()) {
+                          sit = signal_storage_.emplace(key, std::make_any<storage_t>()).first;
+                      }
+                      storage_t& storage = std::any_cast<storage_t&>(sit->second);
+
                       if (front) {
-                          signal_queue_.emplace_front(std::move(f));
+                          storage.emplace(storage.begin(), std::move(loc), std::move(m));
+                          signal_queue_.emplace(signal_queue_.begin(), std::move(0), std::move(f));
                       } else {
-                          signal_queue_.emplace_back(std::move(f));
+                          storage.emplace_back(std::move(loc), std::move(m));
+                          signal_queue_.emplace_back(std::move(storage.size()-1), std::move(f));
                       }
                   }
                   signal_condition_.notify_one();
@@ -442,10 +459,16 @@ namespace cvm {
                   std::lock_guard<std::mutex> guard(pools_mutex_);
                   auto it = pools_.find(key);
                   if (it == pools_.end()) {
-                      std::shared_ptr<pool_base> p(new pool<T>());
+                      std::shared_ptr<pool_base> p = std::make_shared<pool<T>>();
                       it = pools_.emplace(key, std::move(p)).first;
                   }
                   return std::dynamic_pointer_cast<pool<T>>(it->second);
+              }
+
+              void clean_tasks() {
+                  std::lock_guard<std::mutex> guard(tasks_mutex_);
+                  tasks_.erase(std::remove_if(tasks_.begin(), tasks_.end(),
+                              [] (const auto& handler) { return handler.done(); }), tasks_.end());
               }
 
               std::vector<task<void>> tasks_;
@@ -455,7 +478,8 @@ namespace cvm {
 
               std::mutex signal_mutex_;
               std::thread signal_thread_;
-              std::deque<std::function<void(void)>> signal_queue_;
+              std::unordered_map<std::type_index, std::any> signal_storage_;
+              std::vector<std::pair<std::size_t, std::function<bool(std::size_t, messenger&, decltype(signal_storage_)&)>>> signal_queue_;
               std::condition_variable signal_condition_;
               std::atomic<bool> quit_ = false;
       };

@@ -7,21 +7,28 @@ DEFINE_bool(signal_async, false, "cvm::messenger signals serviced by another thr
 
 void cvm::messenger::flush() {
 
+    decltype(signal_queue_  ) q;
+    decltype(signal_storage_) s;
+
     while (1) {
-
-        std::function<void(void)> f;
-
         {
             std::unique_lock<std::mutex> lock(signal_mutex_);
             while (signal_queue_.empty()) {
                 if (!FLAGS_signal_async || quit_) return;
                 signal_condition_.wait_for(lock, 100ms);
             }
-            f = std::move(signal_queue_.front());
-            signal_queue_.erase(signal_queue_.begin());
+            q.swap(signal_queue_  );
+            s.swap(signal_storage_);
         }
 
-        f();
+        for(auto& [idx, f] : q) {
+            if(f(idx, *this, s)) {
+                // not necessary all the time - need to use a GC?
+                clean_tasks();
+            }
+        }
+
+        q.clear();
     }
 }
 
@@ -48,5 +55,6 @@ void cvm::messenger::clear() {
     {
         std::lock_guard<std::mutex> signal_queue_guard(signal_mutex_);
         signal_queue_.clear();
+        signal_storage_.clear();
     }
 }

@@ -7,8 +7,8 @@ TEST(Random, RandomInt) {
     // Test randomness
     uint64_t seed1 = 1;
     cvm::rng<int64_t> rng1(seed1);
-    uint32_t val1 = rng1();
-    uint32_t val2 = rng1();
+    int64_t val1 = rng1();
+    int64_t val2 = rng1();
 
     EXPECT_NE(val1, val2);
 

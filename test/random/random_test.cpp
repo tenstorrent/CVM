@@ -6,7 +6,7 @@ TEST(Random, RandomInt) {
 
     // Test randomness
     uint64_t seed1 = 1;
-    cvm::rng<int32_t, -10000, 10000> rng1(seed1);
+    cvm::rng<int64_t> rng1(seed1);
     uint32_t val1 = rng1();
     uint32_t val2 = rng1();
 

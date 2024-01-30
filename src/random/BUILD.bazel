@@ -1,0 +1,7 @@
+cc_library(
+    name = "random",
+    hdrs = ["random.hpp"],
+    strip_include_prefix = "//src/random",
+    include_prefix = "cvm",
+    visibility = ["//:__pkg__"],
+)

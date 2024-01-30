@@ -67,8 +67,8 @@ module ${packets.name}_domain_${domain}(
     % endif
 
 %for packet in domain_packets:
-    % for bytes in packet.valid_groups_bytes(packets.enum_width()):
-    import "DPI-C" ${"context" if packet.context else ""} function void ${packets.name}_message_${packet.port}_${packet.name}_${packet.subidx}_bytes${bytes}(byte unsigned message[${bytes}]);
+    % for words in packet.valid_groups_words(packets.enum_width()):
+    import "DPI-C" ${"context" if packet.context else ""} function void ${packets.name}_message_${packet.port}_${packet.name}_${packet.subidx}_words${words}(${type(packets).transfer_word_sv_type()} message[${words}]);
     % endfor
 %endfor
 
@@ -81,11 +81,11 @@ module ${packets.name}_domain_${domain}(
         ${packets.name}::message_number header;
     } ${prefix}_pkt_t;
     ${prefix}_pkt_t ${prefix}_pkt;
-    localparam int ${prefix}_BW = $clog2((($bits(${prefix}_pkt)+7)/8)+1);
+    localparam int ${prefix}_WW = $clog2((($bits(${prefix}_pkt)+${type(packets).transfer_word_bits()} - 1)/${type(packets).transfer_word_bits()})+1);
     logic[$clog2($bits(${prefix}_pkt.data)+1)-1:0] ${prefix}_b;
-    logic[${prefix}_BW-1:0] ${prefix}_bytes_to_transfer;
-            % for bytes in packet.valid_groups_bytes(packets.enum_width()):
-    byte unsigned ${prefix}_${bytes}_unpacked[${bytes}];
+    logic[${prefix}_WW-1:0] ${prefix}_words_to_transfer;
+            % for words in packet.valid_groups_words(packets.enum_width()):
+    ${type(packets).transfer_word_sv_type()} ${prefix}_${words}_unpacked[${words}];
             %endfor
         %endfor
     %endfor
@@ -102,7 +102,7 @@ module ${packets.name}_domain_${domain}(
 <% odata = f"tx.{packet.port}_{packet.name}_{packet.subidx}s[{port}][{i}].data" %>\
             ${prefix}_pkt = '{data: ${odata}, header: ${packets.name}::${packet.to_sv_enum()}};
             ${prefix}_b = '0;
-            ${prefix}_bytes_to_transfer = '0;
+            ${prefix}_words_to_transfer = '0;
 <% valid_groups = packet.valid_groups(); packet_size = sum(field.width for field in packet.fields)%>\
             %for index, valid in reversed(list(enumerate(valid_groups))):
 <%lsb, msb = valid_groups[valid]%>\
@@ -117,23 +117,23 @@ module ${packets.name}_domain_${domain}(
                 ${prefix}_b += ${msb}-${lsb}+1;
             end
             %endfor
-            ${prefix}_bytes_to_transfer = ${prefix}_BW'(($bits(${prefix}_pkt)-32'(${prefix}_b)+7)/8);
-            unique case(${prefix}_bytes_to_transfer) inside
+            ${prefix}_words_to_transfer = ${prefix}_WW'(($bits(${prefix}_pkt)-32'(${prefix}_b)+${type(packets).transfer_word_bits()} - 1)/${type(packets).transfer_word_bits()});
+            unique case(${prefix}_words_to_transfer) inside
 <% prev = -1 %>\
-            % for bytes in packet.valid_groups_bytes(packets.enum_width()):
-                [${prefix}_BW'(${prev+1}):${prefix}_BW'(${bytes})]: begin // Need to limit the number of lines with DPI calls otherwise zebu blows up FWC resources. Even if only one of them is guaranteed to be called at a time.
-                    //automatic byte unsigned ${prefix}_unpacked[${bytes}];
-                    for (int i = 0; i < ${bytes}; i++) begin // zebu can't handle using bytes_to_transfer as the loop bound, it can't unroll it
-                        if (i < ${prefix}_bytes_to_transfer) begin
-                            ${prefix}_${bytes}_unpacked[i] = 8'(${prefix}_pkt >> (8*i));
+            % for words in packet.valid_groups_words(packets.enum_width()):
+                [${prefix}_WW'(${prev+1}):${prefix}_WW'(${words})]: begin // Need to limit the number of lines with DPI calls otherwise zebu blows up FWC resources. Even if only one of them is guaranteed to be called at a time.
+                    //automatic ${type(packets).transfer_word_sv_type()} ${prefix}_unpacked[${words}];
+                    for (int i = 0; i < ${words}; i++) begin // zebu can't handle using words_to_transfer as the loop bound, it can't unroll it
+                        if (i < ${prefix}_words_to_transfer) begin
+                            ${prefix}_${words}_unpacked[i] = ${type(packets).transfer_word_bits()}'(${prefix}_pkt >> (${type(packets).transfer_word_bits()}*i));
                         end
                     end
-                    ${packets.name}_message_${packet.port}_${packet.name}_${packet.subidx}_bytes${bytes}(${prefix}_${bytes}_unpacked);
+                    ${packets.name}_message_${packet.port}_${packet.name}_${packet.subidx}_words${words}(${prefix}_${words}_unpacked);
                 end
-<% prev = bytes %>
+<% prev = words %>
             % endfor
                 default: begin
-                    assert(1'b0) else $error("No valid function found for ${packet.port}_${packet.name}_${packet.subidx} to send %0d bytes", ${prefix}_bytes_to_transfer);
+                    assert(1'b0) else $error("No valid function found for ${packet.port}_${packet.name}_${packet.subidx} to send %0d words", ${prefix}_words_to_transfer);
                 end
             endcase
         end

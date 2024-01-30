@@ -2,15 +2,16 @@
 #include "cvm/bitmanip.hpp"
 #include <bitset>
 
-void setbit(std::uint8_t* a, int bit) {
-    a[bit / 8] |= 1 << (bit % 8);
+template<typename T>
+void setbit(T* a, int bit) {
+    a[bit / (8*sizeof(T))] |= 1 << (bit % (8*sizeof(T)));
 }
 
 TEST(Bitmanip, ArraySlice) {
 
     for (int start = 0; start < 64; start++) {
         for (int width = 1; width <= 64; width++) {
-            std::uint8_t arr[16] = {0,};
+            std::uint32_t arr[4] = {0,};
 
             int lsb = start;
             int msb = start + width - 1;
@@ -33,7 +34,7 @@ TEST(Bitmanip, ArraySliceBitset) {
         for (int width = 64; width <= 128; width++) {
             typedef std::bitset<128+64> T;
 
-            std::uint8_t arr[(128+64)/8] = {0,};
+            std::uint32_t arr[(128+64)/32] = {0,};
 
             int lsb = start;
             int msb = start + width - 1;

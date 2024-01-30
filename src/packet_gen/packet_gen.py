@@ -86,9 +86,9 @@ class Packet:
         return d
 
     # This is the sweet spot on zebu ep1 fwc gen2
-    VALID_GROUP_BUCKET_SIZE = 48
+    VALID_GROUP_BUCKET_SIZE_BYTES = 48
 
-    def valid_groups_bytes(self, padding):
+    def valid_groups_words(self, padding):
         valid_groups = self.valid_groups()
         bits = set([sum(field.width for field in self.fields) + padding])
         for lsb,msb in valid_groups.values():
@@ -96,8 +96,12 @@ class Packet:
             bits |= set(s - w for s in bits)
 
         buckets = defaultdict(set)
+
+        bucket_size_words = (Packet.VALID_GROUP_BUCKET_SIZE_BYTES + Packets.transfer_word_bytes() - 1) // Packets.transfer_word_bytes()
+        bucket_size_bits  = bucket_size_words * Packets.transfer_word_bits()
+
         for n in bits:
-            buckets[(n + Packet.VALID_GROUP_BUCKET_SIZE*8-1)//(Packet.VALID_GROUP_BUCKET_SIZE*8)].add((n + 7)//8)
+            buckets[(n + bucket_size_bits - 1)//(bucket_size_bits)].add((n + Packets.transfer_word_bits() - 1)//Packets.transfer_word_bits())
 
         return OrderedDict(
             sorted(
@@ -105,6 +109,7 @@ class Packet:
                 key = lambda x: x[0]
             ),
         )
+
 
 @dataclass
 class Packets:
@@ -179,6 +184,23 @@ class Packets:
     # FIXME compress this
     def location_width():
         return 32
+
+    @staticmethod
+    def transfer_word_bytes():
+        return 4
+
+    @classmethod
+    def transfer_word_bits(cls):
+        return 8 * cls.transfer_word_bytes()
+
+    @staticmethod
+    def transfer_word_sv_type():
+        return "int unsigned"
+
+    @staticmethod
+    def transfer_word_c_type():
+        return "std::uint32_t"
+
 
 class PacketsGen:
 

@@ -50,7 +50,7 @@ namespace ${packets.name} {
                 %endfor
                 {}
             template <std::size_t N>
-            constexpr ${subpacket.name}(const std::array<std::uint8_t, N>& bytes) :
+            constexpr ${subpacket.name}(const std::array<${type(packets).transfer_word_c_type()}, N>& bytes) :
 <%
     start = 0
     valid_groups = subpacket.valid_groups()

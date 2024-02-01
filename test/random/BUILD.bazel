@@ -1,0 +1,10 @@
+cc_test(
+    name = "random_test",
+    size = "small",
+    srcs = ["random_test.cpp"],
+    deps = [
+        "//:random",
+        "@com_google_googletest//:gtest_main",
+        "@bazel_tools//tools/cpp/runfiles",
+    ],
+)

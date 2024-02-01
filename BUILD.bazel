@@ -59,3 +59,9 @@ cc_library(
     deps = ["//src/registry:registry"],
     visibility = ["//visibility:public"],
 )
+
+cc_library(
+    name = "random",
+    deps = ["//src/random:random"],
+    visibility = ["//visibility:public"],
+)

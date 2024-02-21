@@ -6,16 +6,15 @@ This is a library for utilities used in C++ and SV testbenches. There are exampl
 
 Portable way to get plusargs from both C++ and SV using [gflags](https://gflags.github.io/gflags/).
 
-```
+```cpp
 // C++
-
 DEFINE_bool(example)
-...
+//...
 if (FLAGS_example)
-...
+//...
 ```
 
-```
+```verilog
 // SV
 bit example = cvm_plusargs::get_bool("FLAGS_example");
 ```
@@ -69,7 +68,7 @@ The locations of other modules can be discovered using `get_from_type` or `get_f
 
 On the SV side, a module can obtain its own location using `cvm_topology::get_location`, which only accepts a full hierarchical path determined by `topology_gen`'s generated SV package `topology_pkg`. This package definition should be passed down to children nodes at compile time using the `TOPOLOGY` macro define.
 
-The `topology_gen` rule can accept a list of such yml files where they're all concatenated. To take advantage of this, the user can use yml anchors and instantiate modules/attributes to describe the design in a modular way.
+The `topology_gen` rule can accept a list of such yml files where they're all concatenated. To take advantage of this, the user can use [YAML anchors](https://yaml.org/spec/1.2/spec.html#id2765878) and instantiate modules/attributes to describe the design in a modular way.
 
 ## registry
 

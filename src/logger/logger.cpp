@@ -27,8 +27,8 @@ DEFINE_string(cvm_verbosity, "MEDIUM", "cvm logging verbosity, valid values matc
 DEFINE_validator(cvm_verbosity, &validate_verbosity);
 
 cvm::verbosity_level cvm::logger::verbosity = cvm::verbosity_level::MEDIUM;
-std::unordered_map<cvm::verbosity_level, std::function<void()>> cvm::logger::handlers = {};
-std::function<std::string_view()> cvm::logger::prefix = [] () { return ""; };
+decltype(cvm::logger::handlers) cvm::logger::handlers{};
+decltype(cvm::logger::prefix  ) cvm::logger::prefix = [] () { return ""; };
 
 void cvm::file_logger::flush() {
     if (output_file)

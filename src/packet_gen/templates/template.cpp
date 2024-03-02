@@ -37,7 +37,7 @@ static void ${packets.name}_message(const ${type(packets).transfer_word_c_type()
             switch (words) {
     % for words in subpacket.valid_groups_words(packets.enum_width()):
                 case ${words}: {
-                    cvm::registry::messenger.signal<${packets.name}::${subpacket.port}::${subpacket.name}<${subpacket.subidx}>, std::array<${type(packets).transfer_word_c_type()}, ${words}>>(loc, array_wrapper<${words}, ${type(packets).transfer_word_c_type()}>(message), cvm::messenger::priority::${subpacket.priority or packets.domains.get(subpacket.domain, {}).get("priority", "lowest_priority")}, cvm::messenger::launch::async);
+                    cvm::registry::messenger.signal_async<${packets.name}::${subpacket.port}::${subpacket.name}<${subpacket.subidx}>, std::array<${type(packets).transfer_word_c_type()}, ${words}>>(loc, array_wrapper<${words}, ${type(packets).transfer_word_c_type()}>(message), cvm::messenger::priority::${subpacket.priority or packets.domains.get(subpacket.domain, {}).get("priority", "lowest_priority")});
                     break;
                 }
     %endfor

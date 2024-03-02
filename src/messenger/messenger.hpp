@@ -388,18 +388,15 @@ namespace cvm {
               };
               static constexpr priority default_priority = lowest_priority;
 
+            private:
+
               enum launch {
                   async     = 0,
                   immediate = 1,
               };
 
-              template <typename T>
-              void signal(cvm::topology::loc_t loc, const T& m, priority prio = default_priority, launch l = immediate) {
-                  signal<T, T, const T&>(loc, m, prio, l);
-              }
-
               template <typename T, typename E, typename A = const T&&>
-              void signal(cvm::topology::loc_t loc, const A m, priority prio = default_priority, launch l = immediate) {
+              void _signal(cvm::topology::loc_t loc, const A m, priority prio = default_priority, launch l = immediate) {
 
                   if (loc == cvm::topology::null) {
                       assert(false && "attempting to signal to null location");
@@ -455,6 +452,23 @@ namespace cvm {
                   }
 
                   return;
+              }
+
+            public:
+
+              template <typename T>
+              void signal(cvm::topology::loc_t loc, const T& m) {
+                  _signal<T, T, const T&>(loc, m, default_priority, immediate);
+              }
+
+              template <typename T>
+              void signal_async(cvm::topology::loc_t loc, const T& m, priority prio = default_priority) {
+                  _signal<T, T, const T&>(loc, m, prio, async);
+              }
+
+              template <typename T, typename E, typename A = const T&&>
+              void signal_async(cvm::topology::loc_t loc, const A m, priority prio = default_priority) {
+                  _signal<T, E, A>(loc, m, prio, async);
               }
 
               template <typename T>

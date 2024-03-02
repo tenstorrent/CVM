@@ -4,7 +4,6 @@
 #include <bitset>
 #include "cvm/bitmanip.hpp"
 #include <array>
-#include <chrono>
 
 namespace ${packets.name} {
 
@@ -41,8 +40,6 @@ namespace ${packets.name} {
         % for i,field in enumerate(subpacket.fields):
             ${field.get_c_type()} ${field.name};
         %endfor
-            std::chrono::time_point<std::chrono::high_resolution_clock> birth, signal_enqueued_time, prev_func_start_time, prev_func_finish_time, sleep_time, wakeup_time, signal_swap_time, dispatch_time;
-            static constexpr int X = (sizeof(birth) + sizeof(${type(packets).transfer_word_c_type()}) - 1)/(sizeof(${type(packets).transfer_word_c_type()}));
             constexpr ${subpacket.name}(
                 % for i,field in enumerate(subpacket.fields):
                 const ${field.get_c_type()}& ${field.name}${[",", ""][(i+1)//len(subpacket.fields)]}
@@ -53,7 +50,7 @@ namespace ${packets.name} {
                 %endfor
                 {}
             template <std::size_t N>
-            constexpr ${subpacket.name}(const std::array<${type(packets).transfer_word_c_type()}, N>& words) :
+            constexpr ${subpacket.name}(const std::array<${type(packets).transfer_word_c_type()}, N>& bytes) :
 <%
     start = 0
     valid_groups = subpacket.valid_groups()
@@ -70,14 +67,10 @@ namespace ${packets.name} {
                     qualify = f"!cvm::bitmanip::index<{valid_index}>(_packet_gen_valid) ? 0 : "
 
                 %>\
-                ${field.name}(${qualify}cvm::bitmanip::array_slice<decltype(${field.name})>(words.data(), ${field.width + start - 1} + ${packets.enum_width()} - (${valids_offset or 0}), ${start} + ${packets.enum_width()} - (${valids_offset or 0})))${[",", ""][(i+1)//len(subpacket.fields)]}
+                ${field.name}(${qualify}cvm::bitmanip::array_slice<decltype(${field.name})>(bytes.data(), ${field.width + start - 1} + ${packets.enum_width()} - (${valids_offset or 0}), ${start} + ${packets.enum_width()} - (${valids_offset or 0})))${[",", ""][(i+1)//len(subpacket.fields)]}
 <% start += field.width %>\
             %endfor
-            {
-                std::copy_n(words.begin() + N - 2*X, X, (${type(packets).transfer_word_c_type()}*)(&birth) );
-                std::copy_n(words.begin() + N - 1*X, X, (${type(packets).transfer_word_c_type()}*)(&signal_enqueued_time) );
-                assert(birth < signal_enqueued_time && "signal_enqueued before birth");
-            }
+                {}
         };
     }
 %endfor

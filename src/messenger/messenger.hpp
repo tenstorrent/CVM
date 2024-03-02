@@ -25,8 +25,6 @@ namespace cvm {
 
       class messenger {
 
-          using time_point = std::chrono::time_point<std::chrono::high_resolution_clock>;
-
           public:
 
               template <typename T = void>
@@ -205,21 +203,8 @@ namespace cvm {
                           long_runnings_[loc].emplace_back(handle, filter);
                       }
 
-                      bool run(cvm::topology::loc_t loc, T t, const std::tuple<time_point, time_point, time_point, time_point, time_point>& time) {
+                      bool run(cvm::topology::loc_t loc, T t) {
 
-                          constexpr bool has_dispatch = requires(const T& t) {
-                              t.dispatch_time;
-                          };
-                          if constexpr (has_dispatch) {
-                              t.dispatch_time = std::chrono::high_resolution_clock::now();
-                              t.prev_func_start_time = std::get<0>(time);
-                              t.prev_func_finish_time = std::get<1>(time);
-                              t.sleep_time = std::get<2>(time);
-                              t.wakeup_time = std::get<3>(time);
-                              t.signal_swap_time = std::get<4>(time);
-                              assert(t.signal_enqueued_time < t.signal_swap_time && "signal swap before signal enqueued");
-                              assert(t.signal_swap_time     < t.dispatch_time    && "dispatch before signal swap");
-                          }
                           std::vector<std::coroutine_handle<>> handles;
 
                           // first append to all existing channels and moments. register handles which need to be resumed
@@ -263,14 +248,14 @@ namespace cvm {
                           // resume awaiting tasks and listeners
                           bool clean = false;
                           std::for_each(handles.begin(), handles.end(),
-                              [&] (const auto& handle) {
+                              [&clean] (const auto& handle) {
                                   handle.resume();
                                   clean |= handle.done();
                               });
 
                           auto& connected = long_runnings_[loc];
                           std::for_each(connected.begin(), connected.end(),
-                              [&] (auto& handle) {
+                              [&t] (auto& handle) {
                                   if (!(handle.filter) || (handle.filter)(t)) {
                                       (handle.l)(t);
                                   }
@@ -429,10 +414,10 @@ namespace cvm {
                   static const auto key = std::type_index(typeid(E));
                   typedef std::vector<std::pair<cvm::topology::loc_t, E>> storage_t;
 
-                  static constexpr auto f = [](std::size_t idx, messenger& m, decltype(signal_storage_[0])& s, const std::tuple<time_point, time_point, time_point, time_point, time_point>& times) {
+                  static constexpr auto f = [](std::size_t idx, messenger& m, decltype(signal_storage_[0])& s) {
                       storage_t& storage = std::any_cast<storage_t&>(s[key]);
                       auto& [loc, a] = storage[idx];
-                      bool clean = m.message_pool<T>()->run(std::move(loc), std::move(a), times);
+                      bool clean = m.message_pool<T>()->run(std::move(loc), std::move(a));
                       if (idx == storage.size()-1) {
                           storage.clear();
                       }
@@ -449,13 +434,6 @@ namespace cvm {
                           storage_t& storage = std::any_cast<storage_t&>(sit->second);
 
                           signal_queue_[prio].emplace_back(std::move(storage.size()), std::move(f));
-                          constexpr bool has_signal_enqueued = requires(A t) {
-                              t.signal_enqueued_time;
-                          };
-                          if constexpr (has_signal_enqueued) {
-                              m.set_signal_enqueued_time();
-                              assert(m.birth < m.signal_enqueued_time && "signal_enqueued before birth");
-                          }
                           storage.emplace_back(std::move(loc), std::move(m));
                       }
                       signal_queue_updated_.test_and_set();
@@ -464,12 +442,11 @@ namespace cvm {
                       if (!FLAGS_signal_async) flush();
                   } else {
                       bool clean = false;
-                      std::tuple<time_point, time_point, time_point, time_point, time_point> t;
 
                       if constexpr (std::is_same_v<E, std::remove_cvref_t<A>>) {
-                          clean = message_pool<T>()->run(std::move(loc), std::move(m), t);
+                          clean = message_pool<T>()->run(std::move(loc), std::move(m));
                       } else {
-                          clean = message_pool<T>()->run(std::move(loc), E(std::move(m)), t);
+                          clean = message_pool<T>()->run(std::move(loc), E(std::move(m)));
                       }
 
                       if (clean) {
@@ -533,7 +510,7 @@ namespace cvm {
               std::mutex signal_mutex_;
               std::thread signal_thread_;
               std::array<std::unordered_map<std::type_index, std::any>, num_priority> signal_storage_;
-              std::array<std::vector<std::pair<std::size_t, std::function<bool(std::size_t, messenger&, decltype(signal_storage_[0])&, const std::tuple<time_point, time_point, time_point, time_point, time_point>&)>>>, num_priority> signal_queue_;
+              std::array<std::vector<std::pair<std::size_t, std::function<bool(std::size_t, messenger&, decltype(signal_storage_[0])&)>>>, num_priority> signal_queue_;
               std::atomic_flag quit_ = ATOMIC_FLAG_INIT;
               std::atomic_flag signal_queue_updated_ = ATOMIC_FLAG_INIT;
       };

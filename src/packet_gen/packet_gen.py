@@ -43,6 +43,7 @@ class Field:
 class Packet:
     name: str
     domain: int
+    priority: str
     num: int
     context: bool
     port: str
@@ -63,7 +64,7 @@ class Packet:
                 p.insert(0, Field.load("_packet_gen_valid", {"width": quals}))
 
             elaborated.append(p)
-        return [cls(name, values.get("domain", None), values.get("num", 1), values.get("context", False), port, e, i) for i, e in enumerate(elaborated)]
+        return [cls(name, values.get("domain", None), values.get("priority", None), values.get("num", 1), values.get("context", False), port, e, i) for i, e in enumerate(elaborated)]
 
     def to_c_enum(self):
         return 'MSG_NUMBER_' + self.port + '_' + self.name + '_' + str(self.subidx)

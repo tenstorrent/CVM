@@ -7,40 +7,67 @@ DEFINE_bool(signal_async, false, "cvm::messenger signals serviced by another thr
 
 void cvm::messenger::flush() {
 
-    decltype(signal_queue_  ) q;
-    decltype(signal_storage_) s;
+    std::remove_reference<decltype(signal_queue_  )>::type q;
+    std::remove_reference<decltype(signal_storage_)>::type s;
+    std::array<decltype(signal_queue_[0].begin()), num_priority> iterators;
+
+    bool saw_quit = false;
 
     while (1) {
-        {
-            std::unique_lock<std::mutex> lock(signal_mutex_);
-            while (signal_queue_.empty()) {
-                if (!FLAGS_signal_async || quit_) return;
-                signal_condition_.wait_for(lock, 100ms);
+        for (int prio = highest_priority; prio >= lowest_priority; prio--) {
+            if (q[prio].empty()) {
+                std::unique_lock<std::mutex> lock(signal_mutex_);
+                if (!signal_queue_[prio].empty()) {
+                    q[prio].swap(signal_queue_  [prio]);
+                    s[prio].swap(signal_storage_[prio]);
+                    iterators[prio] = q[prio].begin();
+                }
             }
-            q.swap(signal_queue_  );
-            s.swap(signal_storage_);
+
+            if (q[prio].empty()) {
+                continue;
+            }
+
+            bool switching = false;
+
+            for(; iterators[prio] != q[prio].end(); iterators[prio]++) {
+                auto& [idx, f] = *iterators[prio];
+                if(f(idx, *this, s[prio])) {
+                    // not necessary all the time - need to use a GC?
+                    clean_tasks();
+                }
+                if (FLAGS_signal_async && prio != highest_priority && !quit_.test()) {
+                    switching = true;
+                    break;
+                }
+            }
+            if (iterators[prio] == q[prio].end()) {
+                q[prio].clear();
+            }
+
+            if (switching) {
+                prio = highest_priority + 1;
+            }
+
         }
 
-        for(auto& [idx, f] : q) {
-            if(f(idx, *this, s)) {
-                // not necessary all the time - need to use a GC?
-                clean_tasks();
-            }
-        }
-
-        q.clear();
+        if (!FLAGS_signal_async || saw_quit) break;
+        saw_quit = quit_.test();
+        if (!saw_quit) signal_queue_updated_.wait(false);
     }
 }
 
 void cvm::messenger::build() {
-    quit_ = false;
+    quit_.clear();
     if (FLAGS_signal_async) {
-        signal_thread_ = std::thread(std::bind(&cvm::messenger::flush, this));
+        signal_thread_ = std::thread([this] () {this->flush();});
     }
 }
 
 void cvm::messenger::clear() {
-    quit_ = true;
+    quit_.test_and_set();
+    signal_queue_updated_.test_and_set();
+    signal_queue_updated_.notify_one();
     if (signal_thread_.joinable()) {
         signal_thread_.join();
     }
@@ -53,8 +80,10 @@ void cvm::messenger::clear() {
         pools_.clear();
     }
     {
-        std::lock_guard<std::mutex> signal_queue_guard(signal_mutex_);
-        signal_queue_.clear();
-        signal_storage_.clear();
+        for (int i = 0; i < num_priority; i++) {
+            std::lock_guard<std::mutex> signal_queue_guard(signal_mutex_);
+            signal_queue_[i].clear();
+            signal_storage_[i].clear();
+        }
     }
 }

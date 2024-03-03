@@ -17,6 +17,7 @@
 #include <any>
 #include <gflags/gflags.h>
 #include "cvm/topology.hpp"
+#include <type_traits>
 
 DECLARE_bool(signal_async);
 
@@ -203,6 +204,7 @@ namespace cvm {
                       }
 
                       bool run(cvm::topology::loc_t loc, T t) {
+
                           std::vector<std::coroutine_handle<>> handles;
 
                           // first append to all existing channels and moments. register handles which need to be resumed
@@ -377,23 +379,39 @@ namespace cvm {
                   return;
               }
 
-              template <typename T>
-              void signal(cvm::topology::loc_t loc, const T& m, bool front = false) {
-                  signal<T, T, const T&>(loc, m, front);
-              }
+              enum priority {
+                  lowest_priority = 0,
+                  _1 = 1,
+                  _2 = 2,
+                  highest_priority = 3,
+                  num_priority = 4
+              };
+              static constexpr priority default_priority = lowest_priority;
+
+            private:
+
+              enum launch {
+                  async     = 0,
+                  immediate = 1,
+              };
 
               template <typename T, typename E, typename A = const T&&>
-              void signal(cvm::topology::loc_t loc, A m, bool front = false) {
+              void _signal(cvm::topology::loc_t loc, const A m, priority prio = default_priority, launch l = immediate) {
 
                   if (loc == cvm::topology::null) {
                       assert(false && "attempting to signal to null location");
                       return;
                   }
 
+                  if (prio > highest_priority) {
+                      assert(false && "bad priority");
+                      return;
+                  }
+
                   static const auto key = std::type_index(typeid(E));
                   typedef std::vector<std::pair<cvm::topology::loc_t, E>> storage_t;
 
-                  static constexpr auto f = [](std::size_t idx, messenger& m, decltype(signal_storage_)& s) {
+                  static constexpr auto f = [](std::size_t idx, messenger& m, decltype(signal_storage_[0])& s) {
                       storage_t& storage = std::any_cast<storage_t&>(s[key]);
                       auto& [loc, a] = storage[idx];
                       bool clean = m.message_pool<T>()->run(std::move(loc), std::move(a));
@@ -403,27 +421,54 @@ namespace cvm {
                       return clean;
                   };
 
-                  {
-                      std::lock_guard<std::mutex> sl(signal_mutex_);
-                      auto sit = signal_storage_.find(key);
-                      if (sit == signal_storage_.end()) {
-                          sit = signal_storage_.emplace(key, std::make_any<storage_t>()).first;
-                      }
-                      storage_t& storage = std::any_cast<storage_t&>(sit->second);
+                  if (l == async) {
+                      {
+                          std::lock_guard<std::mutex> sl(signal_mutex_);
+                          auto sit = signal_storage_[prio].find(key);
+                          if (sit == signal_storage_[prio].end()) {
+                              sit = signal_storage_[prio].emplace(key, std::make_any<storage_t>()).first;
+                          }
+                          storage_t& storage = std::any_cast<storage_t&>(sit->second);
 
-                      if (front) {
-                          storage.emplace(storage.begin(), std::move(loc), std::move(m));
-                          signal_queue_.emplace(signal_queue_.begin(), std::move(0), std::move(f));
-                      } else {
+                          signal_queue_[prio].emplace_back(std::move(storage.size()), std::move(f));
                           storage.emplace_back(std::move(loc), std::move(m));
-                          signal_queue_.emplace_back(std::move(storage.size()-1), std::move(f));
+                      }
+                      signal_queue_updated_.test_and_set();
+                      signal_queue_updated_.notify_one();
+
+                      if (!FLAGS_signal_async) flush();
+                  } else {
+                      bool clean = false;
+
+                      if constexpr (std::is_same_v<E, std::remove_cvref_t<A>>) {
+                          clean = message_pool<T>()->run(std::move(loc), std::move(m));
+                      } else {
+                          clean = message_pool<T>()->run(std::move(loc), E(std::move(m)));
+                      }
+
+                      if (clean) {
+                          clean_tasks();
                       }
                   }
-                  signal_condition_.notify_one();
-
-                  if (!FLAGS_signal_async) flush();
 
                   return;
+              }
+
+            public:
+
+              template <typename T>
+              void signal(cvm::topology::loc_t loc, const T& m) {
+                  _signal<T, T, const T&>(loc, m, default_priority, immediate);
+              }
+
+              template <typename T>
+              void signal_async(cvm::topology::loc_t loc, const T& m, priority prio = default_priority) {
+                  _signal<T, T, const T&>(loc, m, prio, async);
+              }
+
+              template <typename T, typename E, typename A = const T&&>
+              void signal_async(cvm::topology::loc_t loc, const A m, priority prio = default_priority) {
+                  _signal<T, E, A>(loc, m, prio, async);
               }
 
               template <typename T>
@@ -478,9 +523,9 @@ namespace cvm {
 
               std::mutex signal_mutex_;
               std::thread signal_thread_;
-              std::unordered_map<std::type_index, std::any> signal_storage_;
-              std::vector<std::pair<std::size_t, std::function<bool(std::size_t, messenger&, decltype(signal_storage_)&)>>> signal_queue_;
-              std::condition_variable signal_condition_;
-              std::atomic<bool> quit_ = false;
+              std::array<std::unordered_map<std::type_index, std::any>, num_priority> signal_storage_;
+              std::array<std::vector<std::pair<std::size_t, std::function<bool(std::size_t, messenger&, decltype(signal_storage_[0])&)>>>, num_priority> signal_queue_;
+              std::atomic_flag quit_ = ATOMIC_FLAG_INIT;
+              std::atomic_flag signal_queue_updated_ = ATOMIC_FLAG_INIT;
       };
 }

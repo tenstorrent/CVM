@@ -8,13 +8,14 @@
 namespace cvm {
 
     enum verbosity_level {
-        ERROR  =   0,
-        NONE   =   1,
-        LOW    = 100,
-        MEDIUM = 200,
-        HIGH   = 300,
-        FULL   = 400,
-        DEBUG  = 500,
+        ERROR  = 0,
+        NONE   = 1,
+        LOW    = 2,
+        MEDIUM = 3,
+        HIGH   = 4,
+        FULL   = 5,
+        DEBUG  = 6,
+        NUM_VERBOSITY = 7,
     };
 
 
@@ -23,7 +24,7 @@ namespace cvm {
         private:
 
             static verbosity_level verbosity;
-            static std::unordered_map<verbosity_level, std::function<void()>> handlers;
+            static std::array<std::function<void()>, NUM_VERBOSITY> handlers;
             static std::function<std::string_view()> prefix;
 
         public:
@@ -54,9 +55,14 @@ namespace cvm {
 
             }
 
+            static void handle(verbosity_level v) {
+                if (auto& f = handlers.at(v); f) {
+                    f();
+                }
+            }
 
             template <typename... Args>
-                logger(verbosity_level v, Args&&... args) {
+                static void log(verbosity_level v, Args&&... args) {
 
                     if (check_verbosity(v)) {
 
@@ -65,17 +71,11 @@ namespace cvm {
 
                     }
 
-                    auto it = handlers.find(v);
-                    if (it != handlers.end()) {
-
-                        (it->second)();
-
-                    }
-
+                    handle(v);
                 }
 
             template <typename... Args>
-                logger(fmt::ostream& out, verbosity_level v, Args&&... args) {
+                static void log(fmt::ostream& out, verbosity_level v, Args&&... args) {
 
                     if (check_verbosity(v)) {
 
@@ -84,13 +84,7 @@ namespace cvm {
 
                     }
 
-                    auto it = handlers.find(v);
-                    if (it != handlers.end()) {
-
-                        (it->second)();
-
-                    }
-
+                    handle(v);
                 }
     };
 
@@ -112,7 +106,7 @@ namespace cvm {
                     if (logger::check_verbosity(v) && !output_file)
                         output_file = std::make_unique<fmt::ostream>(fmt::output_file(filename));
 
-                    logger(*output_file, v, std::forward<Args>(args)...);
+                    logger::log(*output_file, v, std::forward<Args>(args)...);
 
                 }
 
@@ -129,7 +123,7 @@ namespace cvm {
 
         template <typename... Args>
             log(Args&&... args) {
-                logger(std::forward<Args>(args)...);
+                logger::log(std::forward<Args>(args)...);
             }
 
     };

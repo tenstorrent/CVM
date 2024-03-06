@@ -4,8 +4,13 @@
 #include <string>
 #include <regex>
 #include "vpi_user.h"
+#include <memory>
 
 void cvm::plusargs::parse() {
+    // this will reinitialize flags between tests
+    // otherwise, flags that are not explicitly specified by a later test will retain the value from a previous test
+    static std::unique_ptr<gflags::FlagSaver> flags_saver;
+    flags_saver = std::make_unique<gflags::FlagSaver>();
 
     s_vpi_vlog_info info;
     vpi_get_vlog_info(&info);

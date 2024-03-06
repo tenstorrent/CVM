@@ -381,10 +381,8 @@ namespace cvm {
 
               enum priority {
                   lowest_priority = 0,
-                  _1 = 1,
-                  _2 = 2,
-                  highest_priority = 3,
-                  num_priority = 4
+                  highest_priority = 1,
+                  num_priority = 2
               };
               static constexpr priority default_priority = lowest_priority;
 

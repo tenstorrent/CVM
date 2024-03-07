@@ -44,9 +44,8 @@ TEST(Plusargs, Plusargs) {
     }
 
     cvm::plusargs::parse();
-    // This is undesirable, but the way it is
-    // If a plusarg was previously specified it won't revert to its default
-    EXPECT_EQ(FLAGS_testflag1infile, 41);
+    // If a plusarg was previously specified make sure it reverts to its default
+    EXPECT_EQ(FLAGS_testflag1infile,  1);
     EXPECT_EQ(FLAGS_testflag2infile, 42);
     EXPECT_EQ(FLAGS_testflag3infile,  3);
 }

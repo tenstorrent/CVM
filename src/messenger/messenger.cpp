@@ -4,7 +4,7 @@
 using namespace std::chrono_literals;
 
 DEFINE_bool(signal_async, false, "cvm::messenger signals serviced by another thread. This is for DPI calls that we make non-streaming for low-latency, but which could stall the emulator while being serviced");
-DEFINE_bool(signal_flush_switch_enable, false, "cvm::messenger switch immediately from low priority queue to high priority queue. Causes starvation");
+DEFINE_bool(signal_flush_switch_enable, true, "cvm::messenger switch immediately from low priority queue to high priority queue. Causes starvation");
 DEFINE_uint64(signal_lower_priority_timeout_ns, 10000000, "Time in nanoseconds to spend servicing a lower priority queue before switching back to checking the high priority queue");
 
 void cvm::messenger::flush() {

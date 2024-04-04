@@ -48,4 +48,16 @@ TEST(Plusargs, Plusargs) {
     EXPECT_EQ(FLAGS_testflag1infile,  1);
     EXPECT_EQ(FLAGS_testflag2infile, 42);
     EXPECT_EQ(FLAGS_testflag3infile,  3);
+
+    {
+        std::ofstream flagfile("flagfile");
+        flagfile << "";
+    }
+
+    cvm::plusargs::parse();
+    // another test to make sure it reverts to its default
+    // for some reason the above test was not enough
+    EXPECT_EQ(FLAGS_testflag1infile, 1);
+    EXPECT_EQ(FLAGS_testflag2infile, 2);
+    EXPECT_EQ(FLAGS_testflag3infile, 3);
 }

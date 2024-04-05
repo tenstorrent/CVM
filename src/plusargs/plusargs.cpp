@@ -10,6 +10,7 @@ void cvm::plusargs::parse() {
     // this will reinitialize flags between tests
     // otherwise, flags that are not explicitly specified by a later test will retain the value from a previous test
     static std::unique_ptr<gflags::FlagSaver> flags_saver;
+    flags_saver.reset();
     flags_saver = std::make_unique<gflags::FlagSaver>();
 
     s_vpi_vlog_info info;

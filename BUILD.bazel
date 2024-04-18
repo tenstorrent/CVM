@@ -65,3 +65,9 @@ cc_library(
     deps = ["//src/random:random"],
     visibility = ["//visibility:public"],
 )
+
+cc_library(
+    name = "type_traits",
+    deps = ["//src/type_traits:type_traits"],
+    visibility = ["//visibility:public"],
+)

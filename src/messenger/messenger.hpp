@@ -17,6 +17,8 @@
 #include <any>
 #include <gflags/gflags.h>
 #include "cvm/topology.hpp"
+#include "cvm/type_traits.hpp"
+#include "cvm/logger.hpp"
 #include <type_traits>
 
 DECLARE_bool(signal_async);
@@ -405,6 +407,8 @@ namespace cvm {
                       assert(false && "bad priority");
                       return;
                   }
+
+                  cvm::log(cvm::DEBUG, "[messenger] signal to location {} of type {}\n", loc, cvm::type_traits::name<decltype(m)>());
 
                   static const auto key = std::type_index(typeid(E));
                   typedef std::vector<std::pair<cvm::topology::loc_t, E>> storage_t;

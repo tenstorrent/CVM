@@ -5,11 +5,11 @@
 
     by_domain = OrderedDict()
     for packet in packets.packets:
-        for subpacket in packet:
-            if subpacket.domain is not None:
-                if subpacket.domain not in by_domain:
-                    by_domain[subpacket.domain] = []
-                by_domain[subpacket.domain].append(subpacket)
+        for packet_variant in packet:
+            if packet_variant.domain is not None:
+                if packet_variant.domain not in by_domain:
+                    by_domain[packet_variant.domain] = []
+                by_domain[packet_variant.domain].append(packet_variant)
     bs = "\\"
 %>\
 `ifndef ${include_guard}
@@ -20,32 +20,32 @@ package ${packets.name};
     typedef enum logic[${packets.enum_width()}-1:0] {
     <% i = 0 %>\
     %for packet in packets.packets:
-    %for subpacket in packet:
-        ${subpacket.to_sv_enum()} = ${i}${[",",""][(i+1)//packets.total_packets()]}
+    %for packet_variant in packet:
+        ${packet_variant.to_sv_enum()} = ${i}${[",",""][(i+1)//packets.total_packets()]}
     <% i += 1 %>\
     %endfor
     %endfor
     } message_number;
 %for packet in packets.packets:
-%for subpacket in packet:
+%for packet_variant in packet:
 
     typedef struct packed {
-    %for field in reversed(subpacket.fields):
+    %for field in reversed(packet_variant.fields):
         logic[${field.width-1}:0] ${field.name};
     %endfor
-    } ${subpacket.port}_${subpacket.name}_${subpacket.subidx};
+    } ${packet_variant.port}_${packet_variant.name}_${packet_variant.variant_id};
 
     typedef struct packed {
-        ${subpacket.port}_${subpacket.name}_${subpacket.subidx} data;
+        ${packet_variant.port}_${packet_variant.name}_${packet_variant.variant_id} data;
         logic valid;
-    } ${subpacket.port}_${subpacket.name}_${subpacket.subidx}_with_valid;
+    } ${packet_variant.port}_${packet_variant.name}_${packet_variant.variant_id}_with_valid;
 %endfor
 %endfor
 
 %for domain,domain_packets in by_domain.items():
     typedef struct packed {
     %for packet in domain_packets:
-        ${packet.port}_${packet.name}_${packet.subidx}_with_valid[${packets.ports[packet.port][packet.subidx]}-1:0][${packet.num}-1:0] ${packet.port}_${packet.name}_${packet.subidx}s;
+        ${packet.port}_${packet.name}_${packet.variant_id}_with_valid[${packets.ports[packet.port][packet.variant_id]}-1:0][${packet.num}-1:0] ${packet.port}_${packet.name}_${packet.variant_id}s;
     %endfor
     } domain_${domain};
 %endfor
@@ -68,16 +68,16 @@ module ${packets.name}_domain_${domain}(
 
 %for packet in domain_packets:
     % for words in packet.valid_groups_words(packets.enum_width()):
-    import "DPI-C" ${"context" if packet.context else ""} function void ${packets.name}_message_${packet.port}_${packet.name}_${packet.subidx}_words${words}(${type(packets).transfer_word_sv_type()} message[${words}]);
+    import "DPI-C" ${"context" if packet.context else ""} function void ${packets.name}_message_${packet.port}_${packet.name}_${packet.variant_id}_words${words}(${type(packets).transfer_word_sv_type()} message[${words}]);
     % endfor
 %endfor
 
 %for packet in domain_packets:
-    %for port in range(packets.ports[packet.port][packet.subidx]):
+    %for port in range(packets.ports[packet.port][packet.variant_id]):
         %for i in range(packet.num):
-<% prefix = f"{packet.port}_{packet.name}_{packet.subidx}_{port}_{i}"%>\
+<% prefix = f"{packet.port}_{packet.name}_{packet.variant_id}_{port}_{i}"%>\
     typedef struct packed {
-        ${packets.name}::${packet.port}_${packet.name}_${packet.subidx} data;
+        ${packets.name}::${packet.port}_${packet.name}_${packet.variant_id} data;
         ${packets.name}::message_number header;
     } ${prefix}_pkt_t;
     ${prefix}_pkt_t ${prefix}_pkt;
@@ -95,11 +95,11 @@ module ${packets.name}_domain_${domain}(
     /* verilator lint_off BLKSEQ */
     always @(posedge clk) begin
 %for packet in domain_packets:
-    %for port in range(packets.ports[packet.port][packet.subidx]):
+    %for port in range(packets.ports[packet.port][packet.variant_id]):
         %for i in range(packet.num):
-        if (tx.${packet.port}_${packet.name}_${packet.subidx}s[${port}][${i}].valid) begin
-<% prefix = f"{packet.port}_{packet.name}_{packet.subidx}_{port}_{i}"%>\
-<% odata = f"tx.{packet.port}_{packet.name}_{packet.subidx}s[{port}][{i}].data" %>\
+        if (tx.${packet.port}_${packet.name}_${packet.variant_id}s[${port}][${i}].valid) begin
+<% prefix = f"{packet.port}_{packet.name}_{packet.variant_id}_{port}_{i}"%>\
+<% odata = f"tx.{packet.port}_{packet.name}_{packet.variant_id}s[{port}][{i}].data" %>\
             ${prefix}_pkt = '{data: ${odata}, header: ${packets.name}::${packet.to_sv_enum()}};
             ${prefix}_b = '0;
             ${prefix}_words_to_transfer = '0;
@@ -128,12 +128,12 @@ module ${packets.name}_domain_${domain}(
                             ${prefix}_${words}_unpacked[i] = ${type(packets).transfer_word_bits()}'(${prefix}_pkt >> (${type(packets).transfer_word_bits()}*i));
                         end
                     end
-                    ${packets.name}_message_${packet.port}_${packet.name}_${packet.subidx}_words${words}(${prefix}_${words}_unpacked);
+                    ${packets.name}_message_${packet.port}_${packet.name}_${packet.variant_id}_words${words}(${prefix}_${words}_unpacked);
                 end
 <% prev = words %>
             % endfor
                 default: begin
-                    assert(1'b0) else $error("No valid function found for ${packet.port}_${packet.name}_${packet.subidx} to send %0d words", ${prefix}_words_to_transfer);
+                    assert(1'b0) else $error("No valid function found for ${packet.port}_${packet.name}_${packet.variant_id} to send %0d words", ${prefix}_words_to_transfer);
                 end
             endcase
         end
@@ -160,33 +160,32 @@ endmodule
   for port in packets.ports:
       for domain_packets in by_domain.values():
           for packet in domain_packets:
-              if packet.port == port:
-                  by_port[port] = by_port.get(port, list()) + [packet]
+              if packet.port == port and packet.variant_id == 0:
+                  by_port[port] = by_port.get(port, list()) + [(packet.name, packet.num)]
 %>
-%for port, port_subpackets in by_port.items():
+%for port, port_packets in by_port.items():
 
 <%
-port_declpackets = set([(subpacket.name, subpacket.num) for subpacket in port_subpackets])
-end = len(port_declpackets) - 1
+end = len(port_packets) - 1
 %>
 
 `define ${packets.name.upper()}_${port.upper()}_OUTPUT_PARAMS                     ${bs}
-    %for i,(declpacket, _) in enumerate(port_declpackets):
+    %for i,(declpacket, _) in enumerate(port_packets):
     type ${declpacket.upper()}_TYPE = int${", \\" if i != end else ""}
     %endfor
 
 `define ${packets.name.upper()}_${port.upper()}_OUTPUT_PORTS                     ${bs}
-    %for i,(declpacket, _) in enumerate(port_declpackets):
+    %for i,(declpacket, _) in enumerate(port_packets):
     output ${declpacket.upper()}_TYPE ${declpacket}s${", \\" if i != end else ""}
     %endfor
 
 `define ${packets.name.upper()}_${port.upper()}_SOURCE_PARAMS(sub)   ${bs}
-    %for i,(declpacket, num) in enumerate(port_declpackets):
+    %for i,(declpacket, num) in enumerate(port_packets):
     .${declpacket.upper()}_TYPE(${packets.name}::${port}_${declpacket}_``sub``_with_valid[${num}-1:0])${", \\" if i != end else ""}
     %endfor
 
 `define ${packets.name.upper()}_${port.upper()}_SOURCE_PORTS(domain, port_num, sub)   ${bs}
-    %for i,(declpacket, _) in enumerate(port_declpackets):
+    %for i,(declpacket, _) in enumerate(port_packets):
     .${declpacket}s(tx_dom_``domain.${port}_${declpacket}_``sub``s[port_num])${", \\" if i != end else ""}
     %endfor
 

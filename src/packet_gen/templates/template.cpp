@@ -24,20 +24,20 @@ static void ${packets.name}_message(const ${type(packets).transfer_word_c_type()
 
     switch(message_number) {
     %for packet in packets.packets:
-    %for subpacket in packet:
-        case ${packets.name}::${subpacket.to_c_enum()}: {
+    %for packet_variant in packet:
+        case ${packets.name}::${packet_variant.to_c_enum()}: {
 <%
     location_lsb = packets.enum_width()
-    for field in subpacket.fields:
+    for field in packet_variant.fields:
         if field.name == "location":
             break
         location_lsb += field.width
 %>\
             const std::uint${type(packets).location_width()}_t loc(cvm::bitmanip::array_slice<std::uint${type(packets).location_width()}_t>(message, ${type(packets).location_width() + location_lsb - 1}, ${location_lsb}));
             switch (words) {
-    % for words in subpacket.valid_groups_words(packets.enum_width()):
+    % for words in packet_variant.valid_groups_words(packets.enum_width()):
                 case ${words}: {
-                    cvm::registry::messenger.signal_async<${packets.name}::${subpacket.port}::${subpacket.name}<${subpacket.subidx}>, std::array<${type(packets).transfer_word_c_type()}, ${words}>>(loc, array_wrapper<${words}, ${type(packets).transfer_word_c_type()}>(message), cvm::messenger::priority::${subpacket.priority or packets.domains.get(subpacket.domain, {}).get("priority", "lowest_priority")});
+                    cvm::registry::messenger.signal_async<${packets.name}::${packet_variant.port}::${packet_variant.name}<${packet_variant.variant_id}>, std::array<${type(packets).transfer_word_c_type()}, ${words}>>(loc, array_wrapper<${words}, ${type(packets).transfer_word_c_type()}>(message), cvm::messenger::priority::${packet_variant.priority or packets.domains.get(packet_variant.domain, {}).get("priority", "lowest_priority")});
                     break;
                 }
     %endfor
@@ -58,10 +58,10 @@ static void ${packets.name}_message(const ${type(packets).transfer_word_c_type()
 }
 
 %for packet in packets.packets:
-%for subpacket in packet:
-% for words in subpacket.valid_groups_words(packets.enum_width()):
-extern "C" void ${packets.name}_message_${subpacket.port}_${subpacket.name}_${subpacket.subidx}_words${words}(const ${type(packets).transfer_word_c_type()}* message) {
-    ${packets.name}_message(message, ${packets.name}::message_number::${subpacket.to_c_enum()}, ${words});
+%for packet_variant in packet:
+% for words in packet_variant.valid_groups_words(packets.enum_width()):
+extern "C" void ${packets.name}_message_${packet_variant.port}_${packet_variant.name}_${packet_variant.variant_id}_words${words}(const ${type(packets).transfer_word_c_type()}* message) {
+    ${packets.name}_message(message, ${packets.name}::message_number::${packet_variant.to_c_enum()}, ${words});
 }
 %endfor
 %endfor

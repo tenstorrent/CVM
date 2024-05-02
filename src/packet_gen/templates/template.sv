@@ -160,33 +160,32 @@ endmodule
   for port in packets.ports:
       for domain_packets in by_domain.values():
           for packet in domain_packets:
-              if packet.port == port:
-                  by_port[port] = by_port.get(port, list()) + [packet]
+              if packet.port == port and packet.variant_id == 0:
+                  by_port[port] = by_port.get(port, list()) + [(packet.name, packet.num)]
 %>
-%for port, port_variants in by_port.items():
+%for port, port_packets in by_port.items():
 
 <%
-port_declpackets = set([(packet.name, packet.num) for packet in port_variants])
-end = len(port_declpackets) - 1
+end = len(port_packets) - 1
 %>
 
 `define ${packets.name.upper()}_${port.upper()}_OUTPUT_PARAMS                     ${bs}
-    %for i,(declpacket, _) in enumerate(port_declpackets):
+    %for i,(declpacket, _) in enumerate(port_packets):
     type ${declpacket.upper()}_TYPE = int${", \\" if i != end else ""}
     %endfor
 
 `define ${packets.name.upper()}_${port.upper()}_OUTPUT_PORTS                     ${bs}
-    %for i,(declpacket, _) in enumerate(port_declpackets):
+    %for i,(declpacket, _) in enumerate(port_packets):
     output ${declpacket.upper()}_TYPE ${declpacket}s${", \\" if i != end else ""}
     %endfor
 
 `define ${packets.name.upper()}_${port.upper()}_SOURCE_PARAMS(sub)   ${bs}
-    %for i,(declpacket, num) in enumerate(port_declpackets):
+    %for i,(declpacket, num) in enumerate(port_packets):
     .${declpacket.upper()}_TYPE(${packets.name}::${port}_${declpacket}_``sub``_with_valid[${num}-1:0])${", \\" if i != end else ""}
     %endfor
 
 `define ${packets.name.upper()}_${port.upper()}_SOURCE_PORTS(domain, port_num, sub)   ${bs}
-    %for i,(declpacket, _) in enumerate(port_declpackets):
+    %for i,(declpacket, _) in enumerate(port_packets):
     .${declpacket}s(tx_dom_``domain.${port}_${declpacket}_``sub``s[port_num])${", \\" if i != end else ""}
     %endfor
 

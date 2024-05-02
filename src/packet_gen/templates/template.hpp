@@ -10,8 +10,8 @@ namespace ${packets.name} {
     typedef enum {
 <% i = 0 %>\
 %for packet in packets.packets:
-%for subpacket in packet:
-        ${subpacket.to_c_enum()} = ${i},
+%for packet_variant in packet:
+        ${packet_variant.to_c_enum()} = ${i},
 <% i += 1 %>\
 %endfor
 %endfor
@@ -22,42 +22,42 @@ namespace ${packets.name} {
 %>
 
 %for packet in packets.packets:
-%for subpacket in packet:
-%if subpacket.name not in namespaces.setdefault(subpacket.port, list()):
+%for packet_variant in packet:
+%if packet_variant.name not in namespaces.setdefault(packet_variant.port, list()):
     // we can't template namespaces
-    namespace ${subpacket.port} {
+    namespace ${packet_variant.port} {
         template <int N = 0>
-        struct ${subpacket.name}
+        struct ${packet_variant.name}
         {
-            ${subpacket.name}(...) = delete;
+            ${packet_variant.name}(...) = delete;
         };
     };
-<% namespaces[subpacket.port].append(subpacket.name) %>
+<% namespaces[packet_variant.port].append(packet_variant.name) %>
 %endif
-    namespace ${subpacket.port} {
+    namespace ${packet_variant.port} {
         template <>
-        struct ${subpacket.name} <${subpacket.subidx}> {
-        % for i,field in enumerate(subpacket.fields):
+        struct ${packet_variant.name} <${packet_variant.variant_id}> {
+        % for i,field in enumerate(packet_variant.fields):
             ${field.get_c_type()} ${field.name};
         %endfor
-            constexpr ${subpacket.name}(
-                % for i,field in enumerate(subpacket.fields):
-                const ${field.get_c_type()}& ${field.name}${[",", ""][(i+1)//len(subpacket.fields)]}
+            constexpr ${packet_variant.name}(
+                % for i,field in enumerate(packet_variant.fields):
+                const ${field.get_c_type()}& ${field.name}${[",", ""][(i+1)//len(packet_variant.fields)]}
                 %endfor
             ) :
-                % for i,field in enumerate(subpacket.fields):
-                ${field.name}(${field.name})${[",", ""][(i+1)//len(subpacket.fields)]}
+                % for i,field in enumerate(packet_variant.fields):
+                ${field.name}(${field.name})${[",", ""][(i+1)//len(packet_variant.fields)]}
                 %endfor
                 {}
             template <std::size_t N>
-            constexpr ${subpacket.name}(const std::array<${type(packets).transfer_word_c_type()}, N>& bytes) :
+            constexpr ${packet_variant.name}(const std::array<${type(packets).transfer_word_c_type()}, N>& bytes) :
 <%
     start = 0
-    valid_groups = subpacket.valid_groups()
+    valid_groups = packet_variant.valid_groups()
     valid_groups_values = list(valid_groups.values()) + [[1<<31, 1<<31]]
     valid_index = 0
 %>\
-            % for i,field in enumerate(subpacket.fields):
+            % for i,field in enumerate(packet_variant.fields):
                 <%
                 if start > valid_groups_values[valid_index][1]:
                     valid_index += 1
@@ -67,7 +67,7 @@ namespace ${packets.name} {
                     qualify = f"!cvm::bitmanip::index<{valid_index}>(_packet_gen_valid) ? 0 : "
 
                 %>\
-                ${field.name}(${qualify}cvm::bitmanip::array_slice<decltype(${field.name})>(bytes.data(), ${field.width + start - 1} + ${packets.enum_width()} - (${valids_offset or 0}), ${start} + ${packets.enum_width()} - (${valids_offset or 0})))${[",", ""][(i+1)//len(subpacket.fields)]}
+                ${field.name}(${qualify}cvm::bitmanip::array_slice<decltype(${field.name})>(bytes.data(), ${field.width + start - 1} + ${packets.enum_width()} - (${valids_offset or 0}), ${start} + ${packets.enum_width()} - (${valids_offset or 0})))${[",", ""][(i+1)//len(packet_variant.fields)]}
 <% start += field.width %>\
             %endfor
                 {}
@@ -78,6 +78,6 @@ namespace ${packets.name} {
 
 }
 
-% if any(subpacket.context for packet in packets.packets for subpacket in packet):
+% if any(packet_variant.context for packet in packets.packets for packet_variant in packet):
 extern "C" void ${packets.name}_finish();
 % endif

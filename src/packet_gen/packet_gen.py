@@ -24,8 +24,8 @@ class Field:
     qualify: str
 
     @classmethod
-    def load(cls, name, values, subidx = 0):
-        width = values.get('widths', [values.get('width')])[subidx]
+    def load(cls, name, values, variant = 0):
+        width = values.get('widths', [values.get('width')])[variant]
         qualify = values.get('qualify')
         return cls(name, width, qualify)
 
@@ -48,15 +48,15 @@ class Packet:
     context: bool
     port: str
     fields: list[Field]
-    subidx: int
+    variant_id: int
 
     @classmethod
     def load(cls, name, values, port):
-        num_subpackets = len(next(iter(values['fields'].values())).get('widths', [0]))
-        assert all(len(v.get('widths', [0])) == num_subpackets for v in values['fields'].values()) and "Need same number of widths for all fields"
+        num_variants = len(next(iter(values['fields'].values())).get('widths', [0]))
+        assert all(len(v.get('widths', [0])) == num_variants for v in values['fields'].values()) and "Need same number of widths for all fields"
         # packets always need topology location
         elaborated = []
-        for i in range(num_subpackets):
+        for i in range(num_variants):
             p = [Field.load("location", {"width": Packets.location_width()})]
             p += [Field.load(name, v, i) for name,v in values['fields'].items()]
             quals = len(set(field.qualify for field in p if field.qualify is not None))
@@ -67,7 +67,7 @@ class Packet:
         return [cls(name, values.get("domain", None), values.get("priority", None), values.get("num", 1), values.get("context", False), port, e, i) for i, e in enumerate(elaborated)]
 
     def to_c_enum(self):
-        return 'MSG_NUMBER_' + self.port + '_' + self.name + '_' + str(self.subidx)
+        return 'MSG_NUMBER_' + self.port + '_' + self.name + '_' + str(self.variant_id)
 
     def to_sv_enum(self):
         return self.to_c_enum()

@@ -26,10 +26,10 @@ module dut #(
             pkts[i].data.num1[0][1] <= 4'b100;
             pkts[i].data.num1[1][0] <= 4'b011;
             pkts[i].data.num1[1][1] <= 4'b101;
-            pkts[i].data.num2[0][0] <= 16'h1;
-            pkts[i].data.num2[0][1] <= 16'h1000;
-            pkts[i].data.num2[1][0] <= 16'h0011;
-            pkts[i].data.num2[1][1] <= 16'h1100;
+            pkts[i].data.num2[0][0][0] <= 13'h1;
+            pkts[i].data.num2[0][1][0] <= 13'h1000;
+            pkts[i].data.num2[1][0][1] <= 13'h0011;
+            pkts[i].data.num2[2][1][2] <= 13'h1100;
             pkts[i].data.x256      <= 256'(1) << 255 | 256'(c);
             pkts[i].data.x54       <=  54'(1) <<  53 | 54'(c);
             pkts[i].data.valid1    <= c == 4;

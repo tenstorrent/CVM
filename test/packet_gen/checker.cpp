@@ -1,5 +1,6 @@
 #include "cvm/topology.hpp"
 #include "cvm/registry.hpp"
+#include "cvm/type_traits.hpp"
 #include "transactions.hpp"
 #include <gtest/gtest.h>
 
@@ -49,6 +50,14 @@ class checker {
         void check(const transactions::dut::pkt<>& pkt) {
             auto c = count_ / 8;
             check("num", pkt.num, decltype(pkt.num)(count_ % 8));
+            check("num1[0][0]", pkt.num1.at(0).at(0), cvm::type_traits::remove_all_array_extents<decltype(pkt.num1)>::type(1));
+            check("num1[0][1]", pkt.num1.at(0).at(1), cvm::type_traits::remove_all_array_extents<decltype(pkt.num1)>::type(4));
+            check("num1[1][0]", pkt.num1.at(1).at(0), cvm::type_traits::remove_all_array_extents<decltype(pkt.num1)>::type(3));
+            check("num1[1][1]", pkt.num1.at(1).at(1), cvm::type_traits::remove_all_array_extents<decltype(pkt.num1)>::type(5));
+            check("num2[0][0]", pkt.num2.at(0).at(0), cvm::type_traits::remove_all_array_extents<decltype(pkt.num2)>::type(0x1));
+            check("num2[0][1]", pkt.num2.at(0).at(1), cvm::type_traits::remove_all_array_extents<decltype(pkt.num2)>::type(0x1000));
+            check("num2[1][0]", pkt.num2.at(1).at(0), cvm::type_traits::remove_all_array_extents<decltype(pkt.num2)>::type(0x11));
+            check("num2[1][1]", pkt.num2.at(1).at(1), cvm::type_traits::remove_all_array_extents<decltype(pkt.num2)>::type(0x1100));
             check("x256", pkt.x256, decltype(pkt.x256)(1) << 255 | decltype(pkt.x256)(c));
             check("x54", pkt.x54, decltype(pkt.x54)(1) << 53 | decltype(pkt.x54)(c));
 

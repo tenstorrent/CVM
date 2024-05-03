@@ -22,6 +22,14 @@ module dut #(
             pkts[i].valid          <= count > 0;
             pkts[i].data.location  <= loc;
             pkts[i].data.num       <= i;
+            pkts[i].data.num1[0][0] <= 4'b1;
+            pkts[i].data.num1[0][1] <= 4'b100;
+            pkts[i].data.num1[1][0] <= 4'b011;
+            pkts[i].data.num1[1][1] <= 4'b101;
+            pkts[i].data.num2[0][0] <= 16'h1;
+            pkts[i].data.num2[0][1] <= 16'h1000;
+            pkts[i].data.num2[1][0] <= 16'h0011;
+            pkts[i].data.num2[1][1] <= 16'h1100;
             pkts[i].data.x256      <= 256'(1) << 255 | 256'(c);
             pkts[i].data.x54       <=  54'(1) <<  53 | 54'(c);
             pkts[i].data.valid1    <= c == 4;
@@ -36,7 +44,7 @@ module dut #(
 
     assign ctxs[0].valid           = count == 10;
     assign ctxs[0].data.location   = loc;
-    assign ctxs[0].data.dummy      = 1'b1;
+    assign ctxs[0].data.dummy[0]   = 1'b1;
 
 endmodule
 

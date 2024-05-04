@@ -32,9 +32,9 @@ dut:
           num:
               width: 3
           num1:
-              width: !!python/tuple [2, 2, 4] # 2x2 of width 4
+              width: [[2, 2, 4]] # 2x2 of width 4
           num2:
-              width: !!python/tuple [3, 2, 5, 13] # 3x2x5 of width 13
+              width: [[3, 2, 5, 13]] # 3x2x5 of width 13
 
   ctx:
       domain: 1

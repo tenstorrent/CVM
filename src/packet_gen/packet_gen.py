@@ -21,14 +21,17 @@ from mako import exceptions
 @dataclass
 class Field:
     name: str
-    width: tuple[int, ...]
+    width: list[int, ...]
     qualify: str
 
     @classmethod
     def load(cls, name, values, variant = 0):
-        width = values.get('widths', [values.get('width')])[variant]
-        if not isinstance(width, tuple):
-            width = (width,)
+        width = values.get('widths', values.get('width'))
+        if not isinstance(width, list):
+            width = [(width,)]
+        width = width[variant]
+        if isinstance(width, int):
+            width = [width]
         qualify = values.get('qualify')
         return cls(name, width, qualify)
 
@@ -154,12 +157,6 @@ class PacketStore:
         except:
             raise Exception(exceptions.text_error_template().render()) from None
 
-        def tuple_constructor(loader, node):
-            values = loader.construct_sequence(node)
-            return tuple(values)
-
-        # Register the constructor with PyYAML
-        yaml.SafeLoader.add_constructor('tag:yaml.org,2002:python/tuple', tuple_constructor)
         for port, values in yaml.safe_load(rendered.getvalue()).items():
 
             if port.startswith("__"): # special fields

@@ -44,7 +44,7 @@ module dut #(
 
     assign ctxs[0].valid           = count == 10;
     assign ctxs[0].data.location   = loc;
-    assign ctxs[0].data.dummy[0]   = 1'b1;
+    assign ctxs[0].data.dummy      = 1'b1;
 
 endmodule
 

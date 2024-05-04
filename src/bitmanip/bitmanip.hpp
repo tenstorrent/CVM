@@ -93,51 +93,43 @@ namespace cvm {
                 return u;
             }
 
-        template <typename V, typename T, typename std::enable_if<!type_traits::is_array_v<V>, bool>::type = true>
+        template <typename V, std::size_t N = 0, typename T>
             static constexpr V array_slice(const T* arr, const size_t msb, const size_t lsb) {
                 const std::size_t G = 8*sizeof(T);
 
-                V v(0);
+                auto v = []() -> auto {
+                  if constexpr (type_traits::is_array_v<V>)
+                    return V{};
+                  else
+                    return V(0);
+                }();
 
-                size_t bits_left_in_g = 0;
-                for (size_t bit = lsb; bit <= msb; bit += bits_left_in_g) {
-
-                    size_t bits_left = msb - bit + 1;
-                    size_t lsb_g = bit % G;
-                    bits_left_in_g = G - lsb_g;
-                    size_t bits_to_take_in_g = std::min(bits_left, bits_left_in_g);
-                    size_t msb_g = bits_to_take_in_g + lsb_g - 1;
-
-                    v |= V(slice(arr[bit / G], msb_g, lsb_g)) << (bit - lsb);
-                }
-
-                return v;
-            };
-
-        template <typename V, std::size_t N, typename T, typename std::enable_if<type_traits::is_array_v<V>, bool>::type = true>
-            static constexpr V array_slice(const T* arr, const size_t msb, const size_t lsb) {
-                const std::size_t G = 8*sizeof(T);
-
-                V v{};
-
-                size_t bits_to_take_in_g = 0;
-                for (size_t bit = lsb; bit <= msb; bit += bits_to_take_in_g) {
+                for (size_t bit = lsb; bit <= msb;) {
 
                     size_t bits_left = msb - bit + 1;
                     size_t lsb_g = bit % G;
                     size_t bits_left_in_g = G - lsb_g;
-                    size_t bits_taken = bit - lsb;
-                    // this is kind of like a scatter operation
-                    size_t bits_left_in_n = N - (bits_taken % N);
 
-                    bits_to_take_in_g = std::min(std::min(bits_left, bits_left_in_g), bits_left_in_n);
-                    size_t msb_g = bits_to_take_in_g + lsb_g - 1;
+                    if constexpr (type_traits::is_array_v<V>) {
+                      size_t bits_taken = bit - lsb;
+                      // this is kind of like a scatter operation
+                      size_t bits_left_in_n = N - (bits_taken % N);
+                      size_t bits_to_take_in_g = std::min(std::min(bits_left, bits_left_in_g), bits_left_in_n);
+                      size_t msb_g = bits_to_take_in_g + lsb_g - 1;
 
-                    size_t index = (bit - lsb) / N;
-                    size_t pos = (bit - lsb) % N;
+                      size_t index = (bit - lsb) / N;
+                      size_t pos = (bit - lsb) % N;
 
-                    using ET = type_traits::remove_all_array_extents<V>::type;
-                    *(type_traits::get_array_base_ptr(v) + index) |= ET(slice(arr[bit / G], msb_g, lsb_g)) << pos;
+                      using ET = type_traits::remove_all_array_extents<V>::type;
+                      *(type_traits::get_array_base_ptr(v) + index) |= ET(slice(arr[bit / G], msb_g, lsb_g)) << pos;
+                      bit += bits_to_take_in_g;
+                    }
+                    else {
+                      size_t bits_to_take_in_g = std::min(bits_left, bits_left_in_g);
+                      size_t msb_g = bits_to_take_in_g + lsb_g - 1;
+                      v |= V(slice(arr[bit / G], msb_g, lsb_g)) << (bit - lsb);
+                      bit += bits_left_in_g;
+                    }
                 }
 
                 return v;

@@ -93,7 +93,7 @@ namespace cvm {
                 return u;
             }
 
-        template <typename V, std::size_t N = 0, typename T>
+        template <typename V, std::size_t ELEM_SIZE = 0, typename T>
             static constexpr V array_slice(const T* arr, const size_t msb, const size_t lsb) {
                 const std::size_t G = 8*sizeof(T);
 
@@ -111,17 +111,19 @@ namespace cvm {
                     size_t bits_left_in_g = G - lsb_g;
 
                     if constexpr (type_traits::is_array_v<V>) {
+                      using ET = type_traits::remove_all_array_extents<V>::type;
+                      static_assert(ELEM_SIZE > 0);
+                      static_assert(8*sizeof(ET) >= ELEM_SIZE);
+
+                      // Overlay elements of bit width ELEM_SIZE into result.
+                      // This can be used as a scatter operation.
                       size_t bits_taken = bit - lsb;
-                      // this is kind of like a scatter operation
-                      size_t bits_left_in_n = N - (bits_taken % N);
+                      size_t bits_left_in_n = ELEM_SIZE - (bits_taken % ELEM_SIZE);
                       size_t bits_to_take_in_g = std::min(std::min(bits_left, bits_left_in_g), bits_left_in_n);
                       size_t msb_g = bits_to_take_in_g + lsb_g - 1;
 
-                      size_t index = (bit - lsb) / N;
-                      size_t pos = (bit - lsb) % N;
-
-                      using ET = type_traits::remove_all_array_extents<V>::type;
-                      *(type_traits::get_array_base_ptr(v) + index) |= ET(slice(arr[bit / G], msb_g, lsb_g)) << pos;
+                      size_t index = (bit - lsb) / ELEM_SIZE;
+                      *(type_traits::get_array_base_ptr(v) + index) |= ET(slice(arr[bit / G], msb_g, lsb_g)) << ((bit - lsb) % ELEM_SIZE);
                       bit += bits_to_take_in_g;
                     }
                     else {

@@ -5,11 +5,11 @@
 #include "cvm/bitmanip.hpp"
 #include <array>
 
-namespace ${packets.name} {
+namespace ${packet_store.name} {
 
     typedef enum {
 <% i = 0 %>\
-%for packet in packets.packets:
+%for packet in packet_store.packets:
 %for packet_variant in packet:
         ${packet_variant.to_c_enum()} = ${i},
 <% i += 1 %>\
@@ -21,7 +21,7 @@ namespace ${packets.name} {
   namespaces = dict()
 %>
 
-%for packet in packets.packets:
+%for packet in packet_store.packets:
 %for packet_variant in packet:
 %if packet_variant.name not in namespaces.setdefault(packet_variant.port, list()):
     // we can't template namespaces
@@ -50,7 +50,7 @@ namespace ${packets.name} {
                 %endfor
                 {}
             template <std::size_t N>
-            constexpr ${packet_variant.name}(const std::array<${type(packets).transfer_word_c_type()}, N>& bytes) :
+            constexpr ${packet_variant.name}(const std::array<${type(packet_store).transfer_word_c_type()}, N>& bytes) :
 <%
     start = 0
     valid_groups = packet_variant.valid_groups()
@@ -67,8 +67,8 @@ namespace ${packets.name} {
                     qualify = f"!cvm::bitmanip::index<{valid_index}>(_packet_gen_valid) ? 0 : "
 
                 %>\
-                ${field.name}(${qualify}cvm::bitmanip::array_slice<decltype(${field.name})>(bytes.data(), ${field.width + start - 1} + ${packets.enum_width()} - (${valids_offset or 0}), ${start} + ${packets.enum_width()} - (${valids_offset or 0})))${[",", ""][(i+1)//len(packet_variant.fields)]}
-<% start += field.width %>\
+                ${field.name}(${qualify}cvm::bitmanip::array_slice<decltype(${field.name})${[f",{field.width[-1]}", ""][len(field.width) == 1]}>(bytes.data(), ${field.total_width() + start - 1} + ${packet_store.enum_width()} - (${valids_offset or 0}), ${start} + ${packet_store.enum_width()} - (${valids_offset or 0})))${[",", ""][(i+1)//len(packet_variant.fields)]}
+<% start += field.total_width() %>\
             %endfor
                 {}
         };
@@ -78,6 +78,6 @@ namespace ${packets.name} {
 
 }
 
-% if any(packet_variant.context for packet in packets.packets for packet_variant in packet):
-extern "C" void ${packets.name}_finish();
+% if any(packet_variant.context for packet in packet_store.packets for packet_variant in packet):
+extern "C" void ${packet_store.name}_finish();
 % endif

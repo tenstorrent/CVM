@@ -18,26 +18,26 @@ class array_wrapper {
 };
 
 
-static void ${packets.name}_message(const ${type(packets).transfer_word_c_type()}* message, ${packets.name}::message_number message_number, std::size_t words) {
+static void ${packet_store.name}_message(const ${type(packet_store).transfer_word_c_type()}* message, ${packet_store.name}::message_number message_number, std::size_t words) {
 
-    // ${packets.name}::message_number message_number = ${packets.name}::message_number(cvm::bitmanip::array_slice<std::underlying_type<${packets.name}::message_number>::type>(message, ${packets.enum_width()-1}, 0));
+    // ${packet_store.name}::message_number message_number = ${packet_store.name}::message_number(cvm::bitmanip::array_slice<std::underlying_type<${packet_store.name}::message_number>::type>(message, ${packet_store.enum_width()-1}, 0));
 
     switch(message_number) {
-    %for packet in packets.packets:
+    %for packet in packet_store.packets:
     %for packet_variant in packet:
-        case ${packets.name}::${packet_variant.to_c_enum()}: {
+        case ${packet_store.name}::${packet_variant.to_c_enum()}: {
 <%
-    location_lsb = packets.enum_width()
+    location_lsb = packet_store.enum_width()
     for field in packet_variant.fields:
         if field.name == "location":
             break
-        location_lsb += field.width
+        location_lsb += field.total_width()
 %>\
-            const std::uint${type(packets).location_width()}_t loc(cvm::bitmanip::array_slice<std::uint${type(packets).location_width()}_t>(message, ${type(packets).location_width() + location_lsb - 1}, ${location_lsb}));
+            const std::uint${type(packet_store).location_width()}_t loc(cvm::bitmanip::array_slice<std::uint${type(packet_store).location_width()}_t>(message, ${type(packet_store).location_width() + location_lsb - 1}, ${location_lsb}));
             switch (words) {
-    % for words in packet_variant.valid_groups_words(packets.enum_width()):
+    % for words in packet_variant.valid_groups_words(packet_store.enum_width()):
                 case ${words}: {
-                    cvm::registry::messenger.signal_async<${packets.name}::${packet_variant.port}::${packet_variant.name}<${packet_variant.variant_id}>, std::array<${type(packets).transfer_word_c_type()}, ${words}>>(loc, array_wrapper<${words}, ${type(packets).transfer_word_c_type()}>(message), cvm::messenger::priority::${packet_variant.priority or packets.domains.get(packet_variant.domain, {}).get("priority", "lowest_priority")});
+                    cvm::registry::messenger.signal_async<${packet_store.name}::${packet_variant.port}::${packet_variant.name}<${packet_variant.variant_id}>, std::array<${type(packet_store).transfer_word_c_type()}, ${words}>>(loc, array_wrapper<${words}, ${type(packet_store).transfer_word_c_type()}>(message), cvm::messenger::priority::${packet_variant.priority or packet_store.domains.get(packet_variant.domain, {}).get("priority", "lowest_priority")});
                     break;
                 }
     %endfor
@@ -57,11 +57,11 @@ static void ${packets.name}_message(const ${type(packets).transfer_word_c_type()
     }
 }
 
-%for packet in packets.packets:
+%for packet in packet_store.packets:
 %for packet_variant in packet:
-% for words in packet_variant.valid_groups_words(packets.enum_width()):
-extern "C" void ${packets.name}_message_${packet_variant.port}_${packet_variant.name}_${packet_variant.variant_id}_words${words}(const ${type(packets).transfer_word_c_type()}* message) {
-    ${packets.name}_message(message, ${packets.name}::message_number::${packet_variant.to_c_enum()}, ${words});
+% for words in packet_variant.valid_groups_words(packet_store.enum_width()):
+extern "C" void ${packet_store.name}_message_${packet_variant.port}_${packet_variant.name}_${packet_variant.variant_id}_words${words}(const ${type(packet_store).transfer_word_c_type()}* message) {
+    ${packet_store.name}_message(message, ${packet_store.name}::message_number::${packet_variant.to_c_enum()}, ${words});
 }
 %endfor
 %endfor

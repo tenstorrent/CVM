@@ -12,6 +12,7 @@ from topology_query import Query
 import re
 import io
 from collections import OrderedDict, defaultdict
+from functools import reduce
 
 from mako.template import Template
 from mako.runtime import Context
@@ -20,23 +21,43 @@ from mako import exceptions
 @dataclass
 class Field:
     name: str
-    width: int
+    width: list[int, ...]
     qualify: str
 
     @classmethod
     def load(cls, name, values, variant = 0):
-        width = values.get('widths', [values.get('width')])[variant]
+        width = values.get('widths', values.get('width'))
+        if not isinstance(width, list):
+            width = [(width,)]
+        width = width[variant]
+        if isinstance(width, int):
+            width = [width]
         qualify = values.get('qualify')
         return cls(name, width, qualify)
 
     def get_c_type(self):
+        def get_word(w):
+            if w <= 8: return "std::uint8_t"
+            elif w <= 16: return "std::uint16_t"
+            elif w <= 32: return "std::uint32_t"
+            elif w <= 64: return "std::uint64_t"
+            return f"std::bitset<{w}>"
+
+        def get_type(w):
+            return get_word(w[0]) if len(w) == 1 else f"std::array<{get_type(w[1:])}, {w[0]}>"
 
         w = self.width
-        if w <= 8: return "std::uint8_t"
-        elif w <= 16: return "std::uint16_t"
-        elif w <= 32: return "std::uint32_t"
-        elif w <= 64: return "std::uint64_t"
-        return f"std::bitset<{w}>"
+        return get_type(w)
+
+    def get_sv_type(self):
+        def get_type(w):
+            return f"[{w[0] - 1}:0]" if len(w) == 1 else f"[{w[0] - 1}:0]{get_type(w[1:])}"
+
+        w = self.width
+        return f"logic {get_type(w)}"
+
+    def total_width(self):
+        return reduce(lambda w0, w1: w0*w1, self.width)
 
 
 @dataclass
@@ -57,7 +78,7 @@ class Packet:
         # packets always need topology location
         elaborated = []
         for i in range(num_variants):
-            p = [Field.load("location", {"width": Packets.location_width()})]
+            p = [Field.load("location", {"width": PacketStore.location_width()})]
             p += [Field.load(name, v, i) for name,v in values['fields'].items()]
             quals = len(set(field.qualify for field in p if field.qualify is not None))
             if quals:
@@ -82,8 +103,8 @@ class Packet:
                         raise Exception(f"Fields with the same qualify should be contiguous, field '{field.name}' with qualification '{field.qualify}' not contiguous from previous field with same qualification ending at bit {d[field.qualify][1]}")
                 else:
                     d[field.qualify] = [lsb, lsb-1]
-                d[field.qualify][1] += field.width
-            lsb += field.width
+                d[field.qualify][1] += field.total_width()
+            lsb += field.total_width()
         return d
 
     # This is the sweet spot on zebu ep1 fwc gen2
@@ -91,18 +112,18 @@ class Packet:
 
     def valid_groups_words(self, padding):
         valid_groups = self.valid_groups()
-        bits = set([sum(field.width for field in self.fields) + padding])
+        bits = set([sum(field.total_width() for field in self.fields) + padding])
         for lsb,msb in valid_groups.values():
             w = msb - lsb + 1
             bits |= set(s - w for s in bits)
 
         buckets = defaultdict(set)
 
-        bucket_size_words = (Packet.VALID_GROUP_BUCKET_SIZE_BYTES + Packets.transfer_word_bytes() - 1) // Packets.transfer_word_bytes()
-        bucket_size_bits  = bucket_size_words * Packets.transfer_word_bits()
+        bucket_size_words = (Packet.VALID_GROUP_BUCKET_SIZE_BYTES + PacketStore.transfer_word_bytes() - 1) // PacketStore.transfer_word_bytes()
+        bucket_size_bits  = bucket_size_words * PacketStore.transfer_word_bits()
 
         for n in bits:
-            buckets[(n + bucket_size_bits - 1)//(bucket_size_bits)].add((n + Packets.transfer_word_bits() - 1)//Packets.transfer_word_bits())
+            buckets[(n + bucket_size_bits - 1)//(bucket_size_bits)].add((n + PacketStore.transfer_word_bits() - 1)//PacketStore.transfer_word_bits())
 
         return OrderedDict(
             sorted(
@@ -113,7 +134,7 @@ class Packet:
 
 
 @dataclass
-class Packets:
+class PacketStore:
     name: str
     domains: dict[int, dict[str, str]] # only contains domains that have special attrs
     packets: list[list[Packet]]
@@ -205,14 +226,14 @@ class Packets:
 
 class PacketsGen:
 
-    def __init__(self, packets):
+    def __init__(self, packet_store):
 
         self.template_dir_path = pathlib.Path(os.path.abspath(__file__)).parent / 'templates'
-        self.packets = packets
+        self.packet_store = packet_store
 
     def gen(self, which, buf, **data):
 
-        ctx = Context(buf, packets=self.packets, **data)
+        ctx = Context(buf, packet_store=self.packet_store, **data)
         template = Template(filename = str(self.template_dir_path / ("template." + which)))
         try:
             template.render_context(ctx)
@@ -234,7 +255,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    p = Packets.load_file(args.name, args.definition, args.topology)
+    p = PacketStore.load_file(args.name, args.definition, args.topology)
     g = PacketsGen(p)
 
     for t in ['hpp', 'cpp', 'sv']:

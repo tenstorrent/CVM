@@ -138,3 +138,15 @@ A field in a packet can have a `qualify`. The field within the packet will only 
 For simple qualify terms, the name of the signal in the packet can be used. For more complex terms, a string can be passed, with `{data}` as the placeholder for the packet path.
 
 For now, fields using the same qualify should be contiguous. This requirement may be relaxed in the future if desired. However the output verilog will be more optimal if they are contiguous.
+
+### Examples
+
+```
+    fields:
+        dummy:
+            width: 1 # field with width of 1
+        dummy2:
+            width: [2, 32] # field with two variants of width 2 and 32. If this is used, all fields within a packet need the same amount of variants.
+        dummy3:
+            width: [[2, 2, 4]] # multi-dimensional field of 2x2, each with width of 4. This can be mixed with variants.
+```

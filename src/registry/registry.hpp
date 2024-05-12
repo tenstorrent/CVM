@@ -36,6 +36,11 @@ namespace cvm {
         return destructs_;
       }
 
+      static auto& shutdown_readys() {
+        static std::vector<std::function<bool()>> sr_;
+        return sr_;
+      }
+
       static auto& registered() {
         static std::unordered_set<std::string> registered_;
         return registered_;
@@ -104,6 +109,15 @@ namespace cvm {
           checks().push_back([&] () { for (auto& t : objs_) t.check(); });
         }
 
+        if constexpr (requires(T& t) {{ t.shutdown_ready() } -> std::same_as<bool>;}) {
+          shutdown_readys().push_back([&] () -> bool {
+              bool ready = true;
+              for (auto& t : objs_)
+                ready = ready and t.shutdown_ready();
+              return ready;
+            });
+        }
+
         destructors().push_back([&] () { return objs_.clear(); });
         registered().emplace(typeid(T).name());
         return true;
@@ -132,6 +146,14 @@ namespace cvm {
       }
 
       static bool shutdown() {
+        // handshake with each registry component first
+        bool ready = true;
+        for (const auto& shutdown_ready : shutdown_readys())
+          ready = ready and shutdown_ready();
+
+        if (not ready)
+          return false;
+
         // messenger.clear() needs to be called before callbacks.clear()
         // messenger may cause new callbacks to be pushed
         // callbacks shouldn't have an (immediate) effect on messenger

@@ -146,7 +146,13 @@ For now, fields using the same qualify should be contiguous. This requirement ma
         dummy:
             width: 1 # field with width of 1
         dummy2:
-            width: [2, 32] # field with two variants of width 2 and 32. If this is used, all fields within a packet need the same amount of variants.
+            width: [2, 32] # field with two variants of width 2 and 32. If this is used, all fields within a packet need the same amount of variants. Useful for parameterizing packets.
         dummy3:
-            width: [[2, 2, 4]] # multi-dimensional field of 2x2, each with width of 4. This can be mixed with variants.
+            width: [[2, 2, 4]] # multi-dimensional field of 2x2, each with width of 4. This can be mixed with variants. 
 ```
+
+## FAQ
+
++ Why can't I call coroutines (`task<T>`) from normal functions?
+
+This is due to function coloring. There's an article about this here https://journal.stuffwithstuff.com/2015/02/01/what-color-is-your-function/. If you really want to do this, check out the `fork` function.

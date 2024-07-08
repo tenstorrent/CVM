@@ -147,6 +147,7 @@ class PacketStore:
     domains: dict[int, dict[str, str]] # only contains domains that have special attrs
     packets: list[list[Packet]]
     ports: dict[str, list[int]]
+    max_byte_transfer: int # beyond this the transfer is chunked up
 
     @classmethod
     def load_file(cls, name, filename, topology):
@@ -156,6 +157,7 @@ class PacketStore:
         packets = []
         ports = dict()
         domains = dict()
+        max_byte_transfer = cls.transfer_word_bytes() * (sys.maxsize//cls.transfer_word_bytes())
 
         rendered = io.StringIO()
         ctx = Context(rendered, **{k: getattr(hierarchy, k) for k in dir(hierarchy) if not k.startswith('__')})
@@ -171,6 +173,8 @@ class PacketStore:
                 f = port[2:]
                 if f == "domains":
                     domains = values
+                elif f == "max_byte_transfer":
+                    max_byte_transfer = values
                 else:
                     raise Exception(f"Unrecognized key {port}. Names starting with '__' are not recognized as ports")
                 continue
@@ -189,7 +193,7 @@ class PacketStore:
                     p = Packet.load(packet_name, packet_values, port)
                     assert len(p) == len(ports[port]) and "Must specify same number of widths among all packets in a port"
                     packets.append(p)
-        return cls(name, domains, packets, ports)
+        return cls(name, domains, packets, ports, max_byte_transfer)
 
     def clog2(self, num):
 
@@ -209,6 +213,18 @@ class PacketStore:
         if c == 0:
             c = 1
         return c
+
+    def chunk_transfer(self, words):
+        w = 0
+        chunks = []
+        max_word_transfer = self.max_byte_transfer // self.transfer_word_bytes()
+        if self.max_byte_transfer % self.transfer_word_bytes():
+            raise Exception(f"max_byte_transfer ({self.max_byte_transfer}) not a multiple of transfer_word_bytes {self.transfer_word_bytes()}")
+        while w != words:
+            chunk = min(words - w, max_word_transfer)
+            chunks.append(chunk)
+            w += chunk
+        return chunks
 
     @staticmethod
     # FIXME compress this

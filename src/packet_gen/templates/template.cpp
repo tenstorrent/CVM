@@ -60,9 +60,46 @@ static void ${packet_store.name}_message(const ${type(packet_store).transfer_wor
 %for packet in packet_store.packets:
 %for packet_variant in packet:
 % for words in packet_variant.valid_groups_words(packet_store.enum_width()):
-extern "C" void ${packet_store.name}_message_${packet_variant.port}_${packet_variant.name}_${packet_variant.variant_id}_words${words}(const ${type(packet_store).transfer_word_c_type()}* message) {
-    ${packet_store.name}_message(message, ${packet_store.name}::message_number::${packet_variant.to_c_enum()}, ${words});
+<%
+    chunks = packet_store.chunk_transfer(words)
+    chunky = len(chunks) > 1
+    suff   = f"{packet_store.name}_message_{packet_variant.port}_{packet_variant.name}_{packet_variant.variant_id}_words{words}"
+%>\
+% if chunky:
+static void(*${suff}_prev_dpi)(const ${type(packet_store).transfer_word_c_type()}*);
+% endif
+% for i,chunk in enumerate(chunks):
+<%
+    last = i == len(chunks) - 1
+    name = f"{suff}{['', '_chunk' + str(i)][int(chunky)]}"
+%>\
+% if chunky and not last:
+static std::array<${type(packet_store).transfer_word_c_type()}, ${chunk}> ${name}_save;
+% endif
+extern "C" void ${name}(const ${type(packet_store).transfer_word_c_type()} message[${chunk}]) {
+% if not last:
+    std::copy(message, message + ${chunk}, std::begin(${name}_save));
+% else:
+    % if chunky:
+    std::array<${type(packet_store).transfer_word_c_type()}, ${words}> m;
+        % for j in range(i):
+    std::copy(std::begin(${suff}_chunk${j}_save), std::end(${suff}_chunk${j}_save), std::begin(m) + ${sum(chunks[:j])});
+        % endfor
+    std::copy(message, message + ${chunk}, std::begin(m) + ${sum(chunks[:-1])});
+    const auto* msg = m.data();
+    % else:
+    const auto* msg = message;
+    % endif
+    ${packet_store.name}_message(msg, ${packet_store.name}::message_number::${packet_variant.to_c_enum()}, ${words});
+% endif
+% if chunky:
+    % if i > 0:
+    assert(${suff}_prev_dpi == ${suff}_chunk${i-1});
+    % endif
+    ${suff}_prev_dpi = ${name};
+% endif
 }
+%endfor
 %endfor
 %endfor
 %endfor

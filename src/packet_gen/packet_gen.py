@@ -87,7 +87,7 @@ class Packet:
             elaborated.append(p)
 
         domain = values.get("domain", None)
-        if isinstance(domain, int):
+        if isinstance(domain, int) or domain is None:
             all_domains = [domain]
         else:
             all_domains = domain

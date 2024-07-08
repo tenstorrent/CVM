@@ -3,6 +3,7 @@ load("//:defs.bzl", "topology_gen")
 load("@rules_hdl//verilog:providers.bzl", "verilog_library")
 load("@rules_hdl//verilog:build_defs.bzl", "verilog_flist")
 load("@rules_verilator//verilator:defs.bzl", "verilator_cc_library")
+load("//test:test.bzl", "linkopts")
 #load("@rules_vcs//vcs:defs.bzl", "vcs_simv")
 
 topology_gen(
@@ -95,6 +96,7 @@ cc_binary(
         ":top_veri_lib",
         "@com_google_googletest//:gtest_main",
     ],
+    linkopts = linkopts,
 )
 
 smoke_tests = []

@@ -68,7 +68,10 @@ module ${packet_store.name}_domain_${domain}(
 
 %for packet in domain_packets:
     % for words in packet.valid_groups_words(packet_store.enum_width()):
-    import "DPI-C" ${"context" if packet.context else ""} function void ${packet_store.name}_message_${packet.port}_${packet.name}_${packet.variant_id}_words${words}(${type(packet_store).transfer_word_sv_type()} message[${words}]);
+        <% chunks = packet_store.chunk_transfer(words) %>\
+        % for i,chunk in enumerate(chunks):
+import "DPI-C" ${"context" if packet.context else ""} function void ${packet_store.name}_message_${packet.port}_${packet.name}_${packet.variant_id}_words${words}${[f"_chunk{i}",""][int(len(chunks)==1)]}(${type(packet_store).transfer_word_sv_type()} message[${chunk}]);
+        % endfor
     % endfor
 %endfor
 
@@ -123,12 +126,19 @@ module ${packet_store.name}_domain_${domain}(
             % for words in packet.valid_groups_words(packet_store.enum_width()):
                 [${prefix}_WW'(${prev+1}):${prefix}_WW'(${words})]: begin // Need to limit the number of lines with DPI calls otherwise zebu blows up FWC resources. Even if only one of them is guaranteed to be called at a time.
                     //automatic ${type(packet_store).transfer_word_sv_type()} ${prefix}_unpacked[${words}];
+<% chunks = packet_store.chunk_transfer(words) %>\
+                    % for i,chunk in enumerate(chunks):
+                        automatic ${packet_store.transfer_word_sv_type()} temp${i}[${chunk}]; // need temp to workaround verilator internal error
+                    %endfor
                     for (int i = 0; i < ${words}; i++) begin // zebu can't handle using words_to_transfer as the loop bound, it can't unroll it
                         if (i < ${prefix}_words_to_transfer) begin
                             ${prefix}_${words}_unpacked[i] = ${type(packet_store).transfer_word_bits()}'(${prefix}_pkt >> (${type(packet_store).transfer_word_bits()}*i));
                         end
                     end
-                    ${packet_store.name}_message_${packet.port}_${packet.name}_${packet.variant_id}_words${words}(${prefix}_${words}_unpacked);
+                    % for i,chunk in enumerate(chunks):
+                        temp${i} = ${prefix}_${words}_unpacked[${sum(chunks[:i])} : ${sum(chunks[:i]) + chunk - 1}];
+                        ${packet_store.name}_message_${packet.port}_${packet.name}_${packet.variant_id}_words${words}${[f"_chunk{i}",""][int(len(chunks)==1)]}(temp${i});
+                    % endfor
                 end
 <% prev = words %>
             % endfor

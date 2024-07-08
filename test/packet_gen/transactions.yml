@@ -46,7 +46,7 @@ dut:
 dut2:
   num: [2, 1]
   pkt2:
-      domain: 1
+      domain: [1, 1]
       fields:
           dummy2:
             widths: [2, 32]

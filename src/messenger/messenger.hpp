@@ -272,14 +272,13 @@ namespace cvm {
                               cvm::topology::loc_t loc;
 
                               T t;
-                              size_t id;
 
                               bool await_ready() noexcept { return false; };
                               void await_suspend(std::coroutine_handle<> awaiting) noexcept { self.moments_[loc].emplace_back(&t, awaiting); };
                               T await_resume() noexcept { return t; };
                           };
 
-                          co_return co_await awaiter{*this, loc};
+                          co_return co_await awaiter{*this, loc, T{}};
                       }
 
                       // messenger managed channel

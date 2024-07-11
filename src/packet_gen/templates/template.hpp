@@ -40,6 +40,7 @@ namespace ${packet_store.name} {
         % for i,field in enumerate(packet_variant.fields):
             ${field.get_c_type()} ${field.name};
         %endfor
+            ${packet_variant.name}() = default;
             constexpr ${packet_variant.name}(
                 % for i,field in enumerate(packet_variant.fields):
                 const ${field.get_c_type()}& ${field.name}${[",", ""][(i+1)//len(packet_variant.fields)]}

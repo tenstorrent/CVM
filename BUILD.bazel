@@ -66,6 +66,12 @@ cc_library(
     visibility = ["//visibility:public"],
 )
 
+verilog_library(
+    name = "random_sv",
+    deps = ["//src/random:random_sv"],
+    visibility = ["//visibility:public"],
+)
+
 cc_library(
     name = "type_traits",
     deps = ["//src/type_traits:type_traits"],

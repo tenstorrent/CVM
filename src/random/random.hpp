@@ -1,3 +1,5 @@
+#pragma once
+
 #include <random>
 #include <limits>
 
@@ -14,6 +16,27 @@ namespace cvm {
             T operator()() {
                 return distrib(gen);
             }
+        };
+
+        struct lcg {
+
+
+          template <typename T>
+          static T generate() {
+              state = (a*state + c) % m;
+              return state;
+          }
+
+          template <typename T>
+          static T generate(T max) {
+              return generate<T>()%max;
+          }
+
+          // magic numbers from glibc
+          static inline uint64_t state = 1;
+          static const uint64_t m = 1 << 31;
+          static const uint64_t a = 1103515245;
+          static const uint64_t c = 12345;
         };
 
         void seed(uint64_t seed);

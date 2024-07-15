@@ -252,13 +252,17 @@ namespace cvm {
 
 
                           // resume awaiting tasks and listeners
+                          // We don't distinguish between lifetimes of "forked" tasks and normal invoked tasks. In the case of
+                          // normal invoked tasks, their coroutine state could have been destroyed after resuming (task object
+                          // was destructed). Therefore, we can't query whether it's done. This is largely inconsequential other than
+                          // for messenger-managed lifetimes for fork tasks (tasks_). So, how do we know when we should clean up those tasks?
+                          // One option would be to have it remove itself once it's determined to have finished by adding a wrapper around
+                          // the user coroutine (potentially slow). The other would be to just randomly sample that a task is done every time a run occurs.
+                          // Then, we initiate a cleanup on all the tasks for the ones that are finished.
                           bool clean = handles.size() > 0;
                           std::for_each(handles.begin(), handles.end(),
                               [] (const auto& handle) {
                                   handle.resume();
-                                  // FIXME: this is called after the handle is already destroyed
-                                  /* if (handle.done()) */
-                                  /*   clean = true; */
                               });
 
                           auto& connected = long_runnings_[loc];

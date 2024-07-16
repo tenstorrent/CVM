@@ -133,7 +133,7 @@ namespace cvm {
                                   std::coroutine_handle<> await_suspend(std::coroutine_handle<>) noexcept {
                                       return (self.awaiting_) ? self.awaiting_ : std::noop_coroutine();
                                   }
-                                  void await_resume() noexcept { coro_.destroy(); coro_ = nullptr; }
+                                  void await_resume() noexcept { }
                               };
 
                               return awaiter{*this};
@@ -162,7 +162,7 @@ namespace cvm {
                                   coro_.promise().awaiting_ = awaiting;
                                   return coro_;
                               }
-                              void await_resume() noexcept {  };
+                              void await_resume() noexcept { coro_.destroy(); coro_ = nullptr; };
                           };
                           return awaiter{this->coro_};
                       }

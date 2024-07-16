@@ -19,7 +19,9 @@
 #include "cvm/topology.hpp"
 #include "cvm/type_traits.hpp"
 #include "cvm/logger.hpp"
+#include "cvm/random.hpp"
 #include <type_traits>
+
 
 DECLARE_bool(signal_async);
 
@@ -90,7 +92,8 @@ namespace cvm {
                       task(task&& other) noexcept : coro_(std::exchange(other.coro_, nullptr)) {}
                       task& operator=(task&& other) noexcept {
                           if (std::addressof(other) != this) {
-                              if (coro_) coro_.destroy();
+                              if (coro_)
+                                coro_.destroy();
                               coro_ = other.coro_;
                               other.coro_ = nullptr;
                           }
@@ -101,7 +104,7 @@ namespace cvm {
                       task(const task&) = delete;
                       task& operator=(const task&) = delete;
 
-                      ~task() { if (coro_) coro_.destroy(); }
+                      ~task() { if (coro_) { coro_.destroy(); coro_ = nullptr; } }
 
                       bool done() const { if (coro_) return coro_.done(); else return true; }
                       void resume() { if(coro_) coro_.resume(); }
@@ -159,7 +162,7 @@ namespace cvm {
                                   coro_.promise().awaiting_ = awaiting;
                                   return coro_;
                               }
-                              void await_resume() noexcept { coro_.destroy(); coro_ = nullptr; };
+                              void await_resume() noexcept {  };
                           };
                           return awaiter{this->coro_};
                       }
@@ -169,7 +172,8 @@ namespace cvm {
                       task(task&& other) noexcept : coro_(std::exchange(other.coro_, nullptr)) {}
                       task& operator=(task&& other) noexcept {
                           if (std::addressof(other) != this) {
-                              if (coro_) coro_.destroy();
+                              if (coro_)
+                                coro_.destroy();
                               coro_ = other.coro_;
                               other.coro_ = nullptr;
                           }
@@ -180,7 +184,7 @@ namespace cvm {
                       task(const task&) = delete;
                       task& operator=(const task&) = delete;
 
-                      ~task() { if (coro_) coro_.destroy(); }
+                      ~task() { if (coro_) {coro_.destroy(); coro_ = nullptr;} }
 
                       bool done() const { if (coro_) return coro_.done(); else return true; }
                       void resume() { if(coro_) coro_.resume(); }
@@ -248,11 +252,17 @@ namespace cvm {
 
 
                           // resume awaiting tasks and listeners
-                          bool clean = false;
+                          // We don't distinguish between lifetimes of "forked" tasks and normal invoked tasks. In the case of
+                          // normal invoked tasks, their coroutine state could have been destroyed after resuming (task object
+                          // was destructed). Therefore, we can't query whether it's done. This is largely inconsequential other than
+                          // for messenger-managed lifetimes for fork tasks (tasks_). So, how do we know when we should clean up those tasks?
+                          // One option would be to have it remove itself once it's determined to have finished by adding a wrapper around
+                          // the user coroutine (potentially slow). The other would be to just randomly sample that a task is done every time a run occurs.
+                          // Then, we initiate a cleanup on all the tasks for the ones that are finished.
+                          bool clean = handles.size() > 0;
                           std::for_each(handles.begin(), handles.end(),
-                              [&clean] (const auto& handle) {
+                              [] (const auto& handle) {
                                   handle.resume();
-                                  clean |= handle.done();
                               });
 
                           auto& connected = long_runnings_[loc];
@@ -372,6 +382,8 @@ namespace cvm {
               requires std::invocable<U, Args...>
               void fork(U l, Args&&... args) {
                   auto forked = (*l)(std::forward<Args>(args)...);
+                  // Potential fix is to have forked remove itself from
+                  // tasks upon completion.
                   forked.resume();
                   if (!forked.done()) {
                       std::lock_guard<std::mutex> guard(tasks_mutex_);
@@ -513,8 +525,14 @@ namespace cvm {
 
               void clean_tasks() {
                   std::lock_guard<std::mutex> guard(tasks_mutex_);
-                  tasks_.erase(std::remove_if(tasks_.begin(), tasks_.end(),
-                              [] (const auto& handler) { return handler.done(); }), tasks_.end());
+                  if (tasks_.size() > 0)
+                    {
+                      // To prevent HOL blocking, we sample a random index.
+                      unsigned ix = cvm::rand::lcg::generate(tasks_.size());
+                      if (tasks_.at(ix).done())
+                        tasks_.erase(std::remove_if(tasks_.begin(), tasks_.end(),
+                                    [] (const auto& handler) { return handler.done(); }), tasks_.end());
+                    }
               }
 
               std::vector<task<void>> tasks_;

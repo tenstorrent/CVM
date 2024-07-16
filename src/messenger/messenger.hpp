@@ -527,6 +527,7 @@ namespace cvm {
                   std::lock_guard<std::mutex> guard(tasks_mutex_);
                   if (tasks_.size() > 0)
                     {
+                      // To prevent HOL blocking, we sample a random index.
                       unsigned ix = cvm::rand::lcg::generate(tasks_.size());
                       if (tasks_.at(ix).done())
                         tasks_.erase(std::remove_if(tasks_.begin(), tasks_.end(),

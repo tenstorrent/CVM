@@ -1,11 +1,11 @@
 #include "cvm/messenger.hpp"
-#include <chrono>
 
 using namespace std::chrono_literals;
 
 DEFINE_bool(signal_async, false, "cvm::messenger signals serviced by another thread. This is for DPI calls that we make non-streaming for low-latency, but which could stall the emulator while being serviced");
 DEFINE_bool(signal_flush_switch_enable, true, "cvm::messenger switch immediately from low priority queue to high priority queue. Causes starvation");
 DEFINE_uint64(signal_lower_priority_timeout_ns, 10000000, "Time in nanoseconds to spend servicing a lower priority queue before switching back to checking the high priority queue");
+DEFINE_uint64(signal_transaction_timeout_ns, 100000000, "transaction in queue becomes critical at this point");
 
 void cvm::messenger::flush() {
 
@@ -16,6 +16,7 @@ void cvm::messenger::flush() {
     bool saw_quit = false;
 
     const std::chrono::nanoseconds signal_lower_priority_timeout{FLAGS_signal_lower_priority_timeout_ns};
+    const std::chrono::nanoseconds signal_transaction_timeout   {FLAGS_signal_transaction_timeout_ns   };
 
     while (1) {
         for (int prio = highest_priority; prio >= lowest_priority; prio--) {
@@ -38,18 +39,17 @@ void cvm::messenger::flush() {
             auto start = std::chrono::steady_clock::now();
 
             for(; iterators[prio] != q[prio].end(); iterators[prio]++) {
-                auto& [idx, f] = *iterators[prio];
+                auto& [idx, enqueue_time, f] = *iterators[prio];
+                if (iterators[prio] != q[prio].begin() && FLAGS_signal_flush_switch_enable && FLAGS_signal_async && prio != highest_priority && !quit_.test()) {
+                    auto now = std::chrono::steady_clock::now();
+                    if ((now - start) > signal_lower_priority_timeout && (now - enqueue_time) < signal_transaction_timeout) {
+                        switching = true;
+                        break;
+                    }
+                }
                 if(f(idx, *this, s[prio])) {
                     // not necessary all the time - need to use a GC?
                     clean_tasks();
-                }
-                if (FLAGS_signal_flush_switch_enable && FLAGS_signal_async && prio != highest_priority && !quit_.test()) {
-                    auto now = std::chrono::steady_clock::now();
-                    if ((now - start) > signal_lower_priority_timeout) {
-                        switching = true;
-                        iterators[prio]++;
-                        break;
-                    }
                 }
             }
             if (iterators[prio] == q[prio].end()) {

@@ -10,12 +10,16 @@ namespace cvm {
         template<typename T, T LO = std::numeric_limits<T>::min(), T HI = std::numeric_limits<T>::max()>
         struct rng {
             static_assert(std::is_integral_v<T>, "T must be an integral type for uniform_int_distribution");
+            using result_type = unsigned int;
             std::mt19937 gen;
             std::uniform_int_distribution<T> distrib;
             rng() : distrib(LO, HI) {}
-            T operator()() {
+            result_type operator()() {
                 return distrib(gen);
             }
+
+            static constexpr result_type min() { return LO; }
+            static constexpr result_type max() { return HI; }
         };
 
         struct lcg {

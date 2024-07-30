@@ -15,6 +15,7 @@
 #include <condition_variable>
 #include <ranges>
 #include <any>
+#include <chrono>
 #include <gflags/gflags.h>
 #include "cvm/topology.hpp"
 #include "cvm/type_traits.hpp"
@@ -443,7 +444,7 @@ namespace cvm {
                           }
                           storage_t& storage = std::any_cast<storage_t&>(sit->second);
 
-                          signal_queue_[prio].emplace_back(std::move(storage.size()), std::move(f));
+                          signal_queue_[prio].emplace_back(std::move(storage.size()), std::chrono::steady_clock::now(), std::move(f));
                           storage.emplace_back(std::move(loc), std::move(m));
                       }
                       signal_queue_updated_.test_and_set();
@@ -543,7 +544,7 @@ namespace cvm {
               std::mutex signal_mutex_;
               std::thread signal_thread_;
               std::array<std::unordered_map<std::type_index, std::any>, num_priority> signal_storage_;
-              std::array<std::vector<std::pair<std::size_t, std::function<bool(std::size_t, messenger&, decltype(signal_storage_[0])&)>>>, num_priority> signal_queue_;
+              std::array<std::vector<std::tuple<std::size_t, decltype(std::chrono::steady_clock::now()), std::function<bool(std::size_t, messenger&, decltype(signal_storage_[0])&)>>>, num_priority> signal_queue_;
               std::atomic_flag quit_ = ATOMIC_FLAG_INIT;
               std::atomic_flag signal_queue_updated_ = ATOMIC_FLAG_INIT;
       };

@@ -131,10 +131,3 @@ namespace cvm {
     }
   }
 }
-
-extern "C" {
-
-    uint32_t cvm_topology_get_location(uint32_t hierarchy, uint32_t id) {
-        return cvm::topology::get(hierarchy, id);
-    }
-}

@@ -17,10 +17,9 @@ cc_library(
 )
 
 verilog_library(
-  name = "topology_defines",
+  name = "cvm_topology",
   srcs = [
-      "topology_defines.sv",
-      "cvm_topology.sv"
+      "cvm_topology.sv",
   ],
   visibility = ["//:__pkg__"],
 )

@@ -50,7 +50,7 @@ cc_library(
 
 verilog_library(
     name = "topology_sv",
-    deps = ["//src/topology:topology_defines"],
+    deps = ["//src/topology:cvm_topology"],
     visibility = ["//visibility:public"],
 )
 

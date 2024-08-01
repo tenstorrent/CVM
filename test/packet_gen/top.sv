@@ -9,12 +9,7 @@ module dut #(
     logic [31:0] count;
     always @(posedge clk) count <= rst ? '0 : (count + 1);
 
-    int unsigned loc = cvm_topology::nil;
-    always @(posedge clk) begin
-        if (rst) begin
-            loc = cvm_topology::get_location(topology_pkg::mods.TOP.CLUSTER.CORE.ID, 0);
-        end
-    end
+    parameter int unsigned loc = cvm_topology_gen::get_location (cvm_topology_gen::mods.TOP.CLUSTER.CORE.ID, 0);
 
     for (genvar i = 0; i < 8; i++) begin
         always @(posedge clk) begin
@@ -56,12 +51,7 @@ module dut2 #(
     `TRANSACTIONS_DUT2_OUTPUT_PORTS
 );
 
-    int unsigned loc = cvm_topology::nil;
-    always@ (posedge clk) begin
-        if (rst) begin
-            loc = cvm_topology::get_location(topology_pkg::mods.TOP.CLUSTER.CORE.ID, 0);
-        end
-    end
+    parameter int unsigned loc = cvm_topology_gen::get_location (cvm_topology_gen::mods.TOP.CLUSTER.CORE.ID, 0);
 
     assign pkt2s[0].valid             = loc != cvm_topology::nil;
     assign pkt2s[0].data.location     = loc;

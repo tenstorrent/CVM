@@ -87,6 +87,9 @@ def topology_gen(name, visibility = None, cc_attrs = {}, **kwargs):
   verilog_library(
       name = name + '_sv',
       srcs = [sv],
+      deps = [
+        "@cvm//:topology_sv"
+      ],
   )
 
   native.filegroup(

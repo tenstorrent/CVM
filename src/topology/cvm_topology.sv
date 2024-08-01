@@ -1,6 +1,22 @@
 package cvm_topology;
 
-    localparam int unsigned nil = '0;
-    import "DPI-C" cvm_topology_get_location = function int unsigned get_location(int unsigned mod, int unsigned id);
+  localparam int unsigned nil = '0;
+
+  // VCS doesn't like this
+  // let get_location (mod, num) = num < mod.TOTAL ? mod.ID + num : nil;
+
+  // class location #(type T);
+  //  static function int unsigned get (T mod, int unsigned num);
+  //    return num < mod.TOTAL ? mod.ID + num : nil;
+  //  endfunction
+  // endclass
+
+`define TOPOLOGY                                     \
+    parameter type TOPOLOGY          =     int,      \
+    parameter TOPOLOGY topology      =       0
+
+`define TOPOLOGY_CFG                                 \
+    .TOPOLOGY(TOPOLOGY),                             \
+    .topology(topology)
 
 endpackage

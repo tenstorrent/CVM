@@ -1,4 +1,4 @@
-package topology_pkg;
+package cvm_topology_gen;
 
 <%
   reversed_locations = topo.locations[::-1]
@@ -45,5 +45,16 @@ package topology_pkg;
 </%def>\
     TOP:${recurse(topo.location("top"))}
   };
+
+  function int unsigned get_location (int unsigned path_id, int unsigned num);
+%for location in reversed_locations:
+    if ((${location.path_id} == path_id) && (num < ${len(location.instances)})) begin
+      return path_id + num;
+    end
+%endfor
+    else begin
+      return cvm_topology::nil;
+    end
+  endfunction
 
 endpackage

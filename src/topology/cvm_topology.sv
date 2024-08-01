@@ -11,6 +11,10 @@ package cvm_topology;
   //  endfunction
   // endclass
 
+  function int unsigned get_location_deprecated (int unsigned path_id, int unsigned num);
+    return path_id + num;
+  endfunction
+
 `define TOPOLOGY                                     \
     parameter type TOPOLOGY          =     int,      \
     parameter TOPOLOGY topology      =       0

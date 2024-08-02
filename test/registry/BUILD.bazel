@@ -2,6 +2,7 @@ load("@rules_hdl//verilog:providers.bzl", "verilog_library")
 load("@rules_hdl//verilog:build_defs.bzl", "verilog_flist")
 load("@rules_verilator//verilator:defs.bzl", "verilator_cc_library")
 load("//:defs.bzl", "topology_gen")
+load("//test:test.bzl", "linkopts")
 
 topology_gen(
     name = "topology",
@@ -43,7 +44,7 @@ cc_binary(
       "top_veri_lib",
       "topology_cc",
     ],
-    linkopts = ["-lz"],
+    linkopts = linkopts,
 )
 
 sh_test(

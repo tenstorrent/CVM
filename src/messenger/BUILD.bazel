@@ -6,6 +6,7 @@ cc_library(
         "//:topology",
         "//:logger",
         "//:type_traits",
+        "//:random",
         "@com_github_gflags_gflags//:gflags",
     ],
     strip_include_prefix = "//src/messenger",

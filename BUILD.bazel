@@ -50,7 +50,7 @@ cc_library(
 
 verilog_library(
     name = "topology_sv",
-    deps = ["//src/topology:topology_defines"],
+    deps = ["//src/topology:cvm_topology"],
     visibility = ["//visibility:public"],
 )
 
@@ -63,6 +63,12 @@ cc_library(
 cc_library(
     name = "random",
     deps = ["//src/random:random"],
+    visibility = ["//visibility:public"],
+)
+
+verilog_library(
+    name = "random_sv",
+    deps = ["//src/random:random_sv"],
     visibility = ["//visibility:public"],
 )
 

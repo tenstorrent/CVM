@@ -17,6 +17,7 @@ from mako import exceptions
 @dataclass
 class Instance:
   instance_id: int
+  # each instance has a unique ID
   loc: int
 
 @dataclass
@@ -31,10 +32,13 @@ class Attribute:
 class Location:
   name: str
   types: list[str]
+  # each "path" has a unique ID
   path_id: int
   path: str
   children: list[str]
+  # represents number of instances at this node.
   shard: int
+  # >> shared. This represents the total number represented including parent nodes.
   instances: list[Instance]
   attributes: list()
 
@@ -64,12 +68,13 @@ class Topology:
     for node in LevelOrderIter(root, filter_=lambda n: n.name not in ('top')):
       instances = list()
 
-      # continuously increasing id's across instances, fix later?
+      # continuously increasing id's across instances,
+      path_id = loc_id + 1
+      assert node.count != 0 and f"Node {node.name} specified with count of 0"
       for i in range(0, node.count):
         loc_id += 1
         instances.append(Instance(i, loc_id))
 
-      path_id += 1
       path = "TOP"
       walk = list(list(w.walk(root, node))[2])
       for parent in walk:

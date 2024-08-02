@@ -1,6 +1,7 @@
 load("@rules_hdl//verilog:providers.bzl", "verilog_library")
 load("@rules_hdl//verilog:build_defs.bzl", "verilog_flist")
 load("@rules_verilator//verilator:defs.bzl", "verilator_cc_library")
+load("//test:test.bzl", "linkopts")
 
 verilog_library(
     name = "logger_test_sv",
@@ -31,6 +32,6 @@ cc_test(
         ":logger_test_veri_lib",
         "@com_google_googletest//:gtest_main",
     ],
-    linkopts = ["-lz"],
+    linkopts = linkopts,
 )
 

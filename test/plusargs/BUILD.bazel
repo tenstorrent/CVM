@@ -1,6 +1,7 @@
 load("@rules_hdl//verilog:providers.bzl", "verilog_library")
 load("@rules_hdl//verilog:build_defs.bzl", "verilog_flist")
 load("@rules_verilator//verilator:defs.bzl", "verilator_cc_library")
+load("//test:test.bzl", "linkopts")
 
 verilog_library(
     name = "plusargs_test_sv",
@@ -28,7 +29,7 @@ cc_binary(
         "//:plusargs",
         ":plusargs_test_veri_lib",
     ],
-    linkopts = ["-lz"],
+    linkopts = linkopts,
 )
 
 sh_test(

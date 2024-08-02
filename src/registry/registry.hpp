@@ -8,6 +8,7 @@
 #include "cvm/messenger.hpp"
 #include "cvm/callbacks.hpp"
 #include "cvm/topology.hpp"
+#include "cvm/rpc.hpp"
 
 namespace cvm {
 
@@ -57,6 +58,7 @@ namespace cvm {
       inline static int all = -1;
       inline static messenger messenger;
       inline static callbacks callbacks;
+      inline static rpc rpc; 
 
       // register classes during static init
       template<typename T, bool A, typename... Args>
@@ -128,9 +130,11 @@ namespace cvm {
         // eg, if emulation has a DPI that's called after shutdown but before build
         messenger.clear();
         callbacks.clear();
+        rpc.clear();
 
         messenger.build();
         callbacks.build();
+        rpc.build();
         for (const auto& construct : constructors())
           construct();
       }
@@ -153,6 +157,8 @@ namespace cvm {
 
         if (not ready)
           return false;
+
+        rpc.clear();
 
         // messenger.clear() needs to be called before callbacks.clear()
         // messenger may cause new callbacks to be pushed

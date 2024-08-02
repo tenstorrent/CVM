@@ -1,0 +1,13 @@
+load("@rules_verilator//verilator/internal:versions.bzl", verilator_version = "DEFAULT_VERSION")
+
+cc_test(
+    name = "rpc_test",
+    size = "small",
+    srcs = ["rpc.cpp"],
+    deps = [
+        "//:remote_procedure_call",
+        "@com_google_googletest//:gtest_main",
+        "@verilator_v{}//:libverilator".format(verilator_version),
+    ],
+    linkopts = ["-lz"],
+)

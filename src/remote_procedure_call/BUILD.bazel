@@ -1,0 +1,10 @@
+cc_library(
+    name = "remote_procedure_call",
+    deps = [
+        "//:topology",
+    ],
+    srcs = ["rpc.cpp"],
+    hdrs = ["rpc.hpp"],
+    include_prefix = "cvm",
+    visibility = ["//visibility:public"],
+)

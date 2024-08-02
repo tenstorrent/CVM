@@ -2,24 +2,103 @@
 
 #include <random>
 #include <limits>
+#include <string>
+#include <utility>
+#include <sstream>
+#include <iostream>
+#include <cassert>
 
 namespace cvm {
 
     namespace rand {
 
-        template<typename T, T LO = std::numeric_limits<T>::min(), T HI = std::numeric_limits<T>::max()>
-        struct rng {
+        // Declarations
+        extern std::mt19937 gen;
+
+        void seed(uint64_t seed);
+
+        template<typename T>
+        T get(std::string flag);
+
+        template<typename T, typename Distribution>
+        struct dist;
+
+        // Helper type aliases for easier use
+        template<typename T>
+        using uniform_dist = dist<T, std::uniform_int_distribution<T>>;
+
+        template<typename T>
+        using discrete_dist = dist<T, std::discrete_distribution<T>>;
+
+        // Specialization for uniform distribution
+        template<typename T>
+        struct dist<T, std::uniform_int_distribution<T>> {
             static_assert(std::is_integral_v<T>, "T must be an integral type for uniform_int_distribution");
-            using result_type = unsigned int;
-            std::mt19937 gen;
+            using result_type = T;
             std::uniform_int_distribution<T> distrib;
-            rng() : distrib(LO, HI) {}
+            T lo_;
+            T hi_;
+
+            dist(T lo = std::numeric_limits<T>::min(), T hi = std::numeric_limits<T>::max())
+                : distrib(lo, hi), lo_(lo), hi_(hi) {}
+            dist(std::string range) {
+                auto [lo_, hi_] = parse(range);
+                distrib = std::uniform_int_distribution<T>(lo_, hi_);
+            }
+
+            result_type operator()() {
+                return distrib(gen);
+            }
+            result_type get() {
+                return distrib(gen);
+            }
+
+            std::pair<T, T> parse(const std::string& range) {
+                std::istringstream iss(range);
+                T start, end;
+                char delimiter;
+
+                if (!(iss >> start >> delimiter >> end) || delimiter != ':') {
+                    std::cout << "Plusarg: " << range << std::endl;
+                    assert(0 && "Error: Invalid rand plusarg format");
+                }
+
+                return std::make_pair(start, end);
+            }
+
+            result_type min() const { return lo_; }
+            result_type max() const { return hi_; }
+        };
+
+        // Specialization for discrete distribution
+        template<typename T>
+        struct dist<T, std::discrete_distribution<T>> {
+            static_assert(std::is_integral_v<T>, "T must be an integral type for discrete_distribution");
+            using result_type = T;
+            std::discrete_distribution<T> distrib;
+            T max_value;
+
+            template<typename WeightIterator>
+            dist(WeightIterator first, WeightIterator last)
+                : distrib(first, last), max_value(std::distance(first, last) - 1) {}
+
+            dist(const std::vector<double>& weights)
+                : distrib(weights.begin(), weights.end()), max_value(weights.size() - 1) {}
+
             result_type operator()() {
                 return distrib(gen);
             }
 
-            static constexpr result_type min() { return LO; }
-            static constexpr result_type max() { return HI; }
+            result_type get() {
+                return distrib(gen);
+            }
+
+            std::vector<double> probabilities() {
+                return distrib.probabilities();
+            }
+
+            static constexpr result_type min() { return 0; }
+            result_type max() const { return max_value; }
         };
 
         struct lcg {
@@ -43,9 +122,6 @@ namespace cvm {
           static const uint64_t c = 12345;
         };
 
-        void seed(uint64_t seed);
-        uint32_t get(std::string flag);
-        std::pair<uint32_t,uint32_t> parse(std::string flag);
     }
 
 }

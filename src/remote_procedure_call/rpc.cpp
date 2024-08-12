@@ -5,6 +5,7 @@ void cvm::rpc::build() {
 }
 
 void cvm::rpc::clear() {
+    cvm::log(cvm::DEBUG, "[remote_procedure_call] clearing remote calls...\n");
     quit_.test_and_set();
 
     {

@@ -2,6 +2,8 @@ cc_library(
     name = "remote_procedure_call",
     deps = [
         "//:topology",
+        "//:logger",
+        "//:type_traits",
     ],
     srcs = ["rpc.cpp"],
     hdrs = ["rpc.hpp"],

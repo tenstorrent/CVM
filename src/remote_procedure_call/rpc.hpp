@@ -8,6 +8,8 @@
 
 // #include "cvm/messenger.hpp"
 #include "cvm/topology.hpp"
+#include "cvm/logger.hpp"
+#include "cvm/type_traits.hpp"
 
 
 namespace cvm {
@@ -36,6 +38,10 @@ namespace cvm {
             }
 
             listeners_[loc] = handle;
+
+            if (!listeners_.contains(loc)) {
+              assert(false && "listener wasn't added to loc");
+            }            
           }
 
           R run(cvm::topology::loc_t loc, T t) {
@@ -43,10 +49,14 @@ namespace cvm {
             // Runs one task vs messenger's multiple connected tasks
 
             if (!listeners_.contains(loc)) {
+              
+              // cvm::log(cvm::ERROR, "[remote_procedure_call] listener does not exist, loc {} type {}\n", loc, typeid(T).name());
               assert(false && "listener does not exist");
             }
 
-            return listeners_[loc](t);  // run listener at loc given arg t, return the value to caller
+            auto rpc_listener = listeners_[loc];
+
+            return rpc_listener(t);  // run listener at loc given arg t, return the value to caller
           }
 
         private:
@@ -59,6 +69,7 @@ namespace cvm {
 
         template <typename T, typename R>
         void connect(cvm::topology::loc_t loc, const typename remote_call<T, R>::listener_t& l) {
+          cvm::log(cvm::DEBUG, "[remote_procedure_call] connect to location {} of type {} with typeid {}\n", loc, typeid(T).name(), std::type_index(typeid(T)).hash_code());
           if (loc == cvm::topology::null) {
             assert(false && "attempting to connect to null location");
             return;
@@ -68,9 +79,9 @@ namespace cvm {
 
         }
 
-        // TODO: write a signal function
         template <typename T, typename R>
         R signal(cvm::topology::loc_t loc, const T& m) {
+          cvm::log(cvm::DEBUG, "[remote_procedure_call] signal to location {} of type {} with typeid {}\n", loc, typeid(T).name(), std::type_index(typeid(T)).hash_code());
           if (loc == cvm::topology::null) {
             assert(false && "attempting to signal to null location");
           }
@@ -90,7 +101,7 @@ namespace cvm {
         template <typename T, typename R>
         std::shared_ptr<remote_call<T, R>> remote_calls() {
           auto key = std::type_index(typeid(T));
-          std::lock_guard<std::mutex> guard(remote_calls_mutex_);   // TODO: is this needed? i think so
+          std::lock_guard<std::mutex> guard(remote_calls_mutex_);
           auto it = remote_calls_.find(key);
           if (it == remote_calls_.end()) {
             std::shared_ptr<remote_call<T, R>> rc = std::make_shared<remote_call<T, R>>();

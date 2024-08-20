@@ -21,3 +21,14 @@ cc_library(
     include_prefix = "cvm",
     visibility = ["//visibility:public"],
 )
+
+cc_library(
+    name = "remote_procedure_call_types",
+    deps = [
+        "//:topology",
+        "//:logger",
+    ],
+    hdrs = ["rpc_types.hpp"],
+    include_prefix = "cvm",
+    visibility = ["//visibility:public"],
+)

@@ -32,6 +32,9 @@ namespace cvm {
 
           public:
 
+            //   struct rpc<typename T> { using function_type = T; };
+
+
               template <typename T = void>
               class task {
                   public:

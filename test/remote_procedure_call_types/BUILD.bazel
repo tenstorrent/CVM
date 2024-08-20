@@ -1,9 +1,9 @@
 load("@rules_verilator//verilator/internal:versions.bzl", verilator_version = "DEFAULT_VERSION")
 load("//test:test.bzl", "linkopts")
 
-cc_binary(
+cc_test(
     name = "rpc_types_test",
-    # size = "small",
+    size = "small",
     srcs = ["test.cpp"],
     deps = [
         "//src/remote_procedure_call:remote_procedure_call_types",

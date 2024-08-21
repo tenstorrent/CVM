@@ -5,7 +5,6 @@ cc_library(
       "@cvm//:messenger",
       "@cvm//:callbacks",
       "@cvm//:topology",
-      "@cvm//:remote_procedure_call",
   ],
   strip_include_prefix = "//src/registry",
   include_prefix = "cvm",

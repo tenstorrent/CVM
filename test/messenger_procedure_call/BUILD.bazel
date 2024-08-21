@@ -1,13 +1,14 @@
 load("@rules_verilator//verilator/internal:versions.bzl", verilator_version = "DEFAULT_VERSION")
+load("//test:test.bzl", "linkopts")
 
 cc_test(
-    name = "rpc_test",
+    name = "messenger_procedure_call_test",
     size = "small",
-    srcs = ["rpc.cpp"],
+    srcs = ["test.cpp"],
     deps = [
-        "//:remote_procedure_call",
+        "//:messenger",
         "@com_google_googletest//:gtest_main",
         "@verilator_v{}//:libverilator".format(verilator_version),
     ],
-    linkopts = ["-lz"],
+    linkopts = linkopts,
 )

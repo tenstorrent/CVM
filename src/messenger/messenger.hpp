@@ -26,14 +26,62 @@
 
 DECLARE_bool(signal_async);
 
+#define CVM_MESSENGER_procedure_call(name, func_type) \
+struct name : cvm::messenger::procedure_call_function<func_type> {};
+
 namespace cvm {
 
       class messenger {
 
           public:
 
-            //   struct rpc<typename T> { using function_type = T; };
+              template <typename T>
+              struct procedure_call_function {
+                using function_type = T;
+              };
 
+              template <typename T>
+              struct function_traits;
+
+              template <typename R, typename... Args>
+              struct function_traits <R (Args...)> {
+                using return_type = R;
+              };
+
+              template <typename T>
+              using return_type_t = typename function_traits<typename T::function_type>::return_type;
+
+              class procedure_call_base {
+                  public:
+                      virtual ~procedure_call_base() {};
+              };
+
+              template <typename F>
+              class procedure_call : public procedure_call_base {
+                  // represents a group of functions that listen to a type F from various locations
+
+                  public: 
+                      virtual ~procedure_call() {};
+
+                      typedef std::function<typename F::function_type> listener_t;
+
+                      void add_listener(cvm::topology::loc_t loc, F::function_type f) {
+                          assert((!listeners_.contains(loc)) && "listener already exists");
+
+                          listeners_[loc] = f;
+                          cvm::log(cvm::DEBUG, "[messenger] procedure call added listener to loc {}, type {} has {} listeners\n", loc, cvm::type_traits::name<decltype(f)>(), listeners_.size());
+                      }
+
+                      template <typename... Args>
+                      return_type_t<F> run(cvm::topology::loc_t loc, Args... args) {
+                          auto f = listeners_[loc];
+                          cvm::log(cvm::DEBUG, "[messenger] procedure call running listener at loc {}, type {}\n", loc, cvm::type_traits::name<decltype(f)>());
+                          return f(args...);
+                      }
+
+                  private:
+                      std::unordered_map<cvm::topology::loc_t, listener_t> listeners_;
+              };
 
               template <typename T = void>
               class task {
@@ -509,6 +557,22 @@ namespace cvm {
                   return;
               }
 
+              template<typename F>
+              void procedure(cvm::topology::loc_t loc, F::function_type listener) {
+                  // Connect a listener to the appropriate remote_call
+                  cvm::log(cvm::DEBUG, "[messenger] procedure location {} with type {}\n", loc, typeid(F).name());
+                  assert((loc != cvm::topology::null) && "attempting to register procedure to a null location");
+                  procedure_calls<F>()->add_listener(loc, listener);
+              }
+
+              template<typename F, typename... Args>
+              [[nodiscard]] return_type_t<F> call(cvm::topology::loc_t loc, Args... args) {
+                  // Find a remote call and call it's function for a specified location
+                  cvm::log(cvm::DEBUG, "[messenger] call location {} with type {}\n", loc, typeid(F).name());
+                  assert((loc != cvm::topology::null) && "attempting to call procedure to a null location");
+                  return procedure_calls<F>()->template run<Args...>(loc, args...);
+              }
+
               void build();
               void clear();
               void flush();
@@ -539,6 +603,18 @@ namespace cvm {
                     }
               }
 
+              template <typename F>
+              std::shared_ptr<procedure_call<F>> procedure_calls() {
+                  auto key = std::type_index(typeid(F));
+                  std::lock_guard<std::mutex> guard(procedure_calls_mutex_);
+                  auto it = procedure_calls_.find(key);
+                  if (it == procedure_calls_.end()) {
+                      std::shared_ptr<procedure_call<F>> rc = std::make_shared<procedure_call<F>>();
+                      it = procedure_calls_.emplace(key, std::move(rc)).first;
+                  } 
+                  return std::dynamic_pointer_cast<procedure_call<F>>(it->second);
+              }
+
               std::vector<task<void>> tasks_;
               std::mutex tasks_mutex_;
               std::unordered_map<std::type_index, std::shared_ptr<pool_base>> pools_;
@@ -550,5 +626,8 @@ namespace cvm {
               std::array<std::vector<std::tuple<std::size_t, decltype(std::chrono::steady_clock::now()), std::function<bool(std::size_t, messenger&, decltype(signal_storage_[0])&)>>>, num_priority> signal_queue_;
               std::atomic_flag quit_ = ATOMIC_FLAG_INIT;
               std::atomic_flag signal_queue_updated_ = ATOMIC_FLAG_INIT;
+              
+              std::unordered_map<std::type_index, std::shared_ptr<procedure_call_base>> procedure_calls_;
+              std::mutex procedure_calls_mutex_;
       };
 }

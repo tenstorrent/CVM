@@ -77,9 +77,3 @@ cc_library(
     deps = ["//src/type_traits:type_traits"],
     visibility = ["//visibility:public"],
 )
-
-cc_library(
-    name = "remote_procedure_call",
-    deps = ["//src/remote_procedure_call:remote_procedure_call"],
-    visibility = ["//visibility:public"],
-)

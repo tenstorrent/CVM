@@ -136,3 +136,84 @@ TEST(Messenger, Filter) {
   messenger5.signal(5, transaction1{2});
   EXPECT_EQ(hit, 5);
 }
+
+// Procedure Call Tests 
+
+cvm::messenger messenger6;
+
+// add two numbers and return them
+
+CVM_MESSENGER_procedure_call(Add1, int (int, int));
+
+int remote1(int a, int b) {
+    return a + b;
+}
+
+TEST(Messenger, Add) {
+    messenger6.procedure<Add1>(6, remote1);
+    auto ret = messenger6.call<Add1>(6, 2, 3);
+
+    EXPECT_EQ(ret, 5);
+}
+
+// two different functions with same underlying type
+
+cvm::messenger messenger7;
+
+CVM_MESSENGER_procedure_call(Add2, int (int, int));
+CVM_MESSENGER_procedure_call(Sub2, int (int, int));
+
+TEST(Messenger, TwoSameListeners) {
+    messenger7.procedure<Add2>(7, [](int a, int b) {return a + b;});
+    messenger7.procedure<Sub2>(7, [](int a, int b) {return a - b;});
+
+    EXPECT_EQ(messenger7.call<Add2>(7, 7, 8), 7 + 8);
+    EXPECT_EQ(messenger7.call<Sub2>(7, 11, 7), 11 - 7);
+}
+
+// two locations with same Type
+
+cvm::messenger messenger8;
+
+CVM_MESSENGER_procedure_call(Ints3, int (int, int));
+
+TEST(Messenger, TwoLocations) {
+    messenger8.procedure<Ints3>(81, [](int a, int b) {return a + b;});
+    messenger8.procedure<Ints3>(82, [](int a, int b) {return a * b;});
+
+    EXPECT_EQ(messenger8.call<Ints3>(81, 7, 9), 7 + 9);
+    EXPECT_EQ(messenger8.call<Ints3>(82, 11, 13), 11 * 13);
+}
+
+// two different functions with different types
+
+cvm::messenger messenger9;
+
+CVM_MESSENGER_procedure_call(Add4, int (int, int, int));
+CVM_MESSENGER_procedure_call(Sub4, int (int, int));
+
+TEST(Messenger, TwoDifferentListeners) {
+    messenger9.procedure<Add4>(9, [](int a, int b, int c) {return a + b + c;});
+    messenger9.procedure<Sub4>(9, [](int a, int b) {return a - b;});
+
+    EXPECT_EQ(messenger9.call<Add4>(9, 7, 8, 9), 7 + 8 + 9);
+    EXPECT_EQ(messenger9.call<Sub4>(9, 11, 7), 11 - 7);
+}
+
+// passing reference as arg
+
+cvm::messenger messenger10;
+
+CVM_MESSENGER_procedure_call(Add5, void (int, int, int&));
+
+void Add5Function (int a, int b, int& c) {
+  c = a + b;
+}
+
+TEST(Messenger, Reference) {
+  messenger10.procedure<Add5>(10, Add5Function);
+
+  int c;
+  messenger10.call<Add5>(10, 7, 11, c);
+  EXPECT_EQ(c, 18);
+}

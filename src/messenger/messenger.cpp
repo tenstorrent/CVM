@@ -97,4 +97,8 @@ void cvm::messenger::clear() {
             signal_storage_[i].clear();
         }
     }
+    {
+        std::lock_guard<std::mutex> procedure_calls_guard(procedure_calls_mutex_);
+        procedure_calls_.clear(); 
+    }
 }

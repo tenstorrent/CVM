@@ -112,6 +112,23 @@ some guides on C++ coroutines,
 + https://lewissbaker.github.io/2017/11/17/understanding-operator-co-await
 + https://lewissbaker.github.io/2022/08/27/understanding-the-compiler-transform
 
+#### Procedure Calls
+
+The messenger supports a system similar to a Remote Procedure Call. 
+
+`CVM_MESSENGER_procedure_call(name, func_type)`
+
+Create a name and function type for a procedure call. The function type represents the return type and argument types of the function, like `int (int, int)` for a function that would have two arguments of type int and return another int. This must be done in a header and included by any files that use procedure or call for that name type. 
+
+`cvm::registry::messenger.procedure<name>(cvm::topology::loc_t loc, func_type listener)`
+
+Register a `listener` function with the specified name to a location. 
+
+`cvm::registry::messenger.call<name>(cvm::topology::loc_t loc, Args... args)`
+
+Call a registered function with a specified name. This will return the return value of the registered listener function. 
+
+
 ### callbacks
 
 This is used for issuing callbacks from C++ to SV through DPI, by passing the relevant DPI function's `svScope` as well as a `std::function` with `void()` type.

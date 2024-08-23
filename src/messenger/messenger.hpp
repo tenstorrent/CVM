@@ -26,8 +26,6 @@
 
 DECLARE_bool(signal_async);
 
-#define CVM_MESSENGER_function_type(func) std::remove_pointer<decltype(&func)>::type
-
 #define CVM_MESSENGER_procedure_call(name, func_type) \
 struct name : cvm::messenger::procedure_call_function<func_type> {};
 

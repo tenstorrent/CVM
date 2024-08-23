@@ -199,3 +199,21 @@ TEST(Messenger, TwoDifferentListeners) {
     EXPECT_EQ(messenger9.call<Add4>(9, 7, 8, 9), 7 + 8 + 9);
     EXPECT_EQ(messenger9.call<Sub4>(9, 11, 7), 11 - 7);
 }
+
+// passing reference as arg
+
+cvm::messenger messenger10;
+
+CVM_MESSENGER_procedure_call(Add5, void (int, int, int&));
+
+void Add5Function (int a, int b, int& c) {
+  c = a + b;
+}
+
+TEST(Messenger, Reference) {
+  messenger10.procedure<Add5>(10, Add5Function);
+
+  int c;
+  messenger10.call<Add5>(10, 7, 11, c);
+  EXPECT_EQ(c, 18);
+}

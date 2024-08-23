@@ -26,8 +26,11 @@
 
 DECLARE_bool(signal_async);
 
+#define CVM_MESSENGER_function_type(func) std::remove_pointer<decltype(&func)>::type
+
 #define CVM_MESSENGER_procedure_call(name, func_type) \
 struct name : cvm::messenger::procedure_call_function<func_type> {};
+
 
 namespace cvm {
 
@@ -65,7 +68,7 @@ namespace cvm {
 
                       typedef std::function<typename F::function_type> listener_t;
 
-                      void add_listener(cvm::topology::loc_t loc, F::function_type f) {
+                      void add_listener(cvm::topology::loc_t loc, std::function<typename F::function_type> f) {
                           assert((!listeners_.contains(loc)) && "listener already exists");
 
                           listeners_[loc] = f;
@@ -558,7 +561,7 @@ namespace cvm {
               }
 
               template<typename F>
-              void procedure(cvm::topology::loc_t loc, F::function_type listener) {
+              void procedure(cvm::topology::loc_t loc, std::function<typename F::function_type> listener) {
                   // Connect a listener to the appropriate remote_call
                   cvm::log(cvm::DEBUG, "[messenger] procedure location {} with type {}\n", loc, typeid(F).name());
                   assert((loc != cvm::topology::null) && "attempting to register procedure to a null location");
@@ -566,7 +569,7 @@ namespace cvm {
               }
 
               template<typename F, typename... Args>
-              [[nodiscard]] return_type_t<F> call(cvm::topology::loc_t loc, Args... args) {
+              [[nodiscard]] return_type_t<F> call(cvm::topology::loc_t loc, Args&&... args) {
                   // Find a remote call and call it's function for a specified location
                   cvm::log(cvm::DEBUG, "[messenger] call location {} with type {}\n", loc, typeid(F).name());
                   assert((loc != cvm::topology::null) && "attempting to call procedure to a null location");

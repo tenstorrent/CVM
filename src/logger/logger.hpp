@@ -4,8 +4,7 @@
 #include <functional>
 #include <string_view>
 #include <memory>
-#include <iostream>
-#include <fstream>
+#include <iosfwd>
 
 namespace cvm {
 
@@ -28,6 +27,7 @@ namespace cvm {
             static verbosity_level verbosity;
             static std::array<std::function<void()>, NUM_VERBOSITY> handlers;
             static std::function<std::string_view()> prefix;
+            static std::ostream& ostream;
 
         public:
 
@@ -65,7 +65,7 @@ namespace cvm {
 
             template <typename... Args>
                 static void log(verbosity_level v, Args&&... args) {
-                  log(std::cout, v, std::forward<Args>(args)...);
+                  log(ostream, v, std::forward<Args>(args)...);
                 }
 
             template <typename... Args>
@@ -87,28 +87,23 @@ namespace cvm {
         private:
 
             const std::string filename;
-            std::ofstream output_file;
+            std::unique_ptr<std::ofstream> output_file;
 
             void rotate_log();
             void check_and_rotate();
 
         public:
 
-            file_logger(const std::string& filename) :
-                filename(filename) {}
+            file_logger(const std::string& filename);
 
             template <typename... Args>
                 void log(verbosity_level v, Args&&... args) {
 
                     if (logger::check_verbosity(v)) {
 
-                        if (!output_file.is_open()) {
-                            output_file = std::ofstream(filename, std::ios::out);
-                        } else {
-                            check_and_rotate();
-                        }
+                        check_and_rotate();
 
-                        logger::log(output_file, v, std::forward<Args>(args)...);
+                        logger::log(*output_file, v, std::forward<Args>(args)...);
                     }
 
                 }
@@ -119,6 +114,8 @@ namespace cvm {
                 }
 
             void flush();
+
+            ~file_logger();
 
     };
 

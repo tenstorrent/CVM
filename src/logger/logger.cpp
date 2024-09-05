@@ -43,7 +43,7 @@ cvm::file_logger::file_logger(const std::string& filename) : filename(filename) 
 void cvm::file_logger::check_and_rotate() {
     if (!output_file || !output_file->is_open()) {
         output_file = std::make_unique<std::ofstream>(filename, std::ios::out);
-    } else if (output_file->tellp() >= FLAGS_cvm_max_log_size) {
+    } else if (std::uint64_t(output_file->tellp()) >= FLAGS_cvm_max_log_size) {
         rotate_log();
     }
 }

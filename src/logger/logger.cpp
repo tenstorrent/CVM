@@ -1,6 +1,10 @@
 #include "logger.hpp"
 #include "cvm/plusargs.hpp"
 #include <unordered_map>
+#include <filesystem>
+#include <limits>
+#include <iostream>
+#include <fstream>
 
 static const std::unordered_map<std::string,cvm::verbosity_level> levels{
     {"NONE"  , cvm::NONE  },
@@ -25,14 +29,40 @@ static bool validate_verbosity(const char* flagname, const std::string& value) {
 
 DEFINE_string(cvm_verbosity, "MEDIUM", "cvm logging verbosity, valid values match uvm verbosity levels");
 DEFINE_validator(cvm_verbosity, &validate_verbosity);
+DEFINE_uint64(cvm_max_log_size, std::numeric_limits<std::uint64_t>::max(), "Maximum size of the log file in bytes");
 
 cvm::verbosity_level cvm::logger::verbosity = cvm::verbosity_level::MEDIUM;
-decltype(cvm::logger::handlers) cvm::logger::handlers{};
-decltype(cvm::logger::prefix  ) cvm::logger::prefix = [] () { return ""; };
+decltype(cvm::logger::handlers)  cvm::logger::handlers{};
+decltype(cvm::logger::prefix  )  cvm::logger::prefix = [] () { return ""; };
+decltype(cvm::logger::ostream )& cvm::logger::ostream = std::cout;
+
+cvm::file_logger::~file_logger() = default;
+
+cvm::file_logger::file_logger(const std::string& filename) : filename(filename) {}
+
+void cvm::file_logger::check_and_rotate() {
+    if (!output_file || !output_file->is_open()) {
+        output_file = std::make_unique<std::ofstream>(filename, std::ios::out);
+    } else if (output_file->tellp() >= FLAGS_cvm_max_log_size) {
+        rotate_log();
+    }
+}
+
+void cvm::file_logger::rotate_log() {
+  output_file->close();  // Close the current file
+
+  // Rename the current log file by appending the .old suffix
+  std::string old_filename = filename + ".old";
+  std::filesystem::rename(filename, old_filename);  // Overwrite old file if it exists
+
+  // Reopen a new log file
+  output_file = std::make_unique<std::ofstream>(filename, std::ios::out);
+}
 
 void cvm::file_logger::flush() {
-    if (output_file)
+    if (output_file->is_open()) {
         output_file->flush();
+    }
 }
 
 extern "C" {

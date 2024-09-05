@@ -1,24 +1,4 @@
-load("@rules_hdl//verilog:providers.bzl", "verilog_library")
-load("@rules_hdl//verilog:build_defs.bzl", "verilog_flist")
-load("@rules_verilator//verilator:defs.bzl", "verilator_cc_library")
 load("//test:test.bzl", "linkopts")
-
-verilog_library(
-    name = "logger_test_sv",
-    srcs = ["logger_test.sv"],
-)
-
-verilog_flist(
-    name = "logger_test.f",
-    srcs = [":logger_test_sv"],
-)
-
-verilator_cc_library(
-    name  = "logger_test_veri_lib",
-    mtop  = "logger_test",
-    vopts = ["--assert"],
-    flist = "logger_test.f",
-)
 
 cc_test(
     name = "logger_test",
@@ -29,7 +9,7 @@ cc_test(
     ],
     deps = [
         "//:logger",
-        ":logger_test_veri_lib",
+        "//third_party/vpi:vpi",
         "@com_google_googletest//:gtest_main",
     ],
     linkopts = linkopts,

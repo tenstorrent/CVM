@@ -1,9 +1,10 @@
 #pragma once
-#include <fmt/os.h>
+#include <fmt/ostream.h>
 #include <unordered_map>
 #include <functional>
 #include <string_view>
 #include <memory>
+#include <iosfwd>
 
 namespace cvm {
 
@@ -26,6 +27,7 @@ namespace cvm {
             static verbosity_level verbosity;
             static std::array<std::function<void()>, NUM_VERBOSITY> handlers;
             static std::function<std::string_view()> prefix;
+            static std::ostream& ostream;
 
         public:
 
@@ -63,24 +65,16 @@ namespace cvm {
 
             template <typename... Args>
                 static void log(verbosity_level v, Args&&... args) {
-
-                    if (check_verbosity(v)) {
-
-                        fmt::print(prefix());
-                        fmt::print(std::forward<Args>(args)...);
-
-                    }
-
-                    handle(v);
+                  log(ostream, v, std::forward<Args>(args)...);
                 }
 
             template <typename... Args>
-                static void log(fmt::ostream& out, verbosity_level v, Args&&... args) {
+                static void log(std::ostream& out, verbosity_level v, Args&&... args) {
 
                     if (check_verbosity(v)) {
 
-                        out.print(prefix());
-                        out.print(std::forward<Args>(args)...);
+                        fmt::print(out, prefix());
+                        fmt::print(out, std::forward<Args>(args)...);
 
                     }
 
@@ -93,20 +87,24 @@ namespace cvm {
         private:
 
             const std::string filename;
-            std::unique_ptr<fmt::ostream> output_file;
+            std::unique_ptr<std::ofstream> output_file;
+
+            void rotate_log();
+            void check_and_rotate();
 
         public:
 
-            file_logger(const std::string& filename) :
-                filename(filename) {}
+            file_logger(const std::string& filename);
 
             template <typename... Args>
                 void log(verbosity_level v, Args&&... args) {
 
-                    if (logger::check_verbosity(v) && !output_file)
-                        output_file = std::make_unique<fmt::ostream>(fmt::output_file(filename));
+                    if (logger::check_verbosity(v)) {
 
-                    logger::log(*output_file, v, std::forward<Args>(args)...);
+                        check_and_rotate();
+
+                        logger::log(*output_file, v, std::forward<Args>(args)...);
+                    }
 
                 }
 
@@ -116,6 +114,8 @@ namespace cvm {
                 }
 
             void flush();
+
+            ~file_logger();
 
     };
 

@@ -73,13 +73,19 @@ class Packet:
 
     @classmethod
     def load(cls, name, values, port):
-        num_variants = len(next(iter(values['fields'].values())).get('widths', [0]))
-        assert all(len(v.get('widths', [0])) == num_variants for v in values['fields'].values()) and "Need same number of widths (variants) for all fields"
+        assert all(k in Packet.keywords() for k in values.keys())
+
+        if 'fields' in values:
+            num_variants = len(next(iter(values['fields'].values())).get('widths', [0]))
+            assert all(len(v.get('widths', [0])) == num_variants for v in values['fields'].values()) and "Need same number of widths (variants) for all fields"
+        else:
+            num_variants = 1
+
         # packets always need topology location
         elaborated = []
         for i in range(num_variants):
             p = [Field.load("location", {"width": PacketStore.location_width()})]
-            p += [Field.load(name, v, i) for name,v in values['fields'].items()]
+            p += [Field.load(name, v, i) for name,v in values.get('fields', dict()).items()]
             quals = len(set(field.qualify for field in p if field.qualify is not None))
             if quals:
                 p.insert(0, Field.load("_packet_gen_valid", {"width": quals}))
@@ -139,6 +145,10 @@ class Packet:
                 key = lambda x: x[0]
             ),
         )
+
+    @staticmethod
+    def keywords():
+        return ["domain", "num", "fields", "priority", "context"]
 
 
 @dataclass

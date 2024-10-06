@@ -43,6 +43,9 @@ dut:
           dummy:
               width: 1
 
+  empty:
+      domain: 1
+
 dut2:
   num: [2, 1]
   pkt2:

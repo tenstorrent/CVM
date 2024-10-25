@@ -33,6 +33,8 @@ C++ logging (printf) tool while being able to control verbosity with the `+cvm_v
 
 These can also be connected to a callback function to perform a task if a corresponding verbosity level print is used. For example, the testbench can use an ERROR condition to terminate the test instead of using assert statements.
 
+Note: The output log file doesn't get created until the first write to the file. 
+
 ## bitmanip
 
 Provides functions to manipulate C++ primitive types as well as std::bitset (used by packet gen, explained below).

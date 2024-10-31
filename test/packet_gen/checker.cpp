@@ -30,6 +30,18 @@ class checker {
                     this->check(ret);
                 }
             );
+            cvm::registry::messenger.connect<transactions::dut::never_seen<>>(
+                loc,
+                [] (const transactions::dut::never_seen<>&) {
+                    FAIL() << "This transaction should never be seen.";
+                }
+            );
+            cvm::registry::messenger.connect<transactions::all_disabled::never_seen2<>>(
+                loc,
+                [] (const transactions::all_disabled::never_seen2<>&) {
+                    FAIL() << "This transaction should never be seen.";
+                }
+            );
             cvm::registry::messenger.connect<transactions::dut::ctx<>>(
                 loc,
                 [] (const transactions::dut::ctx<>& ret) {

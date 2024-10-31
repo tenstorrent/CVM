@@ -26,9 +26,15 @@ packet_gen(
 )
 
 verilog_library(
+    name = "defines_sv",
+    srcs = ["defines.sv"],
+)
+
+verilog_library(
     name = "top",
     srcs = ["top.sv"],
     deps = [
+        "defines_sv",
         "transactions_sv",
         "@cvm//:topology_sv",
         "topology_sv"

@@ -36,6 +36,13 @@ dut:
           num2:
               width: [[3, 2, 5, 13]] # 3x2x5 of width 13
 
+  never_seen:
+      disabling_defines: ["DISABLE_NEVER_SEEN_PKT"]
+      domain: 1
+      fields:
+          dummy:
+            width: 32
+
   ctx:
       domain: 1
       context: true
@@ -55,5 +62,15 @@ dut2:
             widths: [2, 32]
           dummy3:
             widths: [${sum(TOP.CLUSTER.CORE.S)}, 45]
+
+all_disabled:
+    num: 1
+    disabling_defines: ["DISABLE_NEVER_SEEN_PORT"]
+    never_seen2:
+        domain: 1
+        fields:
+            dummy:
+                width: 32
+
 
 __max_byte_transfer: 28

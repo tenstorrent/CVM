@@ -37,6 +37,10 @@ module dut #(
         end
     end
 
+    assign never_seens[0].valid             = '1;
+    assign never_seens[0].data.location     = loc;
+    assign never_seens[0].data.dummy        = 3;
+
     assign ctxs[0].valid           = count == 10;
     assign ctxs[0].data.location   = loc;
     assign ctxs[0].data.dummy      = 1'b1;
@@ -56,6 +60,23 @@ module dut2 #(
     assign pkt2s[0].valid             = loc != cvm_topology::nil;
     assign pkt2s[0].data.location     = loc;
     assign pkt2s[0].data.dummy2       = 3;
+
+endmodule
+
+module all_disabled #(
+    `TRANSACTIONS_ALL_DISABLED_OUTPUT_PARAMS
+) (
+    input clk,
+    input rst,
+    `TRANSACTIONS_ALL_DISABLED_OUTPUT_PORTS
+);
+
+    parameter int unsigned loc = cvm_topology_gen::get_location (cvm_topology_gen::mods.TOP.CLUSTER.CORE.ID, 0);
+
+    assign never_seen2s[0].valid             = '1;
+    assign never_seen2s[0].data.location     = loc;
+    assign never_seen2s[0].data.dummy        = 5;
+
 endmodule
 
 module top(
@@ -109,6 +130,14 @@ module top(
             `TRANSACTIONS_DUT2_SOURCE_PORTS(1, p, 1)
         );
     end
+
+    all_disabled #(
+        `TRANSACTIONS_ALL_DISABLED_SOURCE_PARAMS(0)
+    ) all_disabled (
+        .clk,
+        .rst,
+        `TRANSACTIONS_ALL_DISABLED_SOURCE_PORTS(1, 0, 0)
+    );
 
     import "DPI-C" function void start_checker();
     import "DPI-C" function void end_checker();

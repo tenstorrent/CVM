@@ -64,6 +64,7 @@ class Field:
 class Packet:
     name: str
     domain: int
+    disabling_defines: list[str]
     priority: str
     num: int
     context: bool
@@ -99,7 +100,7 @@ class Packet:
             all_domains = domain
         assert len(all_domains) == num_variants and "Need same number of domains as variants"
 
-        return [cls(name, all_domains[i], values.get("priority", None), values.get("num", 1), values.get("context", False), port, e, i) for i, e in enumerate(elaborated)]
+        return [cls(name, all_domains[i], values.get("disabling_defines", []), values.get("priority", None), values.get("num", 1), values.get("context", False), port, e, i) for i, e in enumerate(elaborated)]
 
     def to_c_enum(self):
         return 'MSG_NUMBER_' + self.port + '_' + self.name + '_' + str(self.variant_id)
@@ -148,7 +149,7 @@ class Packet:
 
     @staticmethod
     def keywords():
-        return ["domain", "num", "fields", "priority", "context"]
+        return ["domain", "num", "disabling_defines", "fields", "priority", "context"]
 
 
 @dataclass
@@ -198,9 +199,11 @@ class PacketStore:
             else:
                 ports[port] = num
 
+            disabling_defines = values.get("disabling_defines", [])
+
             for packet_name, packet_values in values.items():
-                if packet_name != "num": # ignore "num"
-                    p = Packet.load(packet_name, packet_values, port)
+                if packet_name not in ["num", "disabling_defines"]:
+                    p = Packet.load(packet_name, {**{'disabling_defines': disabling_defines}, **packet_values}, port)
                     assert len(p) == len(ports[port]) and "Must specify same number of widths among all packets in a port"
                     packets.append(p)
         return cls(name, domains, packets, ports, max_byte_transfer)

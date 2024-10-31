@@ -67,11 +67,17 @@ module ${packet_store.name}_domain_${domain}(
     % endif
 
 %for packet in domain_packets:
+    % for define in packet.disabling_defines:
+`ifndef ${define}
+    % endfor
     % for words in packet.valid_groups_words(packet_store.enum_width()):
         <% chunks = packet_store.chunk_transfer(words) %>\
         % for i,chunk in enumerate(chunks):
 import "DPI-C" ${"context" if packet.context else ""} function void ${packet_store.name}_message_${packet.port}_${packet.name}_${packet.variant_id}_words${words}${[f"_chunk{i}",""][int(len(chunks)==1)]}(${type(packet_store).transfer_word_sv_type()} message[${chunk}]);
         % endfor
+    % endfor
+    % for _ in packet.disabling_defines:
+`endif
     % endfor
 %endfor
 
@@ -98,6 +104,9 @@ import "DPI-C" ${"context" if packet.context else ""} function void ${packet_sto
     /* verilator lint_off BLKSEQ */
     always @(posedge clk) begin
 %for packet in domain_packets:
+    % for define in packet.disabling_defines:
+`ifndef ${define}
+    % endfor
     %for port in range(packet_store.ports[packet.port][packet.variant_id]):
         %for i in range(packet.num):
         if (tx.${packet.port}_${packet.name}_${packet.variant_id}s[${port}][${i}].valid) begin
@@ -149,6 +158,9 @@ import "DPI-C" ${"context" if packet.context else ""} function void ${packet_sto
         end
         %endfor
     %endfor
+    % for _ in packet.disabling_defines:
+`endif
+    % endfor
 %endfor
     end
     /* verilator lint_on BLKSEQ */

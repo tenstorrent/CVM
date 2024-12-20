@@ -47,7 +47,13 @@ void cvm::messenger::flush() {
                         break;
                     }
                 }
-                if(f(idx, *this, s[prio])) {
+
+                bool clean = false;
+                {
+                    task_guard();
+                    clean = f(idx, *this, s[prio]);
+                }
+                if (clean) {
                     // not necessary all the time - need to use a GC?
                     clean_tasks();
                 }

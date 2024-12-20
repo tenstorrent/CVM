@@ -141,6 +141,7 @@ namespace cvm {
       }
 
       static void check() {
+        auto g = messenger.task_guard();
         for (const auto& check : checks())
           check();
       }
@@ -148,8 +149,12 @@ namespace cvm {
       static bool shutdown() {
         // handshake with each registry component first
         bool ready = true;
-        for (const auto& shutdown_ready : shutdown_readys())
-          ready = ready and shutdown_ready();
+
+        {
+            auto g = messenger.task_guard();
+            for (const auto& shutdown_ready : shutdown_readys())
+              ready = ready and shutdown_ready();
+        }
 
         if (not ready)
           return false;

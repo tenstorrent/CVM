@@ -577,6 +577,7 @@ namespace cvm {
               void build();
               void clear();
               void flush();
+              std::lock_guard<std::mutex> task_guard() { return std::lock_guard<std::mutex>(running_task_mutex_); }
 
           private:
 
@@ -630,5 +631,7 @@ namespace cvm {
               
               std::unordered_map<std::type_index, std::shared_ptr<procedure_call_base>> procedure_calls_;
               std::mutex procedure_calls_mutex_;
+
+              std::mutex running_task_mutex_;
       };
 }

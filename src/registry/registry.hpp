@@ -27,7 +27,7 @@ namespace cvm {
 
           template <typename T, typename... Args>
           meta_helper([[maybe_unused]] identity<T> an, cvm::topology::loc_t loc, unsigned id, Args&&... args)
-            : loc_(loc), obj_(nullptr, [](void* obj) {}) {
+            : loc_(loc), obj_(nullptr, []([[maybe_unused]] void* obj) {}) {
 
             construct_ = [this, loc, id, ...args = std::forward<Args>(args)]() {
               obj_ = std::unique_ptr<void, void(*)(void*)>(

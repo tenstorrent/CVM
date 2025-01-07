@@ -1,10 +1,12 @@
 #pragma once
 
 #include <cassert>
-#include <list>
 #include <functional>
 #include <typeinfo>
 #include <unordered_set>
+#include <vector>
+#include <list>
+#include <ranges>
 #include "cvm/messenger.hpp"
 #include "cvm/callbacks.hpp"
 #include "cvm/topology.hpp"
@@ -15,115 +17,70 @@ namespace cvm {
 
     private:
 
-      // to deal with out-of-order static init
-      static auto& constructors() {
-        static std::vector<std::function<void()>> constructs_;
-        return constructs_;
+      template <typename T>
+      struct identity {};
+
+      // We should probably do CRTP-style instead.
+      class meta_helper {
+
+        public:
+
+          template <typename T, typename... Args>
+          meta_helper([[maybe_unused]] identity<T> an, cvm::topology::loc_t loc, unsigned id, Args&&... args)
+            : loc_(loc), obj_(nullptr, [](void* obj) {}) {
+
+            construct_ = [this, loc, id, ...args = std::forward<Args>(args)]() {
+              obj_ = std::unique_ptr<void, void(*)(void*)>(
+                       new T(loc, id, args...),
+                       [](void* obj) { delete reinterpret_cast<T*>(obj); }
+                     );
+            };
+
+            destruct_ = [this]() {
+              obj_.release();
+            };
+
+            if constexpr (requires(T& t) { t.configure(); }) {
+              configure_ = [this]() { (*reinterpret_cast<T*>(obj_.get())).configure(); };
+            }
+
+            if constexpr (requires(T& t) { t.check(); }) {
+              check_ = [this]() { (*reinterpret_cast<T*>(obj_.get())).check(); };
+            }
+
+            if constexpr (requires(T& t) {{ t.shutdown_ready() } -> std::same_as<bool>;}) {
+              sr_ = [this]() -> bool { return (*reinterpret_cast<T*>(obj_.get())).shutdown_ready(); };
+            }
+          }
+
+          cvm::topology::loc_t loc_ = 0;
+          std::unique_ptr<void, void(*)(void*)> obj_;
+
+          // Helper functions.
+          std::function<void()> construct_ = nullptr;
+          std::function<void()> destruct_ = nullptr;
+          std::function<void()> configure_ = nullptr;
+          std::function<void()> check_ = nullptr;
+          std::function<bool()> sr_ = nullptr;
+      };
+
+      template <typename T>
+      static int type_nums() {
+        static int id = -1;
+        return ++id;
       }
 
-      static auto& configures() {
-        static std::vector<std::function<void()>> configures_;
-        return configures_;
-      }
-
-      static auto& checks() {
-        static std::vector<std::function<void()>> checks_;
-        return checks_;
-      }
-
-      static auto& destructors() {
-        static std::vector<std::function<void()>> destructs_;
-        return destructs_;
-      }
-
-      static auto& shutdown_readys() {
-        static std::vector<std::function<bool()>> sr_;
-        return sr_;
-      }
+      static auto& components() {
+        static std::list<meta_helper> components_;
+        return components_;
+      };
 
       static auto& registered() {
         static std::unordered_set<std::string> registered_;
         return registered_;
       }
 
-    public:
-
-      // ex.
-      // { leaf = "core", id = -1 }
-      // will instantiate a checker for every core
-      // core   -   core   -   core
-      //   |          |          |
-      // checker    checker    checker
-      inline static int all = -1;
-      inline static messenger messenger;
-      inline static callbacks callbacks;
-
-      // register classes during static init
-      template<typename T, bool A, typename... Args>
-      static bool regist(const std::string& module, int id, Args&&... args) {
-        static std::list<T> objs_;
-
-        if constexpr (!A) {
-          bool from_hierarchy = module.find('.') != std::string::npos;
-
-          if (id == all) {
-            std::vector<cvm::topology::loc_t> locs;
-            if (from_hierarchy)
-              locs = cvm::topology::get_from_hierarchy(module);
-            else
-              locs = cvm::topology::get_from_type(module);
-
-            if (locs.empty())
-              return false;
-
-            constructors().push_back(
-              [locs, ...args = std::forward<Args>(args)] () {
-                for (const auto& loc : locs)
-                  objs_.emplace_back(loc, objs_.size(), args...); });
-          }
-          else {
-            cvm::topology::loc_t loc;
-
-            if (from_hierarchy)
-              loc = cvm::topology::get_from_hierarchy(module, id);
-            else
-              loc = cvm::topology::get_from_type(module, id);
-
-            if (loc == cvm::topology::null)
-              return false;
-
-            constructors().push_back(
-              [&, loc, ...args = std::forward<Args>(args)] () { objs_.emplace_back(loc, objs_.size(), args...); });
-          }
-        }
-        else {
-          constructors().push_back(
-            [&, ...args = std::forward<Args>(args)] () { objs_.emplace_back(args...); });
-        }
-
-        if constexpr (requires(T& t) { t.configure(); }) {
-          configures().push_back([&] () { for (auto& t : objs_) { t.configure(); }});
-        }
-
-        if constexpr (requires(T& t) { t.check(); }) {
-          checks().push_back([&] () { for (auto& t : objs_) t.check(); });
-        }
-
-        if constexpr (requires(T& t) {{ t.shutdown_ready() } -> std::same_as<bool>;}) {
-          shutdown_readys().push_back([&] () -> bool {
-              bool ready = true;
-              for (auto& t : objs_)
-                ready = ready and t.shutdown_ready();
-              return ready;
-            });
-        }
-
-        destructors().push_back([&] () { return objs_.clear(); });
-        registered().emplace(typeid(T).name());
-        return true;
-      }
-
-      static void build() {
+      static void build(std::ranges::view auto&& components) {
         // in case something was signalled between the last clear and this build
         // eg, if emulation has a DPI that's called after shutdown but before build
         messenger.clear();
@@ -131,29 +88,21 @@ namespace cvm {
 
         messenger.build();
         callbacks.build();
-        for (const auto& construct : constructors())
-          construct();
+
+        for (auto& c : components)
+          c.construct_();
       }
 
-      static void configure() {
-        for (const auto& configure : configures())
-          configure();
-      }
-
-      static void check() {
-        auto g = messenger.task_guard();
-        for (const auto& check : checks())
-          check();
-      }
-
-      static bool shutdown() {
+      static bool shutdown(std::ranges::view auto&& components) {
         // handshake with each registry component first
         bool ready = true;
 
         {
             auto g = messenger.task_guard();
-            for (const auto& shutdown_ready : shutdown_readys())
-              ready = ready and shutdown_ready();
+            for (auto& c : components) {
+              if (c.sr_)
+                ready = ready and c.sr_();
+            }
         }
 
         if (not ready)
@@ -164,9 +113,80 @@ namespace cvm {
         // callbacks shouldn't have an (immediate) effect on messenger
         messenger.clear();
         if (!callbacks.clear()) return false;
-        for (const auto& destruct : destructors())
-          destruct();
+        for (auto& c : components)
+          c.destruct_();
         return true;
+      }
+
+    public:
+
+      inline static int all = -1;
+      inline static messenger messenger;
+      inline static callbacks callbacks;
+
+      template<typename T, typename... Args>
+      static bool regist(const std::string& module, int id, Args&&... args) {
+        bool from_hierarchy = module.find('.') != std::string::npos;
+        if (id == all) {
+          std::vector<cvm::topology::loc_t> locs;
+          if (from_hierarchy)
+            locs = cvm::topology::get_from_hierarchy(module);
+          else
+            locs = cvm::topology::get_from_type(module);
+
+          if (locs.empty())
+            return false;
+
+          for (const auto& loc : locs)
+            components().emplace_back(identity<T>{}, loc, type_nums<T>(), args...);
+        }
+        else {
+          cvm::topology::loc_t loc;
+
+          if (from_hierarchy)
+            loc = cvm::topology::get_from_hierarchy(module, id);
+          else
+            loc = cvm::topology::get_from_type(module, id);
+
+          if (loc == cvm::topology::null)
+            return false;
+
+          components().emplace_back(identity<T>{}, loc, type_nums<T>(), args...);
+        }
+
+        registered().emplace(typeid(T).name());
+        return true;
+      }
+
+      static void build() {
+        return build(std::ranges::ref_view(components()));
+      }
+
+      // TODO: We can support hierarchical path resets. That is, given an id,
+      // perform operation on all underlying hierarchical paths.
+      static void build(cvm::topology::loc_t loc) {
+        return build(std::ranges::filter_view(components(), [loc](auto& c) { return c.loc_ == loc; }));
+      }
+
+      static void configure() {
+        for (auto& c : components())
+          if (c.configure_)
+            c.configure_();
+      }
+
+      static void check() {
+        auto g = messenger.task_guard();
+        for (auto& c : components())
+          if (c.check_)
+            c.check_();
+      }
+
+      static bool shutdown() {
+        return shutdown(std::ranges::ref_view(components()));
+      }
+
+      static bool shutdown(cvm::topology::loc_t loc) {
+        return shutdown(std::ranges::filter_view(components(), [loc](auto& c) { return c.loc_ == loc; }));
       }
 
       template <typename T>
@@ -190,10 +210,5 @@ namespace _registry {
 // presumably, objects will subscribe to transactions in constructor
 #define REGISTRY_register(type, module, id, ...) \
     namespace _registry { \
-      static bool REGISTRY_CONCAT(_, __COUNTER__) = std::invoke([]() -> bool { return cvm::registry::regist<RemoveBrackets<void (type)>::Type, false>( #module, id __VA_OPT__(,) __VA_ARGS__); }); \
-    }
-
-#define REGISTRY_register_topology_agn(type, ...) \
-    namespace _registry { \
-      static bool REGISTRY_CONCAT(_, __COUNTER__) = std::invoke([]() -> bool { return cvm::registry::regist<RemoveBrackets<void (type)>::Type, true>( "", 0 __VA_OPT__(,) __VA_ARGS__); }); \
+      static bool REGISTRY_CONCAT(_, __COUNTER__) = std::invoke([]() -> bool { return cvm::registry::regist<RemoveBrackets<void (type)>::Type>( #module, id __VA_OPT__(,) __VA_ARGS__); }); \
     }

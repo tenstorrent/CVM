@@ -11,3 +11,7 @@ top:
       count: 1
       type:
         - core
+    dummy:
+      count: 1
+      type:
+        - dummy

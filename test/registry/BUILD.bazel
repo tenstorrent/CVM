@@ -36,7 +36,7 @@ verilator_cc_library(
 
 cc_binary(
     name = "registry_test",
-    srcs = ["sim_main.cpp", "dummy.cpp", "dummy2.cpp", "dummy3.cpp", "dummy4.cpp"],
+    srcs = ["sim_main.cpp", "dummy.cpp", "dummy2.cpp", "dummy3.cpp"],
     deps = [
       "@cvm//:topology",
       "@cvm//:registry",

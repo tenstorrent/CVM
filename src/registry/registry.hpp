@@ -37,7 +37,7 @@ namespace cvm {
             };
 
             destruct_ = [this]() {
-              obj_.release();
+              obj_.reset();
             };
 
             if constexpr (requires(T& t) { t.configure(); }) {

@@ -61,7 +61,7 @@ namespace cvm {
               class procedure_call : public procedure_call_base {
                   // represents a group of functions that listen to a type F from various locations
 
-                  public: 
+                  public:
                       virtual ~procedure_call() {};
 
                       typedef std::function<typename F::function_type> listener_t;
@@ -388,6 +388,11 @@ namespace cvm {
                               co_return co_await awaiter{*this, info, filter};
                       }
 
+                      void clear_channel(channel_info info) {
+                          channels_[info.loc][info.id].vals.clear();
+                          return;
+                      }
+
                       void delete_channel(channel_info info) {
                           channels_[info.loc].erase(channels_.begin() + info.id);
                           return;
@@ -553,8 +558,14 @@ namespace cvm {
               }
 
               template <typename T>
-              void del(typename pool<T>::channel_info info) {
+              void del_channel(typename pool<T>::channel_info info) {
                   message_pool<T>()->delete_channel(info);
+                  return;
+              }
+
+              template <typename T>
+              void clear_channel(typename pool<T>::channel_info info) {
+                  message_pool<T>()->clear_channel(info);
                   return;
               }
 
@@ -613,7 +624,7 @@ namespace cvm {
                   if (it == procedure_calls_.end()) {
                       std::shared_ptr<procedure_call<F>> rc = std::make_shared<procedure_call<F>>();
                       it = procedure_calls_.emplace(key, std::move(rc)).first;
-                  } 
+                  }
                   return std::dynamic_pointer_cast<procedure_call<F>>(it->second);
               }
 
@@ -628,7 +639,7 @@ namespace cvm {
               std::array<std::vector<std::tuple<std::size_t, decltype(std::chrono::steady_clock::now()), std::function<bool(std::size_t, messenger&, decltype(signal_storage_[0])&)>>>, num_priority> signal_queue_;
               std::atomic_flag quit_ = ATOMIC_FLAG_INIT;
               std::atomic_flag signal_queue_updated_ = ATOMIC_FLAG_INIT;
-              
+
               std::unordered_map<std::type_index, std::shared_ptr<procedure_call_base>> procedure_calls_;
               std::mutex procedure_calls_mutex_;
 

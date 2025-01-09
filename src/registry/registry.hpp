@@ -168,6 +168,11 @@ namespace cvm {
         return build(std::ranges::filter_view(components(), [loc](auto& c) { return c.loc_ == loc; }));
       }
 
+      // Temporary until domain support.
+      static void build_all_except(cvm::topology::loc_t loc) {
+        return build(std::ranges::filter_view(components(), [loc](auto& c) { return c.loc_ != loc; }));
+      }
+
       static void configure() {
         for (auto& c : components())
           if (c.configure_)
@@ -187,6 +192,10 @@ namespace cvm {
 
       static bool shutdown(cvm::topology::loc_t loc) {
         return shutdown(std::ranges::filter_view(components(), [loc](auto& c) { return c.loc_ == loc; }));
+      }
+
+      static bool shutdown_all_except(cvm::topology::loc_t loc) {
+        return shutdown(std::ranges::filter_view(components(), [loc](auto& c) { return c.loc_ != loc; }));
       }
 
       template <typename T>

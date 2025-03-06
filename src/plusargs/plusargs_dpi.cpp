@@ -1,13 +1,17 @@
 #include <cinttypes>
 #include <gflags/gflags.h>
 #include <cassert>
+#include <iostream>
 
 template <typename TYPE>
 TYPE get(const char* p) {
 
     gflags::CommandLineFlagInfo info;
     bool found = gflags::GetCommandLineFlagInfo(p, &info);
-    assert(found && "Plusarg not found");
+    if (!found) {
+        std::cerr << "Error: Plusarg not found - " << p << std::endl;
+        assert(false);  // Force assertion failure after printing
+    }
     return *((TYPE *)info.flag_ptr);
 
 }

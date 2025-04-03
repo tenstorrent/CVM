@@ -19,6 +19,7 @@ namespace cvm {
 
 void cvm::rand::seed(uint64_t seed) {
     gen.seed(seed);
+    lcg::state = seed;
 }
 
 template <typename T>

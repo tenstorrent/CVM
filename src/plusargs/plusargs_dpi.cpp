@@ -3,7 +3,6 @@
 #include <cassert>
 #include <iostream>
 #include <cstring>
-#include "cvm/logger.hpp"
 
 template <typename TYPE>
 TYPE get(const char* p) {
@@ -54,7 +53,7 @@ extern "C" {
         size_t len = strlen(str);
 
         if (len > 1023) {
-            cvm::log(cvm::ERROR, "ERROR: +{}={} is too long\n", p, str);
+            std::cerr << "ERROR: +{}={} is too long\n", p, str;
             assert(false);
         }
 

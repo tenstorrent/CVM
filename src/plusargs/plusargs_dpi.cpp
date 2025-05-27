@@ -3,6 +3,7 @@
 #include <cassert>
 #include <iostream>
 #include <cstring>
+#include "cvm/logger.hpp"
 
 template <typename TYPE>
 TYPE get(const char* p) {
@@ -57,7 +58,7 @@ extern "C" {
             assert(false);
         }
 
-        memcpy(str_buffer, str, copy_len);
-        str_buffer[copy_len] = '\0';
+        memcpy(str_buffer, str, len);
+        str_buffer[len] = '\0';
     }
 }

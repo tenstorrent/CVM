@@ -53,7 +53,7 @@ extern "C" {
         size_t len = strlen(str);
 
         if (len > 1023) {
-            std::cerr << "ERROR: +{}={} is too long\n", p, str;
+            std::cerr << "ERROR: +" << p << "=" << str << " is too long\n";
             assert(false);
         }
 

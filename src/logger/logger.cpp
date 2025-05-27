@@ -73,7 +73,8 @@ extern "C" {
     uint32_t cvm_logger_get_verbosity_from_plusargs(const char* p) {
         const char* v = cvm_plusargs_get_string(p);
         if (!v) {
-            return cvm::NONE;
+            // Error out if the plusarg is not set
+            cvm::log(cvm::ERROR, "ERROR: +{}={} is not set\n", p, v);
         }
         return levels.at(std::string(v));
     }

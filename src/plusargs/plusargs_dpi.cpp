@@ -47,14 +47,14 @@ extern "C" {
     }
 
     // New function that returns a fixed-size char array
-    void cvm_plusargs_get_string_bytes(const char* p, unsigned char str_buffer[128]) {
-        memset(str_buffer, 0, sizeof(unsigned char) * 128);
+    void cvm_plusargs_get_string_bytes(const char* p, unsigned char str_buffer[1024]) {
+        memset(str_buffer, 0, sizeof(unsigned char) * 1024);
         
         const char* str = cvm_plusargs_get_string(p);
         size_t len = strlen(str);
         
-        // Copy at most 127 characters to leave room for null terminator
-        size_t copy_len = (len >= 128) ? 127 : len;
+        // Copy at most 1023 characters to leave room for null terminator
+        size_t copy_len = (len >= 1024) ? 1023 : len;
         memcpy(str_buffer, str, copy_len);
         str_buffer[copy_len] = '\0';
     }

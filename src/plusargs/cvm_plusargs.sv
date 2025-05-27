@@ -5,6 +5,6 @@ package cvm_plusargs;
     import "DPI-C" cvm_plusargs_get_int64  = function longint   signed get_longint (string plusarg);
     import "DPI-C" cvm_plusargs_get_uint64 = function longint unsigned get_ulongint(string plusarg);
     import "DPI-C" cvm_plusargs_get_double = function real             get_real    (string plusarg);
-    import "DPI-C" cvm_plusargs_get_string_bytes = function void get_string_bytes(string plusarg, output byte unsigned str_buffer[128]);
+    import "DPI-C" cvm_plusargs_get_string_bytes = function void get_string_bytes(string plusarg, output byte unsigned str_buffer[1024]);
 
 endpackage

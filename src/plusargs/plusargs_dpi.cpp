@@ -2,6 +2,7 @@
 #include <gflags/gflags.h>
 #include <cassert>
 #include <iostream>
+#include <cstring>
 
 template <typename TYPE>
 TYPE get(const char* p) {
@@ -43,5 +44,20 @@ extern "C" {
         static std::string s;
         s = get<std::string>(p);
         return s.c_str();
+    }
+
+    // New function that returns a fixed-size char array
+    void cvm_plusargs_get_string_bytes_1024(const char* p, unsigned char str_buffer[1024]) {
+        
+        const char* str = cvm_plusargs_get_string(p);
+        size_t len = strlen(str);
+
+        if (len > 1023) {
+            std::cerr << "ERROR: +" << p << "=" << str << " is too long\n";
+            assert(false);
+        }
+
+        memcpy(str_buffer, str, len);
+        str_buffer[len] = '\0';
     }
 }

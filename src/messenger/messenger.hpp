@@ -468,7 +468,7 @@ namespace cvm {
               void _signal(cvm::topology::loc_t loc, const A m, priority prio = default_priority, launch l = immediate) {
 
                   if (loc == cvm::topology::null) {
-                      assert(false && "attempting to signal to null location");
+                      cvm::log(cvm::ERROR, "Error: messenger: attempting to signal to null location with type {}\n", cvm::type_traits::name<decltype(m)>());
                       return;
                   }
 

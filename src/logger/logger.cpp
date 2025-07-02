@@ -69,6 +69,9 @@ extern "C" {
     uint32_t cvm_logger_get_verbosity(const char* v) {
         return levels.at(std::string(v));
     }
+    void cvm_logger_set_verbosity(uint32_t v) {
+        cvm::set_verbosity(static_cast<cvm::verbosity_level>(v));
+    }
 
     uint32_t cvm_logger_get_verbosity_from_plusargs(const char* p) {
         const char* v = cvm_plusargs_get_string(p);

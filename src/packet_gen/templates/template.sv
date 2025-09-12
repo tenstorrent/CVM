@@ -30,7 +30,7 @@ package ${packet_store.name};
 %for packet_variant in packet:
 
     typedef struct packed {
-    %for field in reversed(packet_variant.fields):
+    %for field in reversed(list(packet_variant.valid_fields())):
     ${field.get_sv_type()} ${field.name};
     %endfor
     } ${packet_variant.port}_${packet_variant.name}_${packet_variant.variant_id};
@@ -115,7 +115,7 @@ import "DPI-C" ${"context" if packet.context else ""} function void ${packet_sto
             ${prefix}_pkt = '{data: ${odata}, header: ${packet_store.name}::${packet.to_sv_enum()}};
             ${prefix}_b = '0;
             ${prefix}_words_to_transfer = '0;
-<% valid_groups = packet.valid_groups(); packet_size = sum(field.total_width() for field in packet.fields)%>\
+<% valid_groups = packet.valid_groups(); packet_size = sum(field.total_width() for field in packet.valid_fields())%>\
             %for index, valid in reversed(list(enumerate(valid_groups))):
 <%lsb, msb = valid_groups[valid]%>\
             ${prefix}_pkt.data._packet_gen_valid[${index}] = ${formatted if (formatted := valid.format(data = odata)) != valid else odata + "." + valid};
@@ -212,4 +212,15 @@ end = len(port_packets) - 1
     %endfor
 
 %endfor
+
+%for packet in packet_store.packets:
+%for packet_variant in packet:
+%for field in packet_variant.fields:
+%if field.total_width() == 0:
+`define ${packet_store.name.upper()}_${packet_variant.name.upper()}_${packet_variant.variant_id}_${field.name.upper()}_UNDEF
+%endif
+%endfor
+%endfor
+%endfor
+
 `endif

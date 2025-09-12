@@ -139,6 +139,11 @@ module top(
         `TRANSACTIONS_ALL_DISABLED_SOURCE_PORTS(1, 0, 0)
     );
 
+
+`ifndef TRANSACTIONS_ZERO_0_DUMMY_UNDEF
+    $error("Error: ZERO::DUMMY should not be defined.")
+`endif
+
     import "DPI-C" function void start_checker();
     import "DPI-C" function void end_checker();
     initial start_checker();

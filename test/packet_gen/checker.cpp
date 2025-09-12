@@ -98,6 +98,13 @@ class checker {
 
 REGISTRY_register(checker, TOP.CLUSTER.CORE, 0)
 
+template <typename T>
+concept HasDummy = requires(T t) {
+    { t.dummy }; // just being able to access it
+};
+
+static_assert(not HasDummy<transactions::dut::zero<>>);
+
 extern "C" void start_checker() {
     cvm::registry::build();
     cvm::registry::configure();

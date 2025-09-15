@@ -50,6 +50,12 @@ dut:
           dummy:
               width: 1
 
+  zero:
+      domain: 1
+      fields:
+          dummy:
+              width: 0
+
   empty:
       domain: 1
 

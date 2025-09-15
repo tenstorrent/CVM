@@ -44,6 +44,7 @@ class Field:
             return f"std::bitset<{w}>"
 
         def get_type(w):
+            assert w[0] > 0, "Shouldn't generate type for 0-width field."
             return get_word(w[0]) if len(w) == 1 else f"std::array<{get_type(w[1:])}, {w[0]}>"
 
         w = self.width
@@ -51,6 +52,7 @@ class Field:
 
     def get_sv_type(self):
         def get_type(w):
+            assert w[0] > 0, "Shouldn't generate type for 0-width field."
             return f"[{w[0] - 1}:0]" if len(w) == 1 else f"[{w[0] - 1}:0]{get_type(w[1:])}"
 
         w = self.width
@@ -74,11 +76,12 @@ class Packet:
 
     @classmethod
     def load(cls, name, values, port):
-        assert all(k in Packet.keywords() for k in values.keys())
+        # FIXME: ideally, would use a schema instead
+        assert all(k in Packet.keywords() for k in values.keys()), "Detected invalid keyword"
 
         if 'fields' in values:
             num_variants = len(next(iter(values['fields'].values())).get('widths', [0]))
-            assert all(len(v.get('widths', [0])) == num_variants for v in values['fields'].values()) and "Need same number of widths (variants) for all fields"
+            assert all(len(v.get('widths', [0])) == num_variants for v in values['fields'].values()), "Need same number of widths (variants) for all fields"
         else:
             num_variants = 1
 
@@ -98,7 +101,7 @@ class Packet:
             all_domains = [domain]
         else:
             all_domains = domain
-        assert len(all_domains) == num_variants and "Need same number of domains as variants"
+        assert len(all_domains) == num_variants, "Need same number of domains as variants"
 
         return [cls(name, all_domains[i], values.get("disabling_defines", []), values.get("priority", None), values.get("num", 1), values.get("context", False), port, e, i) for i, e in enumerate(elaborated)]
 
@@ -111,7 +114,7 @@ class Packet:
     def valid_groups(self):
         d = OrderedDict()
         lsb = 0
-        for field in self.fields:
+        for field in self.valid_fields():
             if field.qualify:
                 if field.qualify in d:
                     if d[field.qualify][1] != lsb-1:
@@ -127,7 +130,7 @@ class Packet:
 
     def valid_groups_words(self, padding):
         valid_groups = self.valid_groups()
-        bits = set([sum(field.total_width() for field in self.fields) + padding])
+        bits = set([sum(field.total_width() for field in self.valid_fields()) + padding])
         for lsb,msb in valid_groups.values():
             w = msb - lsb + 1
             bits |= set(s - w for s in bits)
@@ -146,6 +149,11 @@ class Packet:
                 key = lambda x: x[0]
             ),
         )
+
+    def valid_fields(self):
+        for field in self.fields:
+            if field.total_width() > 0:
+                yield field
 
     @staticmethod
     def keywords():
@@ -204,7 +212,7 @@ class PacketStore:
             for packet_name, packet_values in values.items():
                 if packet_name not in ["num", "disabling_defines"]:
                     p = Packet.load(packet_name, {**{'disabling_defines': disabling_defines}, **packet_values}, port)
-                    assert len(p) == len(ports[port]) and "Must specify same number of widths among all packets in a port"
+                    assert len(p) == len(ports[port]), "Must specify same number of widths among all packets in a port"
                     packets.append(p)
         return cls(name, domains, packets, ports, max_byte_transfer)
 

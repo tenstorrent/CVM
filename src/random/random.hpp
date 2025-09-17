@@ -106,7 +106,7 @@ namespace cvm {
 
           template <typename T>
           static T generate() {
-              state = (a*state + c) % m;
+              state = ((a * state + c) >> 1) & m;
               return state;
           }
 
@@ -117,7 +117,7 @@ namespace cvm {
 
           // magic numbers from glibc
           static inline uint64_t state = 1;
-          static const uint64_t m = 1 << 31;
+          static const uint64_t m = (1ULL << 31) - 1;   //0x7fffffff
           static const uint64_t a = 1103515245;
           static const uint64_t c = 12345;
         };

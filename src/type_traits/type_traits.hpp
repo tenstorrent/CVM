@@ -1,6 +1,9 @@
 #pragma once
+
 #include <string_view>
 #include <bitset>
+#include <array>
+#include <optional>
 
 namespace cvm {
     // https://stackoverflow.com/questions/35941045/can-i-obtain-c-type-names-in-a-constexpr-way/35943472#35943472
@@ -67,6 +70,24 @@ namespace cvm {
             else
               return &array;
           };
+
+          template <typename T, std::size_t... Is>
+          static constexpr auto make_repeat_tuple(std::index_sequence<Is...>) {
+              return std::tuple<std::decay_t<decltype((void(Is), std::declval<T>()))>...>{};
+          }
+
+          template <typename T, std::size_t N>
+          using make_repeat_tuple_t = decltype(make_repeat_tuple<T>(std::make_index_sequence<N>{}));
+
+          template<typename T, std::size_t N, std::size_t... Is>
+          static constexpr auto array_opt_to_tuple_impl(const std::array<std::optional<T>, N>& arr, std::index_sequence<Is...>) {
+              return std::make_tuple(arr[Is].value()...);
+          }
+
+          template<typename T, std::size_t N>
+          static constexpr auto array_opt_to_tuple(const std::array<std::optional<T>, N>& arr) {
+              return array_opt_to_tuple_impl<T, N>(arr, std::make_index_sequence<N>{});
+          }
 
           template <typename T>
           static constexpr std::string_view name() {

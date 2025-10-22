@@ -17,6 +17,8 @@
 #include <any>
 #include <chrono>
 #include <gflags/gflags.h>
+#include <span>
+#include <optional>
 #include "cvm/topology.hpp"
 #include "cvm/type_traits.hpp"
 #include "cvm/logger.hpp"
@@ -276,31 +278,67 @@ namespace cvm {
 
                           moments_[loc].clear();
 
-                          // can have multiple channels
                           std::for_each(channels_[loc].begin(), channels_[loc].end(),
                               [&t, &handles] (auto& channel) {
-                                  auto ready = channel.handles.end();
-                                  for (auto it = channel.handles.begin(); it != channel.handles.end(); ++it) {
-                                      auto& handle = *it;
-                                      if (handle.first && (!(handle.second) || ((handle.second)(t)))) {
-                                          assert((ready == channel.handles.end()) && "multiple filters passing for a channel");
-                                          ready = it;
-                                          handles.emplace_back(std::move(handle.first));
+                                  bool found_waiter = false;
+                                  for (auto it = channel.waiters.begin(); it != channel.waiters.end();) {
+                                      bool delete_waiter = false;
+                                      auto& waiter = *it;
+                                      if (!waiter.handle)
+                                          continue;
 
-                                          // resuming immediately, push to the front
-                                          channel.vals.emplace_front(t);
+                                      if (!waiter.wait_all && !waiter.wait_any) {
+                                          const auto& filter = waiter.filters.at(0);
+                                          if (!filter || filter(t)) {
+                                              waiter.data[0] = t;
+                                              found_waiter = true;
+                                              delete_waiter = true;
+                                          }
                                       }
+                                      else if (waiter.wait_all) {
+                                          bool check_done = false;
+                                          for (unsigned i = 0; i < waiter.filters.size(); ++i) {
+                                              if (waiter.data[i])
+                                                  continue;
+
+                                              const auto& filter = waiter.filters.at(i);
+                                              if (!filter || filter(t)) {
+                                                  waiter.data[i] = t;
+                                                  found_waiter = true;
+                                                  check_done = true;
+                                              }
+                                          }
+
+                                          // reduce
+                                          if (check_done) {
+                                              bool done_waiting = true;
+                                              for (unsigned i = 0; i < waiter.filters.size(); ++i)
+                                                  done_waiting &= bool(waiter.data[i]);
+                                              delete_waiter = done_waiting;
+                                          }
+                                      }
+                                      else if (waiter.wait_any) {
+                                          for (unsigned i = 0; i < waiter.filters.size(); ++i) {
+                                              assert(!waiter.data[i]);
+                                              const auto& filter = waiter.filters.at(i);
+                                              if (!filter || filter(t)) {
+                                                  waiter.data[i] = t;
+                                                  delete_waiter = true;
+                                                  found_waiter = true;
+                                              }
+                                          }
+                                      }
+
+                                      if (delete_waiter) {
+                                          handles.emplace_back(std::move(waiter.handle));
+                                          it = channel.waiters.erase(it);
+                                      }
+                                      else
+                                        ++it;
                                   }
 
-                                  if (ready != channel.handles.end()) {
-                                      // fast vector erase of handle
-                                      auto back = channel.handles.end() - 1;
-                                      if (ready != back)
-                                          *ready = std::move(*back);
-                                      channel.handles.pop_back();
-                                  }
-                                  else // later will swap
-                                      channel.vals.emplace_back(t);
+                                  if (!found_waiter)
+                                    channel.orphans.emplace_back(t);
                           });
 
 
@@ -352,44 +390,175 @@ namespace cvm {
                       }
 
                       task<T> wait(channel_info info, const std::function<bool(const T&)>& filter) {
+                          std::optional<T> data;
+
                           struct awaiter {
                               pool<T>& self;
+                              std::optional<T>& data;
                               channel_info info;
                               std::function<bool(const T&)> filter;
 
                               bool await_ready() noexcept {
-                                  auto& channel = self.channels_[info.loc][info.id].vals;
+                                  auto& orphans = self.channels_[info.loc][info.id].orphans;
+                                  if (orphans.empty())
+                                    return false;
+
                                   if (filter) {
-                                      for (auto it = channel.begin(); it != channel.end(); ++it)
+                                      for (auto it = orphans.begin(); it != orphans.end(); ++it) {
                                           if ((filter)(*it)) {
-                                              if (it != channel.begin())
-                                                  std::iter_swap(channel.begin(), it);
+                                              data = std::move(*it);
+                                              orphans.erase(it);
                                               return true;
                                           }
-                                      return false;
+                                      }
                                   }
-                                  else
-                                      return !channel.empty();
+                                  else {
+                                      data = orphans.front();
+                                      orphans.pop_front();
+                                      return true;
+                                  }
+                                  return false;
                               };
                               void await_suspend(std::coroutine_handle<> awaiting) noexcept {
-                                  self.channels_[info.loc][info.id].handles.emplace_back(awaiting, std::move(filter));
+                                  self.channels_[info.loc][info.id].waiters.emplace_back(awaiting, filter, &data);
                               };
                               T await_resume() noexcept {
-                                  auto& channel = self.channels_[info.loc][info.id].vals;
-                                  auto val = std::move(channel.front());
-                                  channel.pop_front();
-                                  return val;
+                                  return data.value();
                               };
                           };
 
                           if (info.id >= channels_[info.loc].size())
                               assert(false && "channel id is invalid");
                           else
-                              co_return co_await awaiter{*this, info, filter};
+                              co_return co_await awaiter{*this, data, info, filter};
+                      }
+
+                      template <typename... Fs>
+                        requires (std::convertible_to<Fs, std::function<bool(const T&)>> && ...)
+                      task<cvm::type_traits::make_repeat_tuple_t<T, sizeof...(Fs)>> wait_all(channel_info info, Fs... filters) {
+                          using array_t = std::array<std::optional<T>, sizeof...(Fs)>;
+                          array_t data;
+
+                          struct awaiter {
+                              pool<T>& self;
+                              array_t& data;
+                              channel_info info;
+                              std::vector<std::function<bool(const T&)>> filters;
+
+                              bool await_ready() noexcept {
+                                  auto& orphans = self.channels_[info.loc][info.id].orphans;
+                                  if (orphans.empty())
+                                    return false;
+
+                                  int found = 0;
+                                  for (auto it = orphans.begin(); it != orphans.end() && found != data.size();) {
+                                      bool removable = false;
+                                      for (unsigned i = 0; i < filters.size(); ++i) {
+                                          if (data.at(i))
+                                            continue;
+
+                                          const auto& filter = filters.at(i);
+                                          if (filter) {
+                                              if ((filter)(*it)) {
+                                                data.at(i) = *it;
+                                                ++found;
+                                                removable = true;
+                                              }
+                                          }
+                                          else {
+                                            data.at(i) = *it;
+                                            ++found;
+                                            removable = true;
+                                          }
+                                      }
+
+                                      if (removable)
+                                        it = orphans.erase(it);
+                                      else
+                                        ++it;
+                                  }
+                                  return found == data.size();
+                              };
+                              void await_suspend(std::coroutine_handle<> awaiting) noexcept {
+                                  self.channels_[info.loc][info.id].waiters.emplace_back(awaiting, filters, data, true, false);
+                              };
+                              cvm::type_traits::make_repeat_tuple_t<T, sizeof...(Fs)> await_resume() noexcept {
+                                  return cvm::type_traits::array_opt_to_tuple(data);
+                              };
+                          };
+
+                          if (info.id >= channels_[info.loc].size())
+                              assert(false && "channel id is invalid");
+                          else
+                              co_return co_await awaiter{*this, data, info, {std::forward<Fs>(filters)...}};
+                      }
+
+                      template <typename... Fs>
+                        requires (std::convertible_to<Fs, std::function<bool(const T&)>> && ...)
+                      task<cvm::type_traits::make_repeat_tuple_t<std::optional<T>, sizeof...(Fs)>> wait_any(channel_info info, Fs... filters) {
+                          using array_t = std::array<std::optional<T>, sizeof...(Fs)>;
+                          array_t data;
+
+                          struct awaiter {
+                              pool<T>& self;
+                              array_t& data;
+                              channel_info info;
+                              std::vector<std::function<bool(const T&)>> filters;
+
+                              bool await_ready() noexcept {
+                                  auto& orphans = self.channels_[info.loc][info.id].orphans;
+                                  if (orphans.empty())
+                                    return false;
+
+                                  int found = 0;
+                                  for (auto it = orphans.begin(); it != orphans.end() && found != data.size();) {
+                                      bool removable = false;
+                                      for (unsigned i = 0; i < filters.size(); ++i) {
+                                          if (data.at(i))
+                                            continue;
+
+                                          const auto& filter = filters.at(i);
+                                          if (filter) {
+                                              if ((filter)(*it)) {
+                                                data.at(i) = *it;
+                                                ++found;
+                                                removable = true;
+                                              }
+                                          }
+                                          else {
+                                            data.at(i) = *it;
+                                            ++found;
+                                            removable = true;
+                                          }
+                                      }
+
+                                      if (removable)
+                                        it = orphans.erase(it);
+                                      else
+                                        ++it;
+                                  }
+                                  return found > 0;
+                              };
+                              void await_suspend(std::coroutine_handle<> awaiting) noexcept {
+                                  self.channels_[info.loc][info.id].waiters.emplace_back(awaiting, filters, data, false, true);
+                              };
+                              cvm::type_traits::make_repeat_tuple_t<std::optional<T>, sizeof...(Fs)> await_resume() noexcept {
+                                  return std::tuple_cat(data);
+                              };
+                          };
+
+                          if (info.id >= channels_[info.loc].size())
+                              assert(false && "channel id is invalid");
+                          else
+                              co_return co_await awaiter{*this, data, info, {std::forward<Fs>(filters)...}};
+                      }
+
+                      auto get_orphans(channel_info info) {
+                          return channels_[info.loc][info.id].orphans;
                       }
 
                       void clear_channel(channel_info info) {
-                          channels_[info.loc][info.id].vals.clear();
+                          channels_[info.loc][info.id].orphans.clear();
                           return;
                       }
 
@@ -419,8 +588,24 @@ namespace cvm {
                       struct channel {
                           channel() = default;
 
-                          std::deque<T> vals;
-                          std::vector<std::pair<std::coroutine_handle<>, std::function<bool(const T&)>>> handles;
+                          struct channel_waiter {
+                            channel_waiter(std::coroutine_handle<> h, const std::function<bool(const T&)>& f, std::optional<T>* t)
+                              : handle(h), filters({f}), data(t, 1) {};
+
+                            template <size_t N>
+                            channel_waiter(std::coroutine_handle<> h, const std::vector<std::function<bool(const T&)>>& f,
+                                           std::array<std::optional<T>, N>& ts, bool wait_all, bool wait_any)
+                              : handle(h), filters(f), data(ts), wait_all(wait_all), wait_any(wait_any) {};
+
+                            std::coroutine_handle<> handle;
+                            std::vector<std::function<bool(const T&)>> filters;
+                            std::span<std::optional<T>> data;
+                            bool wait_all;
+                            bool wait_any;
+                          };
+
+                          std::deque<T> orphans; // We insert here if there's no waiters matching on new message.
+                          std::vector<channel_waiter> waiters; // Per-coroutine handle.
                       };
                       std::unordered_map<cvm::topology::loc_t, std::vector<channel>> channels_;
               };
@@ -552,9 +737,30 @@ namespace cvm {
                   co_return co_await message_pool<T>()->wait(info, filter);
               }
 
+              // If any filter is passing, will return T.
+              template <typename T, typename... Fs>
+                requires (std::convertible_to<Fs, std::function<bool(const T&)>> && ...)
+              task<cvm::type_traits::make_repeat_tuple_t<std::optional<T>, sizeof...(Fs)>> wait_any(typename pool<T>::channel_info info, Fs... filters) {
+                  co_return co_await message_pool<T>()->wait_any(info, std::forward<Fs>(filters)...);
+              }
+
+              // Returns matching transaction for each filter. If a transaction would apply
+              // to more than one filter we keep both. Does not return until all filters
+              // are passing.
+              template <typename T, typename... Fs>
+                requires (std::convertible_to<Fs, std::function<bool(const T&)>> && ...)
+              task<cvm::type_traits::make_repeat_tuple_t<T, sizeof...(Fs)>> wait_all(typename pool<T>::channel_info info, Fs... filters) {
+                  co_return co_await message_pool<T>()->wait_all(info, std::forward<Fs>(filters)...);
+              }
+
               template <typename T>
               auto channel(cvm::topology::loc_t loc) {
                   return message_pool<T>()->create_channel(loc);
+              }
+
+              template <typename T>
+              auto get_channel_orphans(typename pool<T>::channel_info info) {
+                  return message_pool<T>()->get_orphans(info);
               }
 
               template <typename T>

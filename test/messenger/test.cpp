@@ -124,7 +124,38 @@ cvm::messenger::task<void> long_running5_1(cvm::messenger::pool<transaction1>::c
   }
 }
 
+cvm::messenger::task<void> long_running5_2(cvm::messenger::pool<transaction1>::channel_info channel) {
+  while (1) {
+    auto [t1, t2] = co_await messenger5.wait_any<transaction1>(channel, [](const transaction1& t) { return t.i == 3; },
+                                                                        [](const transaction1& t) { return t.i == 4; });
+    hit++;
+
+    if (hit == 6) {
+      EXPECT_EQ(bool(t1), true);
+      EXPECT_EQ(t1->i, 3);
+      EXPECT_EQ(bool(t2), false);
+    }
+
+    if (hit == 7) {
+      EXPECT_EQ(bool(t1), false);
+      EXPECT_EQ(bool(t2), true);
+      EXPECT_EQ(t2->i, 4);
+    }
+  }
+}
+
+cvm::messenger::task<void> long_running5_3(cvm::messenger::pool<transaction1>::channel_info channel) {
+  while (1) {
+    auto [t1, t2] = co_await messenger5.wait_all<transaction1>(channel, [](const transaction1& t) { return t.i == 5; },
+                                                                        [](const transaction1& t) { return t.i == 6; });
+    EXPECT_EQ(t1.i, 5);
+    EXPECT_EQ(t2.i, 6);
+    hit++;
+  }
+}
+
 TEST(Messenger, Filter) {
+  hit = 0;
   auto channel = messenger5.channel<transaction1>(5);
   messenger5.signal(5, transaction1{1});
   messenger5.signal(5, transaction1{0});
@@ -134,10 +165,16 @@ TEST(Messenger, Filter) {
   messenger5.signal(5, transaction1{0});
   messenger5.signal(5, transaction1{1});
   messenger5.signal(5, transaction1{2});
-  EXPECT_EQ(hit, 5);
+  messenger5.signal(5, transaction1{3});
+  messenger5.fork(long_running5_2, channel);
+  messenger5.signal(5, transaction1{4});
+  messenger5.signal(5, transaction1{6});
+  messenger5.fork(long_running5_3, channel);
+  messenger5.signal(5, transaction1{5});
+  EXPECT_EQ(hit, 8);
 }
 
-// Procedure Call Tests 
+// Procedure Call Tests
 
 cvm::messenger messenger6;
 

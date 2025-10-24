@@ -254,3 +254,19 @@ TEST(Messenger, Reference) {
   messenger10.call<Add5>(10, 7, 11, c);
   EXPECT_EQ(c, 18);
 }
+
+cvm::messenger messenger11;
+uint8_t d = 0;
+
+cvm::messenger::task<void> sync_test() {
+  while (true) {
+    co_await messenger11.wait_sync_var_is_n(d, 1);
+    ++d;
+  }
+}
+
+TEST(Messenger, SyncVar) {
+  messenger11.fork(sync_test);
+  EXPECT_EQ(messenger11.fetch_add_sync_var(d, 1), 0);
+  EXPECT_EQ(d, 2);
+}

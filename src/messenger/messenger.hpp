@@ -590,7 +590,7 @@ namespace cvm {
 
                           struct channel_waiter {
                             channel_waiter(std::coroutine_handle<> h, const std::function<bool(const T&)>& f, std::optional<T>* t)
-                              : handle(h), filters({f}), data(t, 1) {};
+                              : handle(h), filters({f}), data(t, 1), wait_all(false), wait_any(false) {};
 
                             template <size_t N>
                             channel_waiter(std::coroutine_handle<> h, const std::vector<std::function<bool(const T&)>>& f,
@@ -753,6 +753,67 @@ namespace cvm {
                   co_return co_await message_pool<T>()->wait_all(info, std::forward<Fs>(filters)...);
               }
 
+              template <typename T, typename U>
+                requires (std::is_integral_v<T> && std::is_integral_v<U>)
+              task<void> wait_sync_var_is_n(T& var, U n) {
+                  struct awaiter {
+                      messenger& self;
+                      T& var;
+                      U n;
+
+                      bool await_ready() noexcept {
+                          return std::atomic_ref(var).load() == n;
+                      };
+                      void await_suspend(std::coroutine_handle<> awaiting) noexcept {
+                          self.sync_vars_[(void*) &var].emplace_back(awaiting, n);
+                      };
+                      void await_resume() noexcept {
+                          return;
+                      };
+                  };
+                  co_return co_await awaiter{*this, var, n};
+              }
+
+              template <typename T, typename U>
+                requires (std::is_integral_v<T> && std::is_integral_v<U>)
+              auto fetch_add_sync_var(T& var, U n) {
+                  auto a = std::atomic_ref(var).fetch_add(n);
+                  std::vector<std::coroutine_handle<>> handles;
+                  for (auto it = sync_vars_[(void*) &var].begin(); it != sync_vars_[(void*) &var].end();) {
+                      auto [handle, wait] = *it;
+                      if ((a + n) == wait) {
+                          it = sync_vars_[(void*) &var].erase(it);
+                          handles.push_back(handle);
+                      }
+                      else
+                        ++it;
+                  }
+
+                  for (auto handle : handles)
+                    handle.resume();
+                  return a;
+              }
+
+              template <typename T, typename U>
+                requires (std::is_integral_v<T> && std::is_integral_v<U>)
+              auto fetch_sub_sync_var(T& var, U n) {
+                  auto a = std::atomic_ref(var).fetch_sub(n);
+                  std::vector<std::coroutine_handle<>> handles;
+                  for (auto it = sync_vars_[(void*) &var].begin(); it != sync_vars_[(void*) &var].end();) {
+                      auto [handle, wait] = *it;
+                      if ((a - n) == wait) {
+                          it = sync_vars_[(void*) &var].erase(it);
+                          handles.push_back(handle);
+                      }
+                      else
+                        ++it;
+                  }
+
+                  for (auto handle : handles)
+                    handle.resume();
+                  return a;
+              }
+
               template <typename T>
               auto channel(cvm::topology::loc_t loc) {
                   return message_pool<T>()->create_channel(loc);
@@ -848,6 +909,8 @@ namespace cvm {
 
               std::unordered_map<std::type_index, std::shared_ptr<procedure_call_base>> procedure_calls_;
               std::mutex procedure_calls_mutex_;
+
+              std::unordered_map<void*, std::deque<std::tuple<std::coroutine_handle<>, uint64_t>>> sync_vars_;
 
               std::recursive_mutex running_task_mutex_;
       };

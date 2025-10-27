@@ -26,8 +26,8 @@ namespace cvm {
         public:
 
           template <typename T, typename... Args>
-          meta_helper([[maybe_unused]] identity<T> an, cvm::topology::loc_t loc, unsigned id, Args&&... args)
-            : loc_(loc), obj_(nullptr, []([[maybe_unused]] void* obj) {}) {
+          meta_helper([[maybe_unused]] identity<T> an, cvm::topology::loc_t loc, unsigned id, unsigned reset_domain, Args&&... args)
+            : loc_(loc), reset_domain_(reset_domain), obj_(nullptr, []([[maybe_unused]] void* obj) {}) {
 
             construct_ = [this, loc, id, ...args = std::forward<Args>(args)]() {
               obj_ = std::unique_ptr<void, void(*)(void*)>(
@@ -53,7 +53,8 @@ namespace cvm {
             }
           }
 
-          cvm::topology::loc_t loc_ = 0;
+          cvm::topology::loc_t loc_;
+          unsigned reset_domain_;
           std::unique_ptr<void, void(*)(void*)> obj_;
 
           // Helper functions.
@@ -162,19 +163,20 @@ namespace cvm {
         return build(std::ranges::ref_view(components()));
       }
 
-      // TODO: We can support hierarchical path resets. That is, given an id,
-      // perform operation on all underlying hierarchical paths.
       static void build(cvm::topology::loc_t loc) {
         return build(std::ranges::filter_view(components(), [loc](auto& c) { return c.loc_ == loc; }));
       }
 
-      // Temporary until domain support.
       static void build_all_except(cvm::topology::loc_t loc) {
         return build(std::ranges::filter_view(components(), [loc](auto& c) { return c.loc_ != loc; }));
       }
 
       static void build_all_except(const std::unordered_set<cvm::topology::loc_t>& loc) {
         return build(std::ranges::filter_view(components(), [loc](auto& c) { return not loc.contains(c.loc_); }));
+      }
+
+      static void build_domain(unsigned reset_domain) {
+        return build(std::ranges::filter_view(components(), [reset_domain](auto& c) { return c.reset_domain_ == reset_domain; }));
       }
 
       static void configure() {
@@ -206,6 +208,10 @@ namespace cvm {
         return shutdown(std::ranges::filter_view(components(), [loc](auto& c) { return not loc.contains(c.loc_); }));
       }
 
+      static bool shutdown_domain(unsigned reset_domain) {
+        return shutdown(std::ranges::filter_view(components(), [reset_domain](auto& c) { return c.reset_domain_ == reset_domain; }));
+      }
+
       template <typename T>
       static bool is_registered() {
         return registered().count(typeid(T).name());
@@ -224,8 +230,13 @@ namespace _registry {
 }
 
 // this should be used in source file
-// presumably, objects will subscribe to transactions in constructor
+#define REGISTRY_register_with_reset(type, module, id, reset_domain, ...) \
+    namespace _registry { \
+      static bool REGISTRY_CONCAT(_, __COUNTER__) = std::invoke([]() -> bool { return cvm::registry::regist<RemoveBrackets<void (type)>::Type>( #module, id, reset_domain __VA_OPT__(,) __VA_ARGS__); }); \
+    }
+
+// if reset domain not specified, default to 0
 #define REGISTRY_register(type, module, id, ...) \
     namespace _registry { \
-      static bool REGISTRY_CONCAT(_, __COUNTER__) = std::invoke([]() -> bool { return cvm::registry::regist<RemoveBrackets<void (type)>::Type>( #module, id __VA_OPT__(,) __VA_ARGS__); }); \
+      static bool REGISTRY_CONCAT(_, __COUNTER__) = std::invoke([]() -> bool { return cvm::registry::regist<RemoveBrackets<void (type)>::Type>( #module, id, 0 __VA_OPT__(,) __VA_ARGS__); }); \
     }

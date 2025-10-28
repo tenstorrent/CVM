@@ -145,13 +145,11 @@ cvm::messenger::task<void> long_running5_2(cvm::messenger::pool<transaction1>::c
 }
 
 cvm::messenger::task<void> long_running5_3(cvm::messenger::pool<transaction1>::channel_info channel) {
-  while (1) {
-    auto [t1, t2] = co_await messenger5.wait_all<transaction1>(channel, [](const transaction1& t) { return t.i == 5; },
-                                                                        [](const transaction1& t) { return t.i == 6; });
-    EXPECT_EQ(t1.i, 5);
-    EXPECT_EQ(t2.i, 6);
-    hit++;
-  }
+  auto [t1, t2] = co_await messenger5.wait_all<transaction1>(channel, [](const transaction1& t) { return t.i == 5; },
+                                                                      [](const transaction1& t) { return t.i == 6; });
+  EXPECT_EQ(t1.i, 5);
+  EXPECT_EQ(t2.i, 6);
+  hit++;
 }
 
 TEST(Messenger, Filter) {
@@ -269,4 +267,20 @@ TEST(Messenger, SyncVar) {
   messenger11.fork(sync_test);
   EXPECT_EQ(messenger11.fetch_add_sync_var(d, 1), 0);
   EXPECT_EQ(d, 2);
+}
+
+
+cvm::messenger messenger12;
+uint8_t _12 = 0;
+
+cvm::messenger::task<void> increment() {
+  _12++;
+  co_return;
+}
+
+TEST(Messenger, Fork) {
+  messenger12.fork(increment);
+  // Fork shouldn't come back here.
+  _12++;
+  EXPECT_EQ(_12, 2);
 }

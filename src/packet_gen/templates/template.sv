@@ -53,8 +53,13 @@ package ${packet_store.name};
 endpackage
 
 % for domain,domain_packets in by_domain.items():
+<% init = packet_store.domains.get(domain, {}).get('dpi_init', '') %>\
+
 module ${packet_store.name}_domain_${domain}(
     input clk,
+    % if ( init != '' ):
+    input call_${init},
+    % endif
     input ${packet_store.name}::domain_${domain} tx
 );
 
@@ -99,10 +104,16 @@ import "DPI-C" ${"context" if packet.context else ""} function void ${packet_sto
         %endfor
     %endfor
 %endfor
+    %if (init != '') :
+        import "DPI-C" function void ${init}();
+    %endif
 
     ${packet_store.domains.get(domain, {}).get('always_block_header', '')}
     /* verilator lint_off BLKSEQ */
     always @(posedge clk) begin
+       %if (init != '') :
+       if (call_${init} == 1'b1) ${init}();
+       %endif
 %for packet in domain_packets:
     % for define in packet.disabling_defines:
 `ifndef ${define}
@@ -173,6 +184,9 @@ endmodule
     ${packet_store.name}_domain_``domain                   ${bs}
         ${packet_store.name}_domain_``domain (             ${bs}
             .clk(clock),                              ${bs}
+            % if ( init != '' ):
+            .call_${init}(call_${init}),
+            % endif
             .tx(tx_dom_``domain),                     ${bs}
             .*                                        ${bs}
         );

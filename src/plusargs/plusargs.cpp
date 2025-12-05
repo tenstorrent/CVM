@@ -23,20 +23,30 @@ void cvm::plusargs::parse() {
     s_vpi_vlog_info info;
     vpi_get_vlog_info(&info);
 
-    std::string_view undefok_regexp = "+undefok_regexp="sv;
+    struct StartsWith {
+      std::string_view prefix;
+
+      auto operator() (const char* arg) {
+        return std::string_view(arg).starts_with(prefix);
+      }
+    } starts_with("+undefok_regexp="sv);
+
+    struct Extract {
+      std::string_view prefix;
+
+      auto operator() (const char* arg) {
+        return std::string_view(arg).substr(prefix.length()).data();
+      }
+    } extract("+undefok_regexp="sv);
+
     std::vector<std::string> argvv;
 
     auto argv_view = std::ranges::views::counted(info.argv, info.argc);
-
-    auto starts_with_undefok_regexp = [undefok_regexp](const char* arg) { return std::string_view(arg).starts_with(undefok_regexp); };
-
     auto regex_view = argv_view
-                      | std::ranges::views::filter(starts_with_undefok_regexp)
-                      | std::ranges::views::transform([undefok_regexp](const char* arg) {
-                          return std::string_view(arg).substr(undefok_regexp.length()).data();
-                      });
+                      | std::ranges::views::filter(starts_with)
+                      | std::ranges::views::transform(extract);
 
-    for (const char* argv_item : argv_view | std::ranges::views::filter(std::not_fn(starts_with_undefok_regexp))) {
+    for (const char* argv_item : argv_view | std::ranges::views::filter(std::not_fn(starts_with))) {
         if (argv_item[0] == '+') {
             if (std::ranges::any_of(regex_view, [argv_item](const char* pattern) {
                                                     return std::regex_search(argv_item, std::regex(pattern));

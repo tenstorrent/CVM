@@ -25,6 +25,10 @@ TEST(Plusargs, Plusargs) {
         "+notestclrbool",
         "+teststring=test",
         "+flagfile=./flagfile",
+        "+undefok_regexp=\\+nonexistent",
+        "+undefok_regexp=\\+anothernonexistentflag\\+file",
+        "+nonexistentflag",
+        "+anothernonexistentflag+file_abcde"
     };
 
     VerilatedContext ctx;

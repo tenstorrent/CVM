@@ -4,6 +4,13 @@
 #include "transactions.hpp"
 #include <gtest/gtest.h>
 
+// Track whether dpi_init was called
+static int initialize_domain1_call_count = 0;
+
+extern "C" void transactions_dpi_init_domain_1() {
+    initialize_domain1_call_count++;
+}
+
 class checker {
 
     public:
@@ -44,7 +51,7 @@ class checker {
             );
             cvm::registry::messenger.connect<transactions::dut::ctx<>>(
                 loc,
-                [] (const transactions::dut::ctx<>& ret) {
+                [] (const transactions::dut::ctx<>&) {
                     transactions_finish();
                 }
             );
@@ -112,5 +119,8 @@ extern "C" void start_checker() {
 }
 
 extern "C" void end_checker() {
+    // Verify dpi_init was called at least once
+    EXPECT_GT(initialize_domain1_call_count, 0) 
+        << "dpi_init function 'initialize_domain1' was never called";
     cvm::registry::shutdown();
 }

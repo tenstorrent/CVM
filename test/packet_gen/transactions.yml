@@ -78,5 +78,8 @@ all_disabled:
             dummy:
                 width: 32
 
+__domains:
+    1:
+       dpi_init: "call_initialize_domain1"
 
 __max_byte_transfer: 28

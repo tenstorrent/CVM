@@ -93,6 +93,9 @@ module top(
     end
 `endif
 
+    // Signal for dpi_init test - triggers the initialize_domain1() DPI call
+    logic call_initialize_domain1;
+    
     `TRANSACTIONS_DOMAIN(1, clk)
 
     int clock_count = 0;
@@ -102,6 +105,9 @@ module top(
 
     logic rst;
     assign rst = clock_count < 5;
+    
+    // Trigger dpi_init during the first clock after reset
+    assign call_initialize_domain1 = (clock_count == 5);
 
     dut #(
         `TRANSACTIONS_DUT_SOURCE_PARAMS(0)

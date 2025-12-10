@@ -53,7 +53,7 @@ package ${packet_store.name};
 endpackage
 
 % for domain,domain_packets in by_domain.items():
-<% init = packet_store.domains.get(domain, {}).get('dpi_init', '') %>\
+<% init = packet_store.domains.get(domain, {}).get('dpi_init', '') or '' %>\
 
 module ${packet_store.name}_domain_${domain}(
     input clk,

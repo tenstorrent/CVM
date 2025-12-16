@@ -79,6 +79,22 @@ module all_disabled #(
 
 endmodule
 
+module no_init_test #(
+    `TRANSACTIONS_NO_INIT_TEST_OUTPUT_PARAMS
+) (
+    input clk,
+    input rst,
+    `TRANSACTIONS_NO_INIT_TEST_OUTPUT_PORTS
+);
+
+    parameter int unsigned loc = cvm_topology_gen::get_location (cvm_topology_gen::mods.TOP.CLUSTER.CORE.ID, 0);
+
+    assign m_ticks[0].valid             = '1;
+    assign m_ticks[0].data.location     = loc;
+    assign m_ticks[0].data.cycle        = 5;
+
+endmodule
+
 module top(
 `ifdef TB_EXTERNAL_CLOCK
     input clk
@@ -93,7 +109,12 @@ module top(
     end
 `endif
 
+    // Signals for dpi_init test - triggers the initialize_domainX() DPI calls
+    logic initialize_domain1;
+    
     `TRANSACTIONS_DOMAIN(1, clk)
+
+    `TRANSACTIONS_DOMAIN(2, clk)
 
     int clock_count = 0;
     always @(posedge clk) begin
@@ -102,6 +123,9 @@ module top(
 
     logic rst;
     assign rst = clock_count < 5;
+    
+    // Trigger dpi_init during the first clock after reset
+    assign initialize_domain1 = (clock_count == 5);
 
     dut #(
         `TRANSACTIONS_DUT_SOURCE_PARAMS(0)
@@ -137,6 +161,14 @@ module top(
         .clk,
         .rst,
         `TRANSACTIONS_ALL_DISABLED_SOURCE_PORTS(1, 0, 0)
+    );
+
+    no_init_test #(
+        `TRANSACTIONS_NO_INIT_TEST_SOURCE_PARAMS(0)
+    ) no_init_test (
+        .clk,
+        .rst,
+        `TRANSACTIONS_NO_INIT_TEST_SOURCE_PORTS(2, 0, 0)
     );
 
 

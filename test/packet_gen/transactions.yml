@@ -78,5 +78,21 @@ all_disabled:
             dummy:
                 width: 32
 
+no_init_test:
+    num: 1
+    m_tick:
+        num: 1
+        domain: 2
+        fields:
+            cycle:
+                width: 32
+
+
+__domains:
+    1:
+      dpi_init: 'initialize_domain1'
+    2:
+      dpi_init: 
+
 
 __max_byte_transfer: 28

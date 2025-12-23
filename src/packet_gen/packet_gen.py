@@ -287,20 +287,31 @@ class PacketsGen:
 
 
 
+def merge_definitions(definitions: list[str], merged: str):
+    """Merge multiple yml definition files into a single file."""
+    with open(merged, 'wb') as ostream:
+        for defin in definitions:
+            with open(defin, 'rb') as istream:
+                ostream.write(istream.read() + b'\n')
+
+
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--definition", help="yml file containing packet definitions", required=True)
+    parser.add_argument("--definitions", nargs='+', help="yml files containing packet definitions", required=True)
     parser.add_argument("--incdir"    , help="Path to strip off when generating #include", required=True)
     parser.add_argument("--name"      , help="name of output package and namespace", required=True)
     parser.add_argument("--hpp", help="name of generated hpp", required=True)
     parser.add_argument("--cpp", help="name of generated cpp", required=True)
     parser.add_argument("--sv" , help="name of generated sv", required=True)
     parser.add_argument("--topology", help="name of topology json", required=True)
+    parser.add_argument("--merged", help="merged yml file to generate", required=True)
 
     args = parser.parse_args()
 
-    p = PacketStore.load_file(args.name, args.definition, args.topology)
+    merge_definitions(args.definitions, args.merged)
+
+    p = PacketStore.load_file(args.name, args.merged, args.topology)
     g = PacketsGen(p)
 
     for t in ['hpp', 'cpp', 'sv']:

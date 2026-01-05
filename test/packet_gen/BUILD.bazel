@@ -17,7 +17,7 @@ topology_gen(
 
 packet_gen(
     name = "transactions",
-    srcs = ["transactions.yml"],
+    srcs = ["shared_fields.yml", "transactions.yml"],
     topology = "topology",
     cc_attrs = {
         'alwayslink': True,

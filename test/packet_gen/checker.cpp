@@ -59,6 +59,12 @@ class checker {
                     transactions_finish();
                 }
             );
+            cvm::registry::messenger.connect<transactions::dut::anchor_test<>>(
+                loc,
+                [this] (const transactions::dut::anchor_test<>& ret) {
+                    this->check(ret);
+                }
+            );
         }
 
     private:
@@ -103,6 +109,12 @@ class checker {
 
         void check(const transactions::dut2::pkt2<1>& pkt2) {
             check("dummy2", pkt2.dummy2, decltype(pkt2.dummy2)(3));
+        }
+
+        void check(const transactions::dut::anchor_test<>& pkt) {
+            check("shared_field1", pkt.shared_field1, decltype(pkt.shared_field1)(0x1234));
+            check("shared_field2", pkt.shared_field2, decltype(pkt.shared_field2)(0xDEADBEEF));
+            check("extra_field", pkt.extra_field, decltype(pkt.extra_field)(0x42));
         }
 
 };

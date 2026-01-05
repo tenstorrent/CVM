@@ -186,7 +186,21 @@ class PacketStore:
         except:
             raise Exception(exceptions.text_error_template().render()) from None
 
-        for port, values in yaml.safe_load(rendered.getvalue()).items():
+        loaded_yaml = yaml.safe_load(rendered.getvalue())
+
+        # delete all nodes that are anchors (not ports or special fields)
+        # anchors are keys that don't start with "__" and are used for YAML anchor definitions
+        keys_to_delete = []
+        for k in loaded_yaml:
+            if not k.startswith("__") and not isinstance(loaded_yaml[k], dict):
+                keys_to_delete += [k]
+            elif isinstance(loaded_yaml[k], dict) and "num" not in loaded_yaml[k] and not k.startswith("__"):
+                # anchor definitions don't have "num" field, ports do
+                keys_to_delete += [k]
+        for k in keys_to_delete:
+            del loaded_yaml[k]
+
+        for port, values in loaded_yaml.items():
 
             if port.startswith("__"): # special fields
                 f = port[2:]

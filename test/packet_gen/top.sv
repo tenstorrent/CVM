@@ -45,6 +45,12 @@ module dut #(
     assign ctxs[0].data.location   = loc;
     assign ctxs[0].data.dummy      = 1'b1;
 
+    assign anchor_tests[0].valid              = count == 3;
+    assign anchor_tests[0].data.location      = loc;
+    assign anchor_tests[0].data.shared_field1 = 16'h1234;
+    assign anchor_tests[0].data.shared_field2 = 32'hDEADBEEF;
+    assign anchor_tests[0].data.extra_field   = 8'h42;
+
 endmodule
 
 module dut2 #(

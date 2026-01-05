@@ -59,6 +59,15 @@ dut:
   empty:
       domain: 1
 
+  # Test anchor usage with <<: merge key
+  anchor_test:
+      domain: 1
+      num: 1
+      fields:
+          <<: *shared_fields
+          extra_field:
+              width: 8
+
 dut2:
   num: [2, 1]
   pkt2:

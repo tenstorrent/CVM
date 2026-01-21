@@ -122,8 +122,8 @@ namespace cvm {
     public:
 
       inline static int all = -1;
-      inline static messenger messenger;
-      inline static callbacks callbacks;
+      inline static ::cvm::messenger messenger;
+      inline static ::cvm::callbacks callbacks;
 
       template<typename T, typename... Args>
       static bool regist(const std::string& module, int id, Args&&... args) {

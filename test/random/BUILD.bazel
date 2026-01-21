@@ -27,7 +27,7 @@ verilog_flist(
 
 verilator_cc_library(
     name  = "random_lfsr_test_veri_lib",
-    mtop  = "top",
+    top_module  = "top",
     vopts = ["--assert", "--public"],
     flist = "random_lfsr_test.f",
 )

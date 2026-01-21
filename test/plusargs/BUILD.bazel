@@ -16,7 +16,7 @@ verilog_flist(
 
 verilator_cc_library(
     name  = "plusargs_test_veri_lib",
-    mtop  = "plusargs_test",
+    top_module  = "plusargs_test",
     vopts = ["--assert"],
     flist = "plusargs_test.f",
 )

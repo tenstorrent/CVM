@@ -8,7 +8,7 @@ cc_test(
     deps = [
         "//:messenger",
         "@com_google_googletest//:gtest_main",
-        "@verilator_v{}//:libverilator".format(verilator_version),
+        "@verilator//:libverilated".format(verilator_version),
     ],
     linkopts = linkopts,
 )

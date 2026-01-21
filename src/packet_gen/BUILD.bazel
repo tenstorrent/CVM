@@ -5,6 +5,7 @@ py_binary(
     srcs = ["packet_gen.py"],
     deps = [
         requirement("Mako"),
+        requirement("PyYAML"),
         "//src/topology:topology_query"
     ],
     data = glob(["templates/template.*"]),

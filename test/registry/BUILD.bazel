@@ -25,7 +25,7 @@ verilog_flist(
 
 verilator_cc_library(
     name = "top_veri_lib",
-    mtop = "top",
+    top_module = "top",
     vopts = [
         "--assert",
         "-Wno-DECLFILENAME",

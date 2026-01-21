@@ -1,0 +1,55 @@
+module(name = "cvm", version = "")
+
+# BCR dependencies
+bazel_dep(name = "bazel_skylib", version = "1.7.1")
+bazel_dep(name = "googletest", version = "1.15.2", repo_name = "com_google_googletest")
+bazel_dep(name = "rules_python", version = "0.40.0")
+bazel_dep(name = "gflags", version = "2.2.2", repo_name = "com_github_gflags_gflags")
+bazel_dep(name = "platforms", version = "1.0.0")
+bazel_dep(name = "rules_hdl", version = "2026.01.16-22.01.28")
+
+# fmt 8.1.1 with custom patch (BCR version is too new and has breaking changes)
+http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+http_archive(
+    name = "fmt",
+    url = "https://aus-gitlab.local.tenstorrent.com/riscv/forks/fmt/-/archive/8.1.1/fmt-8.1.1.tar.gz",
+    sha256 = "3d794d3cf67633b34b2771eb9f073bde87e846e0d395d254df7b211ef1ec7346",
+    strip_prefix = "fmt-8.1.1",
+    patches = ["//deps:fmt.patch"],
+    build_file_content = """
+cc_library(
+    name = "fmt",
+    hdrs = glob(["include/**"]),
+    srcs = ["src/format.cc", "src/os.cc"],
+    includes = ["include"],
+    visibility = ["//visibility:public"],
+)
+""",
+)
+
+# rules_verilator from registry
+bazel_dep(name = "rules_verilator", version = "2026.01.21-20.15.07")
+
+# CVM-specific internal deps (rules_vcs)
+internal_deps = use_extension("//deps:extensions.bzl", "internal_deps")
+use_repo(internal_deps, "rules_vcs")
+
+# Verilator-related internal deps from rules_verilator's extension
+verilator_deps = use_extension("@rules_verilator//verilator:extensions.bzl", "internal_deps")
+use_repo(verilator_deps, "verilator")
+
+# Python toolchain - use Python 3.9 to match requirements_lock.txt
+python = use_extension("@rules_python//python/extensions:python.bzl", "python")
+python.toolchain(
+    is_default = True,
+    python_version = "3.9",
+)
+
+# Python pip extension for requirements
+pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip")
+pip.parse(
+    hub_name = "cvm_pypi",
+    python_version = "3.9",
+    requirements_lock = "//deps:requirements_lock.txt",
+)
+use_repo(pip, "cvm_pypi")

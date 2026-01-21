@@ -73,7 +73,7 @@ namespace cvm {
 
                     if (check_verbosity(v)) {
 
-                        fmt::print(out, prefix());
+                        fmt::print(out, "{}", prefix());
                         fmt::print(out, std::forward<Args>(args)...);
 
                     }

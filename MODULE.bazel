@@ -9,7 +9,7 @@ bazel_dep(name = "platforms", version = "1.0.0")
 bazel_dep(name = "rules_hdl", version = "2026.01.16-22.01.28")
 
 # fmt from BCR
-bazel_dep(name = "fmt", version = "8.1.1")
+bazel_dep(name = "fmt", version = "9.1.0")
 
 # rules_verilator from registry
 bazel_dep(name = "rules_verilator", version = "2026.01.21-20.15.07")

@@ -8,6 +8,7 @@ def _packet_gen_impl(ctx):
     hpp = ctx.outputs.hpp
     cpp = ctx.outputs.cpp
     sv  = ctx.outputs.sv
+    merged = ctx.outputs.merged
 
     incdir = "/".join([
         hpp.root.path,
@@ -15,10 +16,11 @@ def _packet_gen_impl(ctx):
     ])
 
     args = ctx.actions.args()
-    args.add("--definition", ctx.file.src)
+    args.add_all("--definitions", ctx.files.srcs)
     args.add("--hpp"       , hpp)
     args.add("--cpp"       , cpp)
     args.add("--sv"        , sv )
+    args.add("--merged"    , merged)
     args.add("--incdir"    , incdir)
 
     if not package:
@@ -28,8 +30,8 @@ def _packet_gen_impl(ctx):
 
     args.add("--topology"  , ctx.file.topology)
 
-    inputs = [ctx.file.src, ctx.file.topology]
-    outputs = [hpp, cpp, sv]
+    inputs = ctx.files.srcs + [ctx.file.topology]
+    outputs = [hpp, cpp, sv, merged]
 
     ctx.actions.run(
         arguments = [args],
@@ -48,9 +50,9 @@ def _packet_gen_impl(ctx):
 _packet_gen = rule(
     _packet_gen_impl,
     attrs = {
-        "src": attr.label(
+        "srcs": attr.label_list(
             mandatory = True,
-            allow_single_file = True
+            allow_files = True,
         ),
         "topology": attr.label(
             mandatory = True,
@@ -63,6 +65,8 @@ _packet_gen = rule(
         "cpp": attr.output(
         ),
         "sv": attr.output(
+        ),
+        "merged": attr.output(
         ),
         "_gen": attr.label(
             default = "//src/packet_gen:packet_gen",
@@ -80,17 +84,20 @@ def packet_gen(name, topology, package = "", visibility = None, cc_attrs = {}, *
     hpp = name + ".hpp"
     cpp = name + ".cpp"
     sv  = name + ".sv"
+    merged = name + "_merged.yml"
 
     if package:
       hpp = name + "/" + package + ".hpp"
       cpp = name + "/" + package + ".cpp"
       sv  = name + "/" + package + ".sv"
+      merged = name + "/" + package + "_merged.yml"
 
     _packet_gen(
         name = name,
         hpp  = hpp,
         cpp  = cpp,
         sv   = sv,
+        merged = merged,
         topology = topology + "_json",
         package = package,
         visibility = visibility,

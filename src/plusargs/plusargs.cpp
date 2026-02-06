@@ -2,11 +2,18 @@
 #include <algorithm>
 #include <vector>
 #include <string>
+#include <string_view>
 #include <regex>
 #include "vpi_user.h"
 #include <memory>
+#include <any>
+#include <ranges>
+#include <functional>
 
 void cvm::plusargs::parse() {
+
+    using namespace std::literals;
+
     // this will reinitialize flags between tests
     // otherwise, flags that are not explicitly specified by a later test will retain the value from a previous test
     static std::unique_ptr<gflags::FlagSaver> flags_saver;
@@ -15,17 +22,44 @@ void cvm::plusargs::parse() {
 
     s_vpi_vlog_info info;
     vpi_get_vlog_info(&info);
-    
+
+    struct StartsWith {
+      std::string_view prefix;
+
+      auto operator() (const char* arg) {
+        return std::string_view(arg).starts_with(prefix);
+      }
+    } starts_with("+undefok_regexp="sv);
+
+    struct Extract {
+      std::string_view prefix;
+
+      auto operator() (const char* arg) {
+        return std::string_view(arg).substr(prefix.length()).data();
+      }
+    } extract("+undefok_regexp="sv);
+
     std::vector<std::string> argvv;
-    for (int i = 0; i < info.argc; i++) {
-        if (info.argv[i][0] == '+') {
-            std::string a = std::string("--") + std::string(info.argv[i] + 1);
-            if (!std::regex_search(a, std::regex(R"(\+\d+)"))) {
-                std::replace(a.begin(), a.end(), '+', '_');
+
+    auto argv_view = std::ranges::views::counted(info.argv, info.argc);
+    auto regex_view = argv_view
+                      | std::ranges::views::filter(starts_with)
+                      | std::ranges::views::transform(extract);
+
+    for (const char* argv_item : argv_view | std::ranges::views::filter(std::not_fn(starts_with))) {
+        if (argv_item[0] == '+') {
+            if (std::ranges::any_of(regex_view, [argv_item](const char* pattern) {
+                                                    return std::regex_search(argv_item, std::regex(pattern));
+                                                }))
+                continue;
+
+            auto arg = std::string("--") + std::string(argv_item + 1);
+            if (!std::regex_search(arg, std::regex(R"(\+\d+)"))) {
+                std::replace(arg.begin(), arg.end(), '+', '_');
             }
-            argvv.push_back(a);
+            argvv.push_back(std::move(arg));
         } else {
-            argvv.push_back(info.argv[i]);
+            argvv.push_back(argv_item);
         }
     }
 

@@ -186,7 +186,21 @@ class PacketStore:
         except:
             raise Exception(exceptions.text_error_template().render()) from None
 
-        for port, values in yaml.safe_load(rendered.getvalue()).items():
+        loaded_yaml = yaml.safe_load(rendered.getvalue())
+
+        # delete all nodes that are anchors (not ports or special fields)
+        # anchors are keys that don't start with "__" and are used for YAML anchor definitions
+        keys_to_delete = []
+        for k in loaded_yaml:
+            if not k.startswith("__") and not isinstance(loaded_yaml[k], dict):
+                keys_to_delete += [k]
+            elif isinstance(loaded_yaml[k], dict) and "num" not in loaded_yaml[k] and not k.startswith("__"):
+                # anchor definitions don't have "num" field, ports do
+                keys_to_delete += [k]
+        for k in keys_to_delete:
+            del loaded_yaml[k]
+
+        for port, values in loaded_yaml.items():
 
             if port.startswith("__"): # special fields
                 f = port[2:]
@@ -287,20 +301,31 @@ class PacketsGen:
 
 
 
+def merge_definitions(definitions: list[str], merged: str):
+    """Merge multiple yml definition files into a single file."""
+    with open(merged, 'wb') as ostream:
+        for defin in definitions:
+            with open(defin, 'rb') as istream:
+                ostream.write(istream.read() + b'\n')
+
+
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--definition", help="yml file containing packet definitions", required=True)
+    parser.add_argument("--definitions", nargs='+', help="yml files containing packet definitions", required=True)
     parser.add_argument("--incdir"    , help="Path to strip off when generating #include", required=True)
     parser.add_argument("--name"      , help="name of output package and namespace", required=True)
     parser.add_argument("--hpp", help="name of generated hpp", required=True)
     parser.add_argument("--cpp", help="name of generated cpp", required=True)
     parser.add_argument("--sv" , help="name of generated sv", required=True)
     parser.add_argument("--topology", help="name of topology json", required=True)
+    parser.add_argument("--merged", help="merged yml file to generate", required=True)
 
     args = parser.parse_args()
 
-    p = PacketStore.load_file(args.name, args.definition, args.topology)
+    merge_definitions(args.definitions, args.merged)
+
+    p = PacketStore.load_file(args.name, args.merged, args.topology)
     g = PacketsGen(p)
 
     for t in ['hpp', 'cpp', 'sv']:

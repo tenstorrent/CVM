@@ -4,6 +4,17 @@
 #include "transactions.hpp"
 #include <gtest/gtest.h>
 
+// Track whether dpi_init was called
+static int initialize_domain1_call_count = 0;
+static int initialize_domain2_call_count = 0;
+
+extern "C" void transactions_dpi_init_domain_1() {
+    initialize_domain1_call_count++;
+}
+extern "C" void transactions_dpi_init_domain_2() {
+    initialize_domain2_call_count++;
+}
+
 class checker {
 
     public:
@@ -46,6 +57,12 @@ class checker {
                 loc,
                 [] (const transactions::dut::ctx<>& ret) {
                     transactions_finish();
+                }
+            );
+            cvm::registry::messenger.connect<transactions::dut::anchor_test<>>(
+                loc,
+                [this] (const transactions::dut::anchor_test<>& ret) {
+                    this->check(ret);
                 }
             );
         }
@@ -94,6 +111,12 @@ class checker {
             check("dummy2", pkt2.dummy2, decltype(pkt2.dummy2)(3));
         }
 
+        void check(const transactions::dut::anchor_test<>& pkt) {
+            check("shared_field1", pkt.shared_field1, decltype(pkt.shared_field1)(0x1234));
+            check("shared_field2", pkt.shared_field2, decltype(pkt.shared_field2)(0xDEADBEEF));
+            check("extra_field", pkt.extra_field, decltype(pkt.extra_field)(0x42));
+        }
+
 };
 
 REGISTRY_register(checker, TOP.CLUSTER.CORE, 0)
@@ -112,5 +135,10 @@ extern "C" void start_checker() {
 }
 
 extern "C" void end_checker() {
+    // Verify dpi_init was called at least once
+    EXPECT_GT(initialize_domain1_call_count, 0) 
+        << "dpi_init function 'transactors_dpi_init_domain_1' was never called";
+    EXPECT_EQ(initialize_domain2_call_count, 0) 
+        << "dpi_init function 'transactors_dpi_init_domain_2' should NOT be called";
     cvm::registry::shutdown();
 }

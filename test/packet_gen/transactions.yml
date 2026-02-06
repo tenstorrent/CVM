@@ -59,6 +59,15 @@ dut:
   empty:
       domain: 1
 
+  # Test anchor usage with <<: merge key
+  anchor_test:
+      domain: 1
+      num: 1
+      fields:
+          <<: *shared_fields
+          extra_field:
+              width: 8
+
 dut2:
   num: [2, 1]
   pkt2:
@@ -77,6 +86,22 @@ all_disabled:
         fields:
             dummy:
                 width: 32
+
+no_init_test:
+    num: 1
+    m_tick:
+        num: 1
+        domain: 2
+        fields:
+            cycle:
+                width: 32
+
+
+__domains:
+    1:
+      dpi_init: 'initialize_domain1'
+    2:
+      dpi_init: 
 
 
 __max_byte_transfer: 28

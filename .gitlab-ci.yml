@@ -17,6 +17,15 @@ test:
     after_script:
         - chmod +w -R ./bazel_output_user_root
 
+test-bazel7:
+    stage: test
+    extends:
+        - .smoke-rules-all-branches-template
+    script:
+        - bazel-7 --output_user_root=./bazel_output_user_root test //test/... --test_output=all --enable_bzlmod
+    after_script:
+        - chmod +w -R ./bazel_output_user_root
+
 notify_rv_tester:
     stage: notify
     extends:

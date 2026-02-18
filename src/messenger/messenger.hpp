@@ -34,6 +34,18 @@ struct name : cvm::messenger::procedure_call_function<func_type> {};
 
 namespace cvm {
 
+      // Helper struct to provide return_value or return_void based on type
+      template <typename T>
+      struct task_promise_return_base {
+          std::optional<T> value_;
+          void return_value(T val) noexcept { value_ = val; }
+      };
+
+      template <>
+      struct task_promise_return_base<void> {
+          void return_void() noexcept { }
+      };
+
       class messenger {
 
           public:
@@ -89,13 +101,12 @@ namespace cvm {
               template <typename T = void>
               class task {
                   public:
-                      struct promise_type {
-                          std::optional<T> value_;
+                      struct promise_type : cvm::task_promise_return_base<T> {
                           std::coroutine_handle<> awaiting_;
 
                           task get_return_object() noexcept { return task{std::coroutine_handle<promise_type>::from_promise(*this)}; }
                           std::suspend_always initial_suspend() noexcept { return {}; }
-                          void return_value(T val) noexcept { value_ = val; }
+
                           void unhandled_exception() { std::terminate(); }
 
                           // handler is done, resume awaiting coroutine
@@ -124,7 +135,17 @@ namespace cvm {
                                   coro_.promise().awaiting_ = awaiting;
                                   return coro_;
                               }
-                              auto await_resume() noexcept { return std::move(*(coro_.promise().value_)); coro_.destroy(); coro_ = nullptr; };
+                              auto await_resume() noexcept {
+                                  if constexpr (std::is_void_v<T>) {
+                                      coro_.destroy();
+                                      coro_ = nullptr;
+                                  } else {
+                                      auto result = std::move(*(coro_.promise().value_));
+                                      coro_.destroy();
+                                      coro_ = nullptr;
+                                      return result;
+                                  }
+                              };
                           };
                           return awaiter{this->coro_};
                       }
@@ -137,7 +158,17 @@ namespace cvm {
                                   coro_.promise().awaiting_ = awaiting;
                                   return coro_;
                               }
-                              auto await_resume() noexcept { return std::move(*(coro_.promise().value_)); coro_.destroy(); coro_ = nullptr; };
+                              auto await_resume() noexcept {
+                                  if constexpr (std::is_void_v<T>) {
+                                      coro_.destroy();
+                                      coro_ = nullptr;
+                                  } else {
+                                      auto result = std::move(*(coro_.promise().value_));
+                                      coro_.destroy();
+                                      coro_ = nullptr;
+                                      return result;
+                                  }
+                              };
                           };
                           return awaiter{this->coro_};
                       }
@@ -166,87 +197,6 @@ namespace cvm {
 
                       std::coroutine_handle<promise_type> coro_;
               };
-
-              template <>
-              class task<void> {
-                  public:
-                      struct promise_type {
-                          std::coroutine_handle<> awaiting_;
-
-                          task get_return_object() noexcept { return task{std::coroutine_handle<promise_type>::from_promise(*this)}; }
-                          std::suspend_always initial_suspend() noexcept { return {}; }
-                          void return_void() noexcept { return; }
-                          void unhandled_exception() { std::terminate(); }
-
-                          // handler is done, resume awaiting coroutine
-                          // https://lewissbaker.github.io/2020/05/11/understanding_symmetric_transfer
-                          auto final_suspend() noexcept {
-                              struct awaiter {
-                                  promise_type& self;
-
-                                  bool await_ready() noexcept { return false; }
-                                  std::coroutine_handle<> await_suspend(std::coroutine_handle<>) noexcept {
-                                      return (self.awaiting_) ? self.awaiting_ : std::noop_coroutine();
-                                  }
-                                  void await_resume() noexcept { }
-                              };
-
-                              return awaiter{*this};
-                          }
-                      };
-
-                      // possible to co_await on handler
-                      auto operator co_await() & noexcept {
-                          struct awaiter {
-                              std::coroutine_handle<promise_type>& coro_;
-                              bool await_ready() noexcept { return false; };
-                              std::coroutine_handle<> await_suspend(std::coroutine_handle<> awaiting) noexcept {
-                                  coro_.promise().awaiting_ = awaiting;
-                                  return coro_;
-                              }
-                              void await_resume() noexcept { coro_.destroy(); coro_ = nullptr; };
-                          };
-                          return awaiter{this->coro_};
-                      }
-
-                      auto operator co_await() && noexcept {
-                          struct awaiter {
-                              std::coroutine_handle<promise_type>& coro_;
-                              bool await_ready() { return false; };
-                              std::coroutine_handle<> await_suspend(std::coroutine_handle<> awaiting) noexcept {
-                                  coro_.promise().awaiting_ = awaiting;
-                                  return coro_;
-                              }
-                              void await_resume() noexcept { coro_.destroy(); coro_ = nullptr; };
-                          };
-                          return awaiter{this->coro_};
-                      }
-
-                      explicit task(std::coroutine_handle<promise_type> coro) : coro_(coro) {}
-
-                      task(task&& other) noexcept : coro_(std::exchange(other.coro_, nullptr)) {}
-                      task& operator=(task&& other) noexcept {
-                          if (std::addressof(other) != this) {
-                              if (coro_)
-                                coro_.destroy();
-                              coro_ = other.coro_;
-                              other.coro_ = nullptr;
-                          }
-
-                          return *this;
-                      }
-
-                      task(const task&) = delete;
-                      task& operator=(const task&) = delete;
-
-                      ~task() { if (coro_) {coro_.destroy(); coro_ = nullptr;} }
-
-                      bool done() const { if (coro_) return coro_.done(); else return true; }
-                      void resume() { if(coro_) coro_.resume(); }
-
-                      std::coroutine_handle<promise_type> coro_;
-              };
-
 
               class pool_base {
                   public:

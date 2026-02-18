@@ -63,18 +63,20 @@ namespace cvm {
                 }
             }
 
+            // TODO: allow using consteval of format string in fmt
+
             template <typename... Args>
-                static void log(verbosity_level v, Args&&... args) {
-                  log(ostream, v, std::forward<Args>(args)...);
+                static void log(verbosity_level v, std::string_view format, Args&&... args) {
+                  log(ostream, v, format, std::forward<Args>(args)...);
                 }
 
             template <typename... Args>
-                static void log(std::ostream& out, verbosity_level v, Args&&... args) {
+                static void log(std::ostream& out, verbosity_level v, std::string_view format, Args&&... args) {
 
                     if (check_verbosity(v)) {
 
-                        fmt::print(out, prefix());
-                        fmt::print(out, std::forward<Args>(args)...);
+                        fmt::print(out, "{}", prefix());
+                        fmt::print(out, fmt::runtime(format), std::forward<Args>(args)...);
 
                     }
 
@@ -97,20 +99,20 @@ namespace cvm {
             file_logger(const std::string& filename);
 
             template <typename... Args>
-                void log(verbosity_level v, Args&&... args) {
+                void log(verbosity_level v, std::string_view format, Args&&... args) {
 
                     if (logger::check_verbosity(v)) {
 
                         check_and_rotate();
 
-                        logger::log(*output_file, v, std::forward<Args>(args)...);
+                        logger::log(*output_file, v, format, std::forward<Args>(args)...);
                     }
 
                 }
 
             template <typename... Args>
-                auto operator()(Args&&... args) -> decltype(log(std::forward<Args>(args)...)) {
-                    return log(std::forward<Args>(args)...);
+                void operator()(verbosity_level v, std::string_view format, Args&&... args) {
+                    log(v, format, std::forward<Args>(args)...);
                 }
 
             void flush();
@@ -122,8 +124,8 @@ namespace cvm {
     struct log {
 
         template <typename... Args>
-            log(Args&&... args) {
-                logger::log(std::forward<Args>(args)...);
+            log(verbosity_level v, std::string_view format, Args&&... args) {
+                logger::log(v, format, std::forward<Args>(args)...);
             }
 
     };

@@ -30,6 +30,7 @@ py_binary(
   deps = [
       requirement("Mako"),
       requirement("anytree"),
+      requirement("PyYAML"),
   ],
   data = glob(["templates/template.*"]),
   visibility = ["//visibility:public"],

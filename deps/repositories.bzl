@@ -30,11 +30,11 @@ def cvm_dependencies():
         url = "https://aus-gitlab.local.tenstorrent.com/riscv/bazel_rules_hdl/-/archive/{commit}/bazel_rules_hdl-{commit}.tar.bz2".format(commit=rules_hdl_hash),
     )
 
-    rules_verilator_hash="cb9ce9e1e03e934bf45f0be7ce390f5670b3ad2e"
+    rules_verilator_hash="a665eda"
     maybe(
         http_archive,
         name = "rules_verilator",
-        sha256 = "b4625a5b81a171ffa2f18280020dbf6afaf07757852863487aea70912053056b",
+        sha256 = "fef80f179c48b2b755ec0896b3b266331752ab255f5328d075a784ec302e56b6",
         strip_prefix = "rules_verilator-{commit}".format(commit=rules_verilator_hash),
         url = "https://aus-gitlab.local.tenstorrent.com/riscv/rules_verilator/-/archive/{commit}/rules_verilator-{commit}.tar.bz2".format(commit=rules_verilator_hash),
     )
@@ -70,10 +70,9 @@ def cvm_dependencies():
     maybe(
         http_archive,
         name = "fmt",
-        url = "https://aus-gitlab.local.tenstorrent.com/riscv/forks/fmt/-/archive/8.1.1/fmt-8.1.1.tar.gz",
-        sha256 = "3d794d3cf67633b34b2771eb9f073bde87e846e0d395d254df7b211ef1ec7346",
-        strip_prefix = "fmt-8.1.1",
-        patches = ["@cvm//deps:fmt.patch"],
+        url = "https://github.com/fmtlib/fmt/releases/download/9.1.0/fmt-9.1.0.zip",
+        sha256 = "cceb4cb9366e18a5742128cb3524ce5f50e88b476f1e54737a47ffdf4df4c996",
+        strip_prefix = "fmt-9.1.0",
         build_file_content = """
 cc_library(
     name = "fmt",
@@ -82,6 +81,5 @@ cc_library(
     includes = ["include"],
     visibility = ["//visibility:public"],
 )
-
     """
     )

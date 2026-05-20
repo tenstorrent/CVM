@@ -67,5 +67,23 @@ callbacks::clear() {
     que_.clear();
   }
 
+  {
+    std::lock_guard<std::mutex> lock(scope_m_);
+    sv_scopes_.clear();
+  }
+
   return true;
 }
+
+void
+callbacks::set_scope(cvm::topology::loc_t loc, svScope scope) {
+  std::lock_guard<std::mutex> lock(scope_m_);
+  auto it = sv_scopes_.find(loc);
+  if (it != sv_scopes_.end() && it->second != scope) {
+    cvm::log(cvm::ERROR, "Error: callbacks::set_scope: loc {} already registered with a different scope\n", loc);
+    return;
+  }
+  sv_scopes_[loc] = scope;
+}
+
+

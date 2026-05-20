@@ -5,8 +5,10 @@ cc_library(
     deps = [
         "//third_party/dpi:dpi",
         "//:plusargs",
+        "//:topology",
+        "//:logger",
     ],
     strip_include_prefix = ".",
     include_prefix = "cvm",
-    visibility = ["//:__pkg__"],
+    visibility = [ "//:__subpackages__" ],
 )

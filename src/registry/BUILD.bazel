@@ -1,12 +1,23 @@
+load("@rules_hdl//verilog:providers.bzl", "verilog_library")
+
 cc_library(
   name = "registry",
   hdrs = ["registry.hpp"],
+  srcs = ["registry_dpi.cpp"],
   deps = [
       "@cvm//:messenger",
-      "@cvm//:callbacks",
+      "//src/callbacks:callbacks",
       "@cvm//:topology",
   ],
   strip_include_prefix = "//src/registry",
   include_prefix = "cvm",
+  alwayslink = True,
+  linkstatic = True,
   visibility = ["//visibility:public"],
+)
+
+verilog_library(
+    name = "registry_sv",
+    srcs = ["registry.sv"],
+    visibility = ["//:__pkg__"],
 )

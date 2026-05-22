@@ -36,11 +36,23 @@ class Location:
   path_id: int
   path: str
   children: list[str]
-  # represents number of instances at this node.
+  # number of array slots / groups at this node (len(attributes) when is_array,
+  # else the location's local count). NOT the number of physical instances —
+  # see `instances` (length = sum(shards)) for that.
   shard: int
-  # >> shared. This represents the total number represented including parent nodes.
+  # one Instance per physical instance; length = sum(shards) for is_array.
   instances: list[Instance]
   attributes: list()
+  # per-slot physical-instance counts. For is_array, parallel to attributes.
+  # For non-array, [shard]. sum(shards) == len(instances).
+  shards: list = None
+
+  @property
+  def is_array(self):
+    """Check if attributes are per-instance (array) or shared."""
+    return (isinstance(self.attributes, list) and
+            len(self.attributes) > 0 and
+            isinstance(self.attributes[0], list))
 
 @dataclass
 class Topology:
@@ -62,7 +74,7 @@ class Topology:
     w = Walker()
 
     # null == 0, top (root) == 1
-    locations.append(Location("top", ["top"], path_id, "TOP", [child.name for child in root.children], 1, [Instance(0, 1)], attributes=list()))
+    locations.append(Location("top", ["top"], path_id, "TOP", [child.name for child in root.children], 1, [Instance(0, 1)], attributes=list(), shards=[1]))
     types.append("top")
 
     for node in LevelOrderIter(root, filter_=lambda n: n.name not in ('top')):
@@ -84,7 +96,7 @@ class Topology:
         if typ not in types:
           types.append(typ)
 
-      locations.append(Location(node.name, node.types, path_id, path, [child.name for child in node.children], node.shard, instances, node.attributes))
+      locations.append(Location(node.name, node.types, path_id, path, [child.name for child in node.children], node.shard, instances, node.attributes, shards=node.shards))
     return cls(locations, types)
 
 class TopologyGen:
@@ -127,23 +139,76 @@ class TopologyGen:
     # generate topology class
     self.topology = Topology.load(self.root)
 
+  def _process_attributes(self, children):
+    """Return (attributes, shards). For an attrs-list, each entry is a group
+    and its per-entry `count` field (default 1) is its physical-instance count;
+    the `count` key is stripped from the emitted attrs. For a scalar/dict attrs
+    or no attrs, shards is None (caller fills it from the location's count)."""
+
+    if "attrs" not in children or children["attrs"] is None:
+      return list(), None
+
+    attrs_value = children["attrs"]
+
+    if isinstance(attrs_value, list):
+      attrs_list = []
+      shards = []
+      for item in attrs_value:
+        if isinstance(item, dict):
+          group_count = item.get("count", 1)
+          if not isinstance(group_count, int) or group_count < 1:
+            raise RuntimeError(
+              f"attrs entry count must be a positive int, got {group_count!r}")
+          shards.append(group_count)
+          attrs_list.append(list(
+            Attribute(key, val) for key, val in item.items() if key != "count"))
+        else:
+          shards.append(1)
+          attrs_list.append([])
+      return attrs_list, shards
+
+    if isinstance(attrs_value, dict):
+      return list(Attribute(key, val) for key, val in attrs_value.items()), None
+
+    return list(), None
+
   def recurse(self, name, children, parent, uppers):
-    if "count" not in children or "type" not in children:
-      raise RuntimeError("Must specify a `count` and `type` for each node in topology. Faulting node is {name}")
+    if not isinstance(children, dict):
+      return
 
-    count = children["count"]*uppers
+    if "type" not in children:
+      raise RuntimeError(f"Must specify a `type` for each node in topology. Faulting node is {name} with children {children}")
 
-    if "attrs" in children:
-      attributes = list(Attribute(key, val) for key, val in children["attrs"].items())
+    attributes, shards = self._process_attributes(children)
+
+    # `shard` is the number of array slots / groups at this node:
+    #   - list-attrs: one slot per yaml entry  (len(attrs))
+    #   - else      : `count:` from yaml (or 1)
+    # `total_insts` is the number of physical instances per parent:
+    #   - list-attrs: sum of per-entry counts
+    #   - else      : shard
+    if shards is not None:
+      shard = len(attributes)
+      total_insts = sum(shards)
     else:
-      attributes = list()
+      shard = children.get("count", 1)
+      total_insts = shard
+      shards = [shard]   # one anonymous group of size `shard`
 
-    new = Node(name, parent=parent, shard=children["count"], count=count, types=children["type"], attributes=attributes)
+    count = total_insts * uppers
+    children["count"] = shard
+
+    new = Node(name, parent=parent,
+               shard=shard,
+               count=count,
+               shards=shards,
+               types=children["type"],
+               attributes=attributes)
 
     for key, val in children.items():
-      if key != "count" and key != "type" and key != "attrs":
-        if key == "instances":
-            raise RuntimeError("Reserved keyword: instances")
+      if key == "instances":
+        raise RuntimeError("Reserved keyword: instances")
+      if key not in ["count", "type", "attrs"] and isinstance(val, dict):
         self.recurse(key, val, new, count)
 
   def generate(self, buf, which):

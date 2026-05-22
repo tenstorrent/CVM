@@ -11,11 +11,15 @@ struct wrapper {
 %endfor
 %for location in topo.locations:
     std::vector<cvm::topology::loc_t> locs_${location.name}_${location.path_id};
+    %if not location.is_array:
     std::unordered_map<std::string, uint32_t> attrs_${location.name}_${location.path_id};
     std::unordered_map<std::string, std::vector<uint32_t>> list_attrs_${location.name}_${location.path_id};
     attrs_${location.name}_${location.path_id}["SHARD"] = ${location.shard};
     attrs_${location.name}_${location.path_id}["TOTAL"] = ${len(location.instances)};
-    %for (name, value) in location.attributes:
+    <%
+      attrs_to_use = location.attributes if not location.is_array else []
+    %>
+    %for (name, value) in attrs_to_use:
       %if type(value) is int:
     attrs_${location.name}_${location.path_id}["${name.upper()}"] = ${value};
       %elif type(value) is list:
@@ -23,19 +27,75 @@ struct wrapper {
     list_attrs_${location.name}_${location.path_id}["${name.upper()}"] = {${','.join(value)}};
       %endif
     %endfor
-  %for instance in location.instances:
+    %endif
+  <%
+    has_attributes = location.attributes is not None and len(location.attributes) > 0
+    # Build per-instance (loc-ordered) view: which group each instance belongs
+    # to, and the offset of each group's first instance within `instances`.
+    if location.is_array:
+      group_of_inst = []
+      group_starts = []
+      _c = 0
+      for g, sh in enumerate(location.shards):
+        group_starts.append(_c)
+        for _ in range(sh):
+          group_of_inst.append(g)
+        _c += sh
+      total_insts = sum(location.shards)
+    else:
+      group_of_inst = [0] * len(location.instances)
+      group_starts = [0]
+      total_insts = len(location.instances)
+  %>
+
+  %for idx, instance in enumerate(location.instances):
     locs_${location.name}_${location.path_id}.push_back(${instance.loc});
     %for typ in location.types:
     locs_${typ}.push_back(${instance.loc});
     %endfor
     names[${instance.loc}] = "${location.name.upper()}";
-  %if location.attributes:
+
+    %if has_attributes:
+      %if location.is_array:
+        <%
+          g = group_of_inst[idx]
+          group_attrs = location.attributes[g]
+          group_shard = location.shards[g]
+        %>
+        ## Create unique attributes for this instance (reflecting its group)
+    std::unordered_map<std::string, uint32_t> attrs_inst_${instance.loc};
+    std::unordered_map<std::string, std::vector<uint32_t>> list_attrs_inst_${instance.loc};
+    attrs_inst_${instance.loc}["SHARD"] = ${group_shard};
+    attrs_inst_${instance.loc}["TOTAL"] = ${total_insts};
+        %for (name, value) in group_attrs:
+          %if type(value) is int:
+    attrs_inst_${instance.loc}["${name.upper()}"] = ${value};
+          %elif type(value) is list:
+          <% value_str = ','.join(str(v) for v in value) %>
+    list_attrs_inst_${instance.loc}["${name.upper()}"] = {${value_str}};
+          %endif
+        %endfor
+    attrs[${instance.loc}] = attrs_inst_${instance.loc};
+    list_attrs[${instance.loc}] = list_attrs_inst_${instance.loc};
+      %else:
+        ## Use shared attributes
     attrs[${instance.loc}] = attrs_${location.name}_${location.path_id};
     list_attrs[${instance.loc}] = list_attrs_${location.name}_${location.path_id};
-  %endif
+      %endif
+    %endif
   %endfor
     str_hierarchy.insert({"${location.path}", locs_${location.name}_${location.path_id}});
     int_hierarchy.insert({${location.path_id}, locs_${location.name}_${location.path_id}});
+    %if location.is_array:
+    ## One PATH[g] entry per group, pointing at all the locs in that group.
+    %for g, sh in enumerate(location.shards):
+    str_hierarchy.insert({"${location.path}[${g}]", {\
+      %for k in range(sh):
+locs_${location.name}_${location.path_id}[${group_starts[g] + k}]${"," if k < sh - 1 else ""}\
+      %endfor
+}});
+    %endfor
+    %endif
 %endfor
 %for typ in topo.types:
     str_type["${typ.upper()}"] = locs_${typ};

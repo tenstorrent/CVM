@@ -133,6 +133,18 @@ module top(
     // Trigger dpi_init during the first clock after reset
     assign initialize_domain1 = (clock_count == 5);
 
+    generate
+        if (cvm_topology_gen::mods.TOP.CLUSTER.AXI[0].ID_WIDTH != 12)
+            $error("AXI[0].ID_WIDTH should be 12, got %d", cvm_topology_gen::mods.TOP.CLUSTER.AXI[0].ID_WIDTH);
+        if (cvm_topology_gen::mods.TOP.CLUSTER.AXI[0].ADDR_WIDTH != 52)
+            $error("AXI[0].ADDR_WIDTH should be 52, got %d", cvm_topology_gen::mods.TOP.CLUSTER.AXI[0].ADDR_WIDTH);
+
+        if (cvm_topology_gen::mods.TOP.CLUSTER.AXI[1].ID_WIDTH != 10)
+            $error("AXI[1].ID_WIDTH should be 10, got %d", cvm_topology_gen::mods.TOP.CLUSTER.AXI[1].ID_WIDTH);
+        if (cvm_topology_gen::mods.TOP.CLUSTER.AXI[1].ADDR_WIDTH != 64)
+            $error("AXI[1].ADDR_WIDTH should be 64, got %d", cvm_topology_gen::mods.TOP.CLUSTER.AXI[1].ADDR_WIDTH);
+    endgenerate
+
     dut #(
         `TRANSACTIONS_DUT_SOURCE_PARAMS(0)
     ) dut (

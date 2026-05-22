@@ -230,13 +230,15 @@ namespace _registry {
 }
 
 // this should be used in source file
-#define REGISTRY_register_with_reset(type, module, id, reset_domain, ...) \
+#define REGISTRY_register_with_reset_(type, module, id, reset_domain, ...) \
     namespace _registry { \
       static bool REGISTRY_CONCAT(_, __COUNTER__) = std::invoke([]() -> bool { return cvm::registry::regist<RemoveBrackets<void (type)>::Type>( #module, id, reset_domain __VA_OPT__(,) __VA_ARGS__); }); \
     }
+#define REGISTRY_register_with_reset(...) REGISTRY_register_with_reset_(__VA_ARGS__)
 
 // if reset domain not specified, default to 0
-#define REGISTRY_register(type, module, id, ...) \
+#define REGISTRY_register_(type, module, id, ...) \
     namespace _registry { \
       static bool REGISTRY_CONCAT(_, __COUNTER__) = std::invoke([]() -> bool { return cvm::registry::regist<RemoveBrackets<void (type)>::Type>( #module, id, 0 __VA_OPT__(,) __VA_ARGS__); }); \
     }
+#define REGISTRY_register(...) REGISTRY_register_(__VA_ARGS__) // allows using ENUMS / #defines instead of numbers

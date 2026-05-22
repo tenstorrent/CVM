@@ -1,3 +1,22 @@
+common_attrs: &common_attrs
+    ADDR_WIDTH: 52
+    DATA_WIDTH: 256
+    STRB_WIDTH: 32
+    ID_WIDTH:   10
+    NAME:       ""
+    DOMAIN: 2
+axi_0: &axi_0
+  <<: *common_attrs
+  NAME: AXI0
+  ID_WIDTH: 12
+
+axi_1: &axi_1
+  <<: *common_attrs
+  NAME: AXI1
+  ADDR_WIDTH: 64
+
+axi_list: &axi_list [*axi_0, *axi_1]
+
 top:
   cluster:
     count: 1
@@ -18,3 +37,8 @@ top:
       count: 1
       type:
         - bar
+    axi:
+      type:
+        - axi
+      attrs: *axi_list
+

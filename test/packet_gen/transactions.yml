@@ -96,6 +96,35 @@ no_init_test:
             cycle:
                 width: 32
 
+<%
+axi0 = TOP.CLUSTER.AXI[0]
+axi1 = TOP.CLUSTER.AXI[1]
+%>
+
+axi_test:
+    num: 1
+    axi0_pkt:
+        domain: 1
+        num: 1
+        fields:
+            id:
+                width: ${axi0.ID_WIDTH}
+            addr:
+                width: ${axi0.ADDR_WIDTH}
+            data:
+                width: ${axi0.DATA_WIDTH}
+
+    axi1_pkt:
+        domain: 1
+        num: 1
+        fields:
+            id:
+                width: ${axi1.ID_WIDTH}
+            addr:
+                width: ${axi1.ADDR_WIDTH}
+            data:
+                width: ${axi1.DATA_WIDTH}
+
 
 __domains:
     1:

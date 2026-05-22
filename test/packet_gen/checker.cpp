@@ -23,6 +23,17 @@ class checker {
             check<uint32_t>("CORE.width", cvm::topology::attr(loc, "WIDTH").second, 2);
             check<uint32_t>("CORE.s", cvm::topology::list_attr(loc, "S").second.at(0), 1);
             check<std::string>("CORE.name", cvm::topology::name(loc), "CORE");
+
+            auto axi0_loc = cvm::topology::get_from_hierarchy("TOP.CLUSTER.AXI", 0);
+            check<uint32_t>("AXI[0].id_width", cvm::topology::attr(axi0_loc, "ID_WIDTH").second, 12);
+            check<uint32_t>("AXI[0].addr_width", cvm::topology::attr(axi0_loc, "ADDR_WIDTH").second, 52);
+            check<uint32_t>("AXI[0].data_width", cvm::topology::attr(axi0_loc, "DATA_WIDTH").second, 256);
+
+            auto axi1_loc = cvm::topology::get_from_hierarchy("TOP.CLUSTER.AXI", 1);
+            check<uint32_t>("AXI[1].id_width", cvm::topology::attr(axi1_loc, "ID_WIDTH").second, 10);
+            check<uint32_t>("AXI[1].addr_width", cvm::topology::attr(axi1_loc, "ADDR_WIDTH").second, 64);
+            check<uint32_t>("AXI[1].data_width", cvm::topology::attr(axi1_loc, "DATA_WIDTH").second, 256);
+
             cvm::registry::messenger.connect<transactions::dut::pkt<>>(
                 loc,
                 [this] (const transactions::dut::pkt<>& ret) {

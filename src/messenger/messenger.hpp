@@ -603,10 +603,12 @@ namespace cvm {
               void _signal(cvm::topology::loc_t loc, const A m, priority prio = default_priority, launch l = immediate) {
 
                   if (loc == cvm::topology::null) {
-                      cvm::log(cvm::ERROR, "Error: messenger: attempting to signal to null location with type {}\n", cvm::type_traits::name<decltype(m)>());
+                      cvm::log(cvm::ERROR,
+                          "Error: messenger: attempting to signal to null location, packet type={} payload type={}\n",
+                          cvm::type_traits::name<T>(),
+                          cvm::type_traits::name<decltype(m)>());
                       return;
                   }
-
                   if (prio > highest_priority) {
                       assert(false && "bad priority");
                       return;

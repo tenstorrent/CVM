@@ -10,7 +10,7 @@ module top();
     import "DPI-C" function void cvm_callbacks_run_test();
 
     initial begin
-        cvm_registry::set_scope(7);
+        `CVM_REGISTRY_SET_SCOPE(7)
         cvm_callbacks_run_test();
         if (counter != 3) begin
             $display("FAIL: counter=%0d, expected 3", counter);

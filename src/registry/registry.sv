@@ -1,7 +1,6 @@
 package cvm_registry;
-
-    import "DPI-C" context cvm_set_scope = function void set_scope( int unsigned location, string scope);
-
 endpackage
-`define CVM_REGISTRY_SET_SCOPE(location) cvm_registry::set_scope(location, $sformatf("%m"));
 
+`define CVM_REGISTRY_SET_SCOPE(LOC) \
+    import "DPI-C" context function int cvm_registry_set_scope(int unsigned location); \
+    int _unused_cvm_registry_set_scope = cvm_registry_set_scope(LOC);

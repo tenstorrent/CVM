@@ -5,14 +5,19 @@
 
 extern "C" {
 
-  void cvm_set_scope(cvm::topology::loc_t location, const char* s) {
-    svScope scope = svGetScopeFromName(s);
+  int cvm_registry_set_scope(unsigned int location) {
+    if (location == cvm::topology::null) {
+      cvm::log(cvm::ERROR, "cvm_registry_set_scope: null location  for callback\n");
+      return 0;
+    }
+    svScope scope = svGetScope();
 
     if (scope == nullptr) {
-      cvm::log(cvm::ERROR, "cvm_set_scope: could not resolve scope for '{}' (loc {})\n", s, location);
-      return;
+      cvm::log(cvm::ERROR, "cvm_registry_set_scope: null svScope for loc {}\n", location);
+      return 0;
     }
     cvm::registry::callbacks.set_scope(location, scope);
+    return 0;
   }
 
 }

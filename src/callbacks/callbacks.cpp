@@ -67,10 +67,10 @@ callbacks::clear() {
     que_.clear();
   }
 
-  {
-    std::lock_guard<std::mutex> lock(scope_m_);
-    sv_scopes_.clear();
-  }
+  // {
+  //   std::lock_guard<std::mutex> lock(scope_m_);
+  //   sv_scopes_.clear();
+  // }
 
   return true;
 }

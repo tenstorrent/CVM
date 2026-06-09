@@ -1,0 +1,6 @@
+cc_library(
+    name = "dpi",
+    hdrs = ["svdpi.h"],
+    strip_include_prefix = ".",
+    visibility = ["//visibility:public"],
+)

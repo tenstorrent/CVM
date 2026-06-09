@@ -1,0 +1,206 @@
+// SPDX-FileCopyrightText: © 2026 Tenstorrent USA, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+module dut #(
+    `TRANSACTIONS_DUT_OUTPUT_PARAMS
+) (
+    input clk,
+    input rst,
+    `TRANSACTIONS_DUT_OUTPUT_PORTS
+);
+
+    logic [31:0] count;
+    always @(posedge clk) count <= rst ? '0 : (count + 1);
+
+    parameter int unsigned loc = cvm_topology_gen::get_location (cvm_topology_gen::mods.TOP.CLUSTER.CORE.ID, 0);
+
+    for (genvar i = 0; i < 8; i++) begin
+        always @(posedge clk) begin
+            automatic logic[31:0] c = count - 1;
+            pkts[i].valid          <= count > 0;
+            pkts[i].data.location  <= loc;
+            pkts[i].data.num       <= i;
+            pkts[i].data.num1[0][0] <= 4'b1;
+            pkts[i].data.num1[0][1] <= 4'b100;
+            pkts[i].data.num1[1][0] <= 4'b011;
+            pkts[i].data.num1[1][1] <= 4'b101;
+            pkts[i].data.num2[0][0][0] <= 13'h1;
+            pkts[i].data.num2[0][1][0] <= 13'h1000;
+            pkts[i].data.num2[1][0][1] <= 13'h0011;
+            pkts[i].data.num2[2][1][2] <= 13'h1100;
+            pkts[i].data.x256      <= 256'(1) << 255 | 256'(c);
+            pkts[i].data.x54       <=  54'(1) <<  53 | 54'(c);
+            pkts[i].data.valid1    <= c == 4;
+            pkts[i].data.optional1 <= 8'(c);
+            pkts[i].data.valid2    <= c == 5;
+            pkts[i].data.optional2 <= 8'(c);
+            pkts[i].data.valid3a   <= 64'(c == 6 || c == 7);
+            pkts[i].data.valid3b   <= 64'(c == 7);
+            pkts[i].data.optional3 <= 512'(c);
+        end
+    end
+
+    assign never_seens[0].valid             = '1;
+    assign never_seens[0].data.location     = loc;
+    assign never_seens[0].data.dummy        = 3;
+
+    assign ctxs[0].valid           = count == 10;
+    assign ctxs[0].data.location   = loc;
+    assign ctxs[0].data.dummy      = 1'b1;
+
+    assign anchor_tests[0].valid              = count == 3;
+    assign anchor_tests[0].data.location      = loc;
+    assign anchor_tests[0].data.shared_field1 = 16'h1234;
+    assign anchor_tests[0].data.shared_field2 = 32'hDEADBEEF;
+    assign anchor_tests[0].data.extra_field   = 8'h42;
+
+endmodule
+
+module dut2 #(
+    `TRANSACTIONS_DUT2_OUTPUT_PARAMS
+) (
+    input clk,
+    input rst,
+    `TRANSACTIONS_DUT2_OUTPUT_PORTS
+);
+
+    parameter int unsigned loc = cvm_topology_gen::get_location (cvm_topology_gen::mods.TOP.CLUSTER.CORE.ID, 0);
+
+    assign pkt2s[0].valid             = loc != cvm_topology::nil;
+    assign pkt2s[0].data.location     = loc;
+    assign pkt2s[0].data.dummy2       = 3;
+
+endmodule
+
+module all_disabled #(
+    `TRANSACTIONS_ALL_DISABLED_OUTPUT_PARAMS
+) (
+    input clk,
+    input rst,
+    `TRANSACTIONS_ALL_DISABLED_OUTPUT_PORTS
+);
+
+    parameter int unsigned loc = cvm_topology_gen::get_location (cvm_topology_gen::mods.TOP.CLUSTER.CORE.ID, 0);
+
+    assign never_seen2s[0].valid             = '1;
+    assign never_seen2s[0].data.location     = loc;
+    assign never_seen2s[0].data.dummy        = 5;
+
+endmodule
+
+module no_init_test #(
+    `TRANSACTIONS_NO_INIT_TEST_OUTPUT_PARAMS
+) (
+    input clk,
+    input rst,
+    `TRANSACTIONS_NO_INIT_TEST_OUTPUT_PORTS
+);
+
+    parameter int unsigned loc = cvm_topology_gen::get_location (cvm_topology_gen::mods.TOP.CLUSTER.CORE.ID, 0);
+
+    assign m_ticks[0].valid             = '1;
+    assign m_ticks[0].data.location     = loc;
+    assign m_ticks[0].data.cycle        = 5;
+
+endmodule
+
+module top(
+`ifdef TB_EXTERNAL_CLOCK
+    input clk
+`endif
+);
+
+`ifndef TB_EXTERNAL_CLOCK
+    logic clk;
+    initial begin
+        clk = '1;
+        forever #5 clk = !clk;
+    end
+`endif
+
+    // Signals for dpi_init test - triggers the initialize_domainX() DPI calls
+    logic initialize_domain1;
+    
+    `TRANSACTIONS_DOMAIN(1, clk)
+
+    `TRANSACTIONS_DOMAIN(2, clk)
+
+    int clock_count = 0;
+    always @(posedge clk) begin
+        clock_count <= clock_count + 1;
+    end
+
+    logic rst;
+    assign rst = clock_count < 5;
+    
+    // Trigger dpi_init during the first clock after reset
+    assign initialize_domain1 = (clock_count == 5);
+
+    generate
+        if (cvm_topology_gen::mods.TOP.CLUSTER.AXI[0].ID_WIDTH != 12)
+            $error("AXI[0].ID_WIDTH should be 12, got %d", cvm_topology_gen::mods.TOP.CLUSTER.AXI[0].ID_WIDTH);
+        if (cvm_topology_gen::mods.TOP.CLUSTER.AXI[0].ADDR_WIDTH != 52)
+            $error("AXI[0].ADDR_WIDTH should be 52, got %d", cvm_topology_gen::mods.TOP.CLUSTER.AXI[0].ADDR_WIDTH);
+
+        if (cvm_topology_gen::mods.TOP.CLUSTER.AXI[1].ID_WIDTH != 10)
+            $error("AXI[1].ID_WIDTH should be 10, got %d", cvm_topology_gen::mods.TOP.CLUSTER.AXI[1].ID_WIDTH);
+        if (cvm_topology_gen::mods.TOP.CLUSTER.AXI[1].ADDR_WIDTH != 64)
+            $error("AXI[1].ADDR_WIDTH should be 64, got %d", cvm_topology_gen::mods.TOP.CLUSTER.AXI[1].ADDR_WIDTH);
+    endgenerate
+
+    dut #(
+        `TRANSACTIONS_DUT_SOURCE_PARAMS(0)
+    ) dut (
+        .clk,
+        .rst,
+        `TRANSACTIONS_DUT_SOURCE_PORTS(1, 0, 0)
+    );
+
+    for (genvar p = 0; p < 2; p++) begin
+        dut2 #(
+            `TRANSACTIONS_DUT2_SOURCE_PARAMS(0)
+        ) dut2 (
+            .clk,
+            .rst,
+            `TRANSACTIONS_DUT2_SOURCE_PORTS(1, p, 0)
+        );
+    end
+
+    for (genvar p = 0; p < 1; p++) begin
+        dut2 #(
+            `TRANSACTIONS_DUT2_SOURCE_PARAMS(1)
+        ) dut3 (
+            .clk,
+            .rst,
+            `TRANSACTIONS_DUT2_SOURCE_PORTS(1, p, 1)
+        );
+    end
+
+    all_disabled #(
+        `TRANSACTIONS_ALL_DISABLED_SOURCE_PARAMS(0)
+    ) all_disabled (
+        .clk,
+        .rst,
+        `TRANSACTIONS_ALL_DISABLED_SOURCE_PORTS(1, 0, 0)
+    );
+
+    no_init_test #(
+        `TRANSACTIONS_NO_INIT_TEST_SOURCE_PARAMS(0)
+    ) no_init_test (
+        .clk,
+        .rst,
+        `TRANSACTIONS_NO_INIT_TEST_SOURCE_PORTS(2, 0, 0)
+    );
+
+
+`ifndef TRANSACTIONS_ZERO_0_DUMMY_UNDEF
+    $error("Error: ZERO::DUMMY should not be defined.")
+`endif
+
+    import "DPI-C" function void start_checker();
+    import "DPI-C" function void end_checker();
+    initial start_checker();
+    final   end_checker();
+
+endmodule
+

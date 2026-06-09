@@ -1,0 +1,62 @@
+load("@rules_hdl//verilog:providers.bzl", "verilog_library")
+load("@rules_hdl//verilog:build_defs.bzl", "verilog_flist")
+load("@rules_verilator//verilator:defs.bzl", "verilator_cc_library")
+load("//test:test.bzl", "linkopts")
+
+cc_test(
+    name = "random_test",
+    size = "small",
+    srcs = ["random_test.cpp"],
+    deps = [
+        "//:random",
+        "@com_google_googletest//:gtest_main",
+        "@bazel_tools//tools/cpp/runfiles",
+    ],
+)
+
+verilog_library(
+    name = "random_lfsr_test_sv",
+    srcs = ["random_lfsr_test.sv"],
+    deps = ["//:random_sv"],
+)
+
+verilog_flist(
+    name = "random_lfsr_test.f",
+    srcs = [":random_lfsr_test_sv"],
+)
+
+verilator_cc_library(
+    name  = "random_lfsr_test_veri_lib",
+    top_module  = "top",
+    vopts = ["--assert", "--public"],
+    flist = "random_lfsr_test.f",
+)
+
+cc_binary(
+    name = "libdpi.so",
+    deps = ["random_lfsr_test"],
+    linkshared = True,
+)
+
+cc_binary(
+    name = "random_lfsr_test",
+    srcs = ["random_lfsr_test.cpp"],
+    deps = [
+        "@com_google_googletest//:gtest",
+        "@com_google_googletest//:gtest_main",
+        ":random_lfsr_test_veri_lib",
+    ],
+    linkopts = linkopts,
+)
+
+sh_test(
+    name = "sh_random_lfsr_test",
+    srcs = ["sim.sh"],
+    args = ["$(location :random_lfsr_test)"],
+    data = [":random_lfsr_test"],
+)
+
+test_suite(
+    name = "smoke",
+    tests = ["random_test", ":sh_random_lfsr_test"]
+)

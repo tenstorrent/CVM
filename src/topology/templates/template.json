@@ -1,0 +1,57 @@
+<%
+  def format_json_value(value):
+    if type(value) is int:
+      return str(value)
+    elif type(value) is list:
+      return "[" + ','.join(str(v) for v in value) + "]"
+    elif type(value) is str:
+      return f'"{value}"'
+    return None
+
+  def format_attrs(attrs):
+    if not attrs:
+      return ""
+    formatted = []
+    for name, value in attrs:
+      formatted_value = format_json_value(value)
+      if formatted_value:
+        formatted.append(f'"{name.upper()}": {formatted_value}')
+    return ", " + ", ".join(formatted) if formatted else ""
+
+  def create_json_structure():
+    result = {}
+    for location in topo.locations:
+      if location.is_array:
+        # One JSON entry per group. SHARD = group's instance count;
+        # TOTAL = sum across groups (same on every entry).
+        array_items = []
+        total = sum(location.shards)
+        for g in range(location.shard):
+          attrs = location.attributes[g] if g < len(location.attributes) else []
+          group_shard = location.shards[g]
+          item = f'{{"SHARD": {group_shard}, "TOTAL": {total}{format_attrs(attrs)}}}'
+          array_items.append(item)
+        result[location.path] = array_items
+      else:
+        attrs = location.attributes if location.attributes else []
+        result[location.path] = f'{{"SHARD": {location.shard}, "TOTAL": {len(location.instances)}{format_attrs(attrs)}}}'
+    return result
+
+  json_structure = create_json_structure()
+%>
+{
+<%
+  entries = list(json_structure.items())
+%>
+%for idx, (path, content) in enumerate(entries):
+  %if isinstance(content, list):
+  "${path}": [
+    %for item_idx, item in enumerate(content):
+    ${item}${"" if item_idx == len(content) - 1 else ","}
+    %endfor
+  ]${"" if idx == len(entries) - 1 else ","}
+  %else:
+  "${path}": ${content}${"" if idx == len(entries) - 1 else ","}
+  %endif
+%endfor
+}

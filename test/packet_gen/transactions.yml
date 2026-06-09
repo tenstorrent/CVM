@@ -1,0 +1,136 @@
+dut:
+  num: 1
+  pkt:
+      domain: 1
+      num: 8
+      fields:
+          x54:
+              width: ${TOP.CLUSTER.CORE.WIDTH * 27}
+          x256:
+              width: 256
+          valid1:
+              qualify: valid1
+              width: 1
+          optional1:
+              qualify: valid1
+              width: 8
+          valid2:
+              qualify: valid2
+              width: 1
+          optional2:
+              qualify: valid2
+              width: 8
+          valid3a:
+              qualify: "{data}.valid3a != '0 || {data}.valid3b != '0"
+              width: 64
+          valid3b:
+              qualify: "{data}.valid3a != '0 || {data}.valid3b != '0"
+              width: 64
+          optional3:
+              qualify: "{data}.valid3a != '0 || {data}.valid3b != '0"
+              width: 512
+          num:
+              width: 3
+          num1:
+              width: [[2, 2, 4]] # 2x2 of width 4
+          num2:
+              width: [[3, 2, 5, 13]] # 3x2x5 of width 13
+
+  never_seen:
+      disabling_defines: ["DISABLE_NEVER_SEEN_PKT"]
+      domain: 1
+      fields:
+          dummy:
+            width: 32
+
+  ctx:
+      domain: 1
+      context: true
+      fields:
+          dummy:
+              width: 1
+
+  zero:
+      domain: 1
+      fields:
+          dummy:
+              width: 0
+
+  empty:
+      domain: 1
+
+  # Test anchor usage with <<: merge key
+  anchor_test:
+      domain: 1
+      num: 1
+      fields:
+          <<: *shared_fields
+          extra_field:
+              width: 8
+
+dut2:
+  num: [2, 1]
+  pkt2:
+      domain: [1, 1]
+      fields:
+          dummy2:
+            widths: [2, 32]
+          dummy3:
+            widths: [${sum(TOP.CLUSTER.CORE.S)}, 45]
+
+all_disabled:
+    num: 1
+    disabling_defines: ["DISABLE_NEVER_SEEN_PORT"]
+    never_seen2:
+        domain: 1
+        fields:
+            dummy:
+                width: 32
+
+no_init_test:
+    num: 1
+    m_tick:
+        num: 1
+        domain: 2
+        fields:
+            cycle:
+                width: 32
+
+<%
+axi0 = TOP.CLUSTER.AXI[0]
+axi1 = TOP.CLUSTER.AXI[1]
+%>
+
+axi_test:
+    num: 1
+    axi0_pkt:
+        domain: 1
+        num: 1
+        fields:
+            id:
+                width: ${axi0.ID_WIDTH}
+            addr:
+                width: ${axi0.ADDR_WIDTH}
+            data:
+                width: ${axi0.DATA_WIDTH}
+
+    axi1_pkt:
+        domain: 1
+        num: 1
+        fields:
+            id:
+                width: ${axi1.ID_WIDTH}
+            addr:
+                width: ${axi1.ADDR_WIDTH}
+            data:
+                width: ${axi1.DATA_WIDTH}
+
+
+__domains:
+    1:
+      dpi_init: 'initialize_domain1'
+    2:
+      dpi_init: 
+
+
+__max_byte_transfer: 28

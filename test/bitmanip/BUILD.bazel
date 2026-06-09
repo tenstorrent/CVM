@@ -1,0 +1,11 @@
+cc_test(
+    name = "bitmanip_test",
+    size = "small",
+    srcs = ["bitmanip_test.cpp"],
+    deps = [
+        "//:bitmanip",
+        "@com_google_googletest//:gtest_main",
+        "@bazel_tools//tools/cpp/runfiles",
+    ],
+)
+

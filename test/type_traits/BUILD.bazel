@@ -1,0 +1,10 @@
+cc_test(
+    name = "type_traits_test",
+    size = "small",
+    srcs = ["type_traits_test.cpp"],
+    deps = [
+        "//:type_traits",
+        "@com_google_googletest//:gtest_main",
+        "@bazel_tools//tools/cpp/runfiles",
+    ],
+)

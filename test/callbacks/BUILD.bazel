@@ -1,0 +1,55 @@
+load("@rules_hdl//verilog:providers.bzl", "verilog_library")
+load("@rules_hdl//verilog:build_defs.bzl", "verilog_flist")
+load("@rules_verilator//verilator:defs.bzl", "verilator_cc_library")
+load("//test:test.bzl", "linkopts")
+
+cc_test(
+    name = "callbacks_test",
+    size = "small",
+    srcs = ["callbacks_test.cpp"],
+    deps = [
+        "//src/callbacks:callbacks",
+        "//third_party/vpi:vpi",
+        "@com_google_googletest//:gtest_main",
+        "@verilator//:libverilated",
+    ],
+    linkopts = linkopts,
+)
+
+verilog_library(
+    name = "callbacks_sv_test_sv",
+    srcs = ["top.sv"],
+    deps = ["//:registry_sv"],
+)
+
+verilog_flist(
+    name = "callbacks_sv_test.f",
+    srcs = [":callbacks_sv_test_sv"],
+)
+
+verilator_cc_library(
+    name = "callbacks_sv_test_veri_lib",
+    top_module = "top",
+    vopts = ["--assert"],
+    flist = "callbacks_sv_test.f",
+)
+
+cc_binary(
+    name = "callbacks_sv_test",
+    srcs = ["callbacks_sv_test.cpp"],
+    deps = [
+        "//src/callbacks:callbacks",
+        "//:registry",
+        "//third_party/vpi:vpi",
+        ":callbacks_sv_test_veri_lib",
+        "@com_google_googletest//:gtest_main",
+    ],
+    linkopts = linkopts,
+)
+
+sh_test(
+    name = "sh_callbacks_sv_test",
+    srcs = ["sim.sh"],
+    args = ["$(location :callbacks_sv_test)"],
+    data = [":callbacks_sv_test"],
+)

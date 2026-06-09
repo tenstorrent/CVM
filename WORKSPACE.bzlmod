@@ -1,0 +1,4 @@
+# WORKSPACE.bzlmod - loaded after MODULE.bazel for hybrid mode
+# This file handles toolchain initialization for repos without MODULE.bazel support
+
+# Note: rules_m4, rules_flex, rules_bison toolchains are now handled via BCR modules

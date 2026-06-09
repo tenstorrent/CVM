@@ -1,0 +1,40 @@
+load("@rules_hdl//verilog:providers.bzl", "verilog_library")
+load("@rules_hdl//verilog:build_defs.bzl", "verilog_flist")
+load("@rules_verilator//verilator:defs.bzl", "verilator_cc_library")
+load("//test:test.bzl", "linkopts")
+
+verilog_library(
+    name = "plusargs_test_sv",
+    srcs = ["plusargs_test.sv"],
+    deps = ["//:plusargs_sv"],
+)
+
+verilog_flist(
+    name = "plusargs_test.f",
+    srcs = [":plusargs_test_sv"],
+)
+
+verilator_cc_library(
+    name  = "plusargs_test_veri_lib",
+    top_module  = "plusargs_test",
+    vopts = ["--assert"],
+    flist = "plusargs_test.f",
+)
+
+cc_binary(
+    name = "plusargs_test",
+    srcs = ["plusargs_test.cpp"],
+    deps = [
+        "@com_google_googletest//:gtest_main",
+        "//:plusargs",
+        ":plusargs_test_veri_lib",
+    ],
+    linkopts = linkopts,
+)
+
+sh_test(
+    name = "sh_plusargs_test",
+    srcs = ["sim.sh"],
+    args = ["$(location :plusargs_test)"],
+    data = [":plusargs_test"],
+)

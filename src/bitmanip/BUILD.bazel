@@ -1,0 +1,8 @@
+cc_library(
+    name = "bitmanip",
+    hdrs = ["bitmanip.hpp"],
+    deps = ["//:type_traits"],
+    strip_include_prefix = "//src/bitmanip",
+    include_prefix = "cvm",
+    visibility = ["//:__pkg__"],
+)

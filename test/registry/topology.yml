@@ -1,0 +1,17 @@
+top:
+  cluster:
+    count: 4
+    type:
+      - cluster
+    foo:
+      count: 3
+      type:
+        - core
+    core:
+      count: 1
+      type:
+        - core
+    dummy:
+      count: 1
+      type:
+        - dummy

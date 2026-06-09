@@ -1,0 +1,8 @@
+# Custom registry for internal modules
+common --registry=https://aus-gitlab.local.tenstorrent.com/riscv/dv/bazel/bazel-registry/-/raw/main/
+common --registry=https://bcr.bazel.build
+
+build --cxxopt=-std=c++20 --cxxopt=-Wall --cxxopt=-Werror --host_cxxopt=-std=c++20
+build --sandbox_tmpfs_path=/tmp
+build --action_env=CC=clang --action_env=CXX=clang++ --host_action_env=CC=clang --host_action_env=CXX=clang++
+

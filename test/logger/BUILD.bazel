@@ -1,0 +1,17 @@
+load("//test:test.bzl", "linkopts")
+
+cc_test(
+    name = "logger_test",
+    size = "small",
+    srcs = [
+        "logger_test.cpp",
+        "logger_mock.hpp",
+    ],
+    deps = [
+        "//:logger",
+        "//third_party/vpi:vpi",
+        "@com_google_googletest//:gtest_main",
+    ],
+    linkopts = linkopts,
+)
+

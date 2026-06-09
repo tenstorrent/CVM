@@ -1,0 +1,79 @@
+load("@rules_hdl//verilog:providers.bzl", "verilog_library")
+
+cc_library(
+    name = "bitmanip",
+    deps = ["//src/bitmanip:bitmanip"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "plusargs",
+    deps = ["//src/plusargs:plusargs"],
+    visibility = ["//visibility:public"],
+)
+
+verilog_library(
+    name = "plusargs_sv",
+    deps = ["//src/plusargs:plusargs_sv"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "logger",
+    deps = ["//src/logger:logger"],
+    visibility = ["//visibility:public"],
+)
+
+verilog_library(
+    name = "logger_sv",
+    deps = ["//src/logger:logger_sv"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "messenger",
+    deps = ["//src/messenger:messenger"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "topology",
+    deps = ["//src/topology:topology"],
+    visibility = ["//visibility:public"],
+)
+
+verilog_library(
+    name = "topology_sv",
+    deps = ["//src/topology:cvm_topology"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "registry",
+    deps = ["//src/registry:registry"],
+    visibility = ["//visibility:public"],
+)
+
+verilog_library(
+    name = "registry_sv",
+    deps = ["//src/registry:registry_sv"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "random",
+    deps = ["//src/random:random"],
+    visibility = ["//visibility:public"],
+)
+
+verilog_library(
+    name = "random_sv",
+    deps = ["//src/random:random_sv"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "type_traits",
+    deps = ["//src/type_traits:type_traits"],
+    visibility = ["//visibility:public"],
+)

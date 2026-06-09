@@ -1,0 +1,6 @@
+# Anchor definitions for reusable field sets
+shared_fields: &shared_fields
+    shared_field1:
+        width: 16
+    shared_field2:
+        width: 32

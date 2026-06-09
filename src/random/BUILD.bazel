@@ -1,0 +1,22 @@
+load("@rules_hdl//verilog:providers.bzl", "verilog_library")
+
+cc_library(
+    name = "random",
+    srcs = ["random.cpp"],
+    hdrs = ["random.hpp"],
+    deps = [
+        "@com_github_gflags_gflags//:gflags",
+    ],
+    strip_include_prefix = ".",
+    include_prefix = "cvm",
+    visibility = ["//:__pkg__"],
+)
+
+verilog_library(
+    name = "random_sv",
+    srcs = [
+      "cvm_random.sv",
+      "cvm_random_lfsr.sv"
+    ],
+    visibility = ["//:__pkg__"],
+)

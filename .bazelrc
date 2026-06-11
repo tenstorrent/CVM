@@ -1,10 +1,13 @@
-# Custom registry for internal modules
-common --registry=https://aus-gitlab.local.tenstorrent.com/riscv/dv/bazel/bazel-registry/-/raw/main/
-common --registry=https://bcr.bazel.build
-
-build --cxxopt=-std=c++20 --cxxopt=-Wall --cxxopt=-Werror --host_cxxopt=-std=c++20
-build --action_env=SNPSLMD_LICENSE_FILE
-build --action_env=VCS_HOME
-build --sandbox_tmpfs_path=/tmp
+build --cxxopt=-std=c++20 --host_cxxopt=-std=c++20
 build --action_env=CC=clang --action_env=CXX=clang++ --host_action_env=CC=clang --host_action_env=CXX=clang++
 
+# clang 20 promotes the C99 implicit-function-declaration warning to an
+# error by default. BCR's zlib / m4 / flex / bison gnulib sources still emit
+# implicit declarations; relax the default for both target and host configs.
+build --copt=-Wno-error=implicit-function-declaration --host_copt=-Wno-error=implicit-function-declaration
+
+# -Wall / -Werror on first-party cvm code only (the regex excludes external/
+# repos). -Wno-error=deprecated-declarations covers gtest header instantiations
+# of libstdc++'s deprecated std::get_temporary_buffer (diagnostic location is
+# in cvm code, so external/ filtering can't suppress it).
+build --per_file_copt=-external/.*@-Wall,-Werror,-Wno-error=deprecated-declarations

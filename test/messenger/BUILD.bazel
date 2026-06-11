@@ -1,5 +1,3 @@
-load("@rules_verilator//verilator/internal:versions.bzl", verilator_version = "DEFAULT_VERSION")
-load("//test:test.bzl", "linkopts")
 
 cc_test(
     name = "messenger_test",
@@ -8,8 +6,6 @@ cc_test(
     deps = [
         "//:messenger",
         "@com_google_googletest//:gtest_main",
-        "@verilator//:libverilated".format(verilator_version),
+        "@rules_verilator//verilator:verilated_runtime",
     ],
-    linkopts = linkopts,
 )
-

@@ -19,6 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libgcc-12-dev \
         libstdc++-12-dev \
         libatomic1 \
+        liblz4-dev \
         m4 \
         flex \
         bison \

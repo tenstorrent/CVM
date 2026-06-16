@@ -34,10 +34,13 @@ RUN install -d /etc/apt/keyrings \
         > /etc/apt/sources.list.d/llvm-20.list \
     && apt-get update && apt-get install -y --no-install-recommends \
         clang-20 \
+        clang-tidy-20 \
         lld-20 \
+        libclang-rt-20-dev \
     && rm -rf /var/lib/apt/lists/* \
     && update-alternatives --install /usr/bin/clang clang /usr/bin/clang-20 100 \
-    && update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-20 100
+    && update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-20 100 \
+    && update-alternatives --install /usr/bin/clang-tidy clang-tidy /usr/bin/clang-tidy-20 100
 
 # Bazel 6.5.0 + Bazel 7.7.1. /usr/local/bin/bazel defaults to 6.5.0 to match
 # the build-bazel6-top job; bazel-7 maps to 7.7.1.

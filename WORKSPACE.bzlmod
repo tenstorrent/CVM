@@ -1,8 +1,4 @@
 # WORKSPACE.bzlmod - loaded after MODULE.bazel for hybrid mode
-# This file handles toolchain initialization for repos without MODULE.bazel support
+# This file handles toolchain initialization for repos without MODULE.bazel support.
 
-# Initialize VCS dependencies
-load("@rules_vcs//vcs:repositories.bzl", "rules_vcs_dependencies")
-rules_vcs_dependencies()
-
-# Note: rules_m4, rules_flex, rules_bison toolchains are now handled via BCR modules
+# Note: rules_m4, rules_flex, rules_bison toolchains are now handled via BCR modules.

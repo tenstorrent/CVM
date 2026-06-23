@@ -4,17 +4,8 @@
 image:
     name: "aus-gitlab.local.tenstorrent.com:5005/riscv/dv/cvm:0.1.3"
 
-include:
-  # TODO(open-source): drop the internal gitlab-definitions include along with
-  # `.smoke-rules-all-branches-template` / `.notify-template` references below
-  # once the repo no longer needs the Tenstorrent-internal CI templates.
-  - project: 'riscv/dv/gitlab-definitions'
-    ref: main
-    file: 'common-definitions.yml'
-
 stages:
     - test
-    - notify
 
 .test-template:
     variables:
@@ -40,26 +31,3 @@ test-bazel7:
         - bazel-7 --output_user_root=./bazel_output_user_root test //test/... --test_output=all --enable_bzlmod ${BAZEL_OPTS}
     after_script:
         - chmod +w -R ./bazel_output_user_root
-
-# TODO(open-source): the two notify_* jobs trigger an internal downstream
-# pipeline. Drop both when the repo is published; external forks won't have
-# access to the rv_tester project.
-notify_rv_tester:
-    stage: notify
-    extends:
-        - .notify-template
-    trigger:
-        project: riscv/dv/rv_tester
-
-# https://tenstorrent.atlassian.net/wiki/spaces/RVRTLDV/pages/1421574263/Ascalon+-+Dependency+Freeze+Plan
-notify_rv_tester_asc_release:
-    stage: notify
-    rules:
-        - if: '$CI_COMMIT_BRANCH =~ /^ascalon\/ea\/a0/ && $CI_PIPELINE_SOURCE == "push"'
-    extends:
-        - .notify-template
-    trigger:
-        project: riscv/dv/rv_tester
-        branch: ascalon/ea/a0
-    variables:
-        UPDATE_TARGET_BRANCH: ascalon/ea/a0

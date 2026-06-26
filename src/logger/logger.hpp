@@ -8,21 +8,6 @@
 #include <type_traits>
 #include <utility>
 
-namespace cvm::detail {
-    // Map enums to their underlying integer *before* they reach fmt, so fmt 9.x's
-    // deprecated implicit enum->underlying path (arg_mapper::map, fmt/core.h:1470,
-    // marked FMT_DEPRECATED) is never instantiated. Non-enums are perfect-forwarded
-    // untouched. fmt::underlying is fmt's own non-deprecated replacement; format
-    // specs like {:016x} still work since the value is an integer.
-    template <typename T>
-    constexpr decltype(auto) log_arg(T&& v) {
-        if constexpr (std::is_enum_v<std::remove_cvref_t<T>>)
-            return fmt::underlying(v);
-        else
-            return std::forward<T>(v);
-    }
-}
-
 namespace cvm {
 
     enum verbosity_level {
@@ -40,6 +25,19 @@ namespace cvm {
     class logger {
 
         private:
+
+            // Map enums to their underlying integer *before* they reach fmt, so fmt 9.x's
+            // deprecated implicit enum->underlying path (arg_mapper::map, fmt/core.h:1470,
+            // marked FMT_DEPRECATED) is never instantiated. Non-enums are perfect-forwarded
+            // untouched. fmt::underlying is fmt's own non-deprecated replacement; format
+            // specs like {:016x} still work since the value is an integer.
+            template <typename T>
+            static constexpr decltype(auto) log_arg(T&& v) {
+                if constexpr (std::is_enum_v<std::remove_cvref_t<T>>)
+                    return fmt::underlying(v);
+                else
+                    return std::forward<T>(v);
+            }
 
             static verbosity_level verbosity;
             static std::array<std::function<void()>, NUM_VERBOSITY> handlers;
@@ -93,7 +91,7 @@ namespace cvm {
                     if (check_verbosity(v)) {
 
                         fmt::print(out, "{}", prefix());
-                        fmt::print(out, fmt::runtime(format), cvm::detail::log_arg(std::forward<Args>(args))...);
+                        fmt::print(out, fmt::runtime(format), log_arg(std::forward<Args>(args))...);
 
                     }
 

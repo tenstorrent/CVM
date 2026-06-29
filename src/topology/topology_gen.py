@@ -7,6 +7,7 @@ import argparse
 import pathlib
 import fileinput
 import json
+import re
 from dataclasses import dataclass
 from anytree import Node, RenderTree, AsciiStyle, LevelOrderIter, Walker
 
@@ -136,8 +137,62 @@ class TopologyGen:
         print(exc)
         raise Exception("Failed to parse merged topology file")
 
-    # generate topology class
     self.topology = Topology.load(self.root)
+    self.resolve_references()
+
+  CONNECTION_REF = re.compile(
+    r'^([A-Za-z0-9_.]+)\[(\d+)\](?:\.([A-Za-z_][A-Za-z0-9_]*))?$')
+
+  def resolve_references(self):
+    # Precompute, per hierarchy path, its ordered instance locs, and per loc its
+    # attribute map exactly as the runtime exposes it (SHARD/TOTAL + declared
+    # attrs, picking the right per-group attrs for array locations). A reference
+    # then resolves to either the loc (.ID) or one of these attribute values.
+    path_to_locs = {}
+    attrs_by_loc = {}
+    for loc in self.topology.locations:
+      path_to_locs[loc.path] = [inst.loc for inst in loc.instances]
+      groups = ([g for g, sh in enumerate(loc.shards) for _ in range(sh)]
+                if loc.is_array else [0] * len(loc.instances))
+      total = sum(loc.shards) if loc.is_array else len(loc.instances)
+      for i, inst in enumerate(loc.instances):
+        group = loc.attributes[groups[i]] if loc.is_array else loc.attributes
+        attrs_by_loc[inst.loc] = {"SHARD": loc.shards[groups[i]], "TOTAL": total,
+                                  **{a.name.upper(): a.value for a in group}}
+
+    def parse_ref(ref):
+      """'@PATH[idx].FIELD' -> (path, idx, field); idx defaults to 0 and field to
+      'ID'. The bracket-less form is all dot-separated, so PATH/FIELD is split by
+      longest-matching hierarchy (whole string preferred, else peel last seg)."""
+      body = ref[1:]  # drop leading '@'
+      m = TopologyGen.CONNECTION_REF.match(body)
+      if m:
+        return m.group(1).upper(), int(m.group(2)), (m.group(3) or "ID").upper()
+      dotted = body.upper()
+      if dotted in path_to_locs:
+        return dotted, 0, "ID"
+      path, _, field = dotted.rpartition(".")
+      return path, 0, field
+
+    def resolve(value):
+      if not isinstance(value, str) or not value.strip().startswith("@"):
+        return value
+      path, idx, field = parse_ref(value.strip())
+      locs = path_to_locs.get(path, [])
+      if idx >= len(locs):
+        raise RuntimeError(f"unresolvable topology connection reference '{value}'")
+      loc = locs[idx]
+      if field == "ID":
+        return loc
+      if field not in attrs_by_loc[loc]:
+        raise RuntimeError(
+          f"topology connection reference '{value}': no attribute '{field}'")
+      return resolve(attrs_by_loc[loc][field])
+
+    for loc in self.topology.locations:
+      for group in (loc.attributes if loc.is_array else [loc.attributes]):
+        for attr in group:
+          attr.value = resolve(attr.value)
 
   def _process_attributes(self, children):
     """Return (attributes, shards). For an attrs-list, each entry is a group

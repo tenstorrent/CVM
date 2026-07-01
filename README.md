@@ -76,7 +76,7 @@ The `topology_gen` rule can accept a list of such yml files where they're all co
 
 This is the primary way C++ classes should instantiate themselves to be topology agnostic. The macro `REGISTRY_register` will instantiate the C++ class for all modules defined in a topology path or type (`cvm::registry::all`), or for a specific id within that path or module type. Needing to specify a specific module id is not recommended.
 
-The registry also provides a `build` and `shutdown` function to better manage test phasing. For example, in [rv_tester](https://aus-gitlab.local.tenstorrent.com/riscv/dv/rv_tester/-/blob/master/rv_tester.sv) a C++ class can assume that its constructor will be invoked prior to a test and its destructor will be invoked at the end of a test. The testbench may also do location-based resets for finer-grained control of build/shutdown functions (TODO: hierarchical-path based resets). Generally, the C++ class should setup its `messenger` connections in its constructor.
+The registry also provides a `build` and `shutdown` function to better manage test phasing. For example, in an upstream SV testbench, a C++ class can assume that its constructor will be invoked prior to a test and its destructor will be invoked at the end of a test. The testbench may also do location-based resets for finer-grained control of build/shutdown functions (TODO: hierarchical-path based resets). Generally, the C++ class should setup its `messenger` connections in its constructor.
 
 ### messenger
 

@@ -1,5 +1,3 @@
-load("//test:test.bzl", "linkopts")
-
 cc_test(
     name = "logger_test",
     size = "small",
@@ -12,6 +10,4 @@ cc_test(
         "//third_party/vpi:vpi",
         "@com_google_googletest//:gtest_main",
     ],
-    linkopts = linkopts,
 )
-

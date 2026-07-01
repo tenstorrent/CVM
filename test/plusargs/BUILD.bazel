@@ -1,24 +1,17 @@
 load("@rules_hdl//verilog:providers.bzl", "verilog_library")
-load("@rules_hdl//verilog:build_defs.bzl", "verilog_flist")
 load("@rules_verilator//verilator:defs.bzl", "verilator_cc_library")
-load("//test:test.bzl", "linkopts")
 
 verilog_library(
     name = "plusargs_test_sv",
     srcs = ["plusargs_test.sv"],
     deps = ["//:plusargs_sv"],
-)
-
-verilog_flist(
-    name = "plusargs_test.f",
-    srcs = [":plusargs_test_sv"],
+    top_module = "plusargs_test",
 )
 
 verilator_cc_library(
-    name  = "plusargs_test_veri_lib",
-    top_module  = "plusargs_test",
+    name = "plusargs_test_veri_lib",
+    module = ":plusargs_test_sv",
     vopts = ["--assert"],
-    flist = "plusargs_test.f",
 )
 
 cc_binary(
@@ -29,7 +22,6 @@ cc_binary(
         "//:plusargs",
         ":plusargs_test_veri_lib",
     ],
-    linkopts = linkopts,
 )
 
 sh_test(

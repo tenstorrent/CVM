@@ -1,6 +1,3 @@
-// SPDX-FileCopyrightText: © 2026 Tenstorrent USA, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 #include "cvm/topology.hpp"
 #include "cvm/registry.hpp"
 #include "cvm/type_traits.hpp"
@@ -36,6 +33,14 @@ class checker {
             check<uint32_t>("AXI[1].id_width", cvm::topology::attr(axi1_loc, "ID_WIDTH").second, 10);
             check<uint32_t>("AXI[1].addr_width", cvm::topology::attr(axi1_loc, "ADDR_WIDTH").second, 64);
             check<uint32_t>("AXI[1].data_width", cvm::topology::attr(axi1_loc, "DATA_WIDTH").second, 256);
+
+            auto cluster_loc = cvm::topology::get_from_hierarchy("TOP.CLUSTER", 0);
+            auto axi1_id = cvm::topology::attr(cluster_loc, "AXI1_ID").second;
+            check<uint32_t>("AXI1_ID", axi1_id, axi1_loc);
+
+            auto cluster_attr = cvm::topology::attr(cluster_loc, "CLUSTER_ATTR").second;
+            check<uint32_t>("CLUSTER_ATTR_AT_CORE", cluster_attr, cvm::topology::attr(axi0_loc, "CORE_CLUSTER_ATTR").second);
+
 
             cvm::registry::messenger.connect<transactions::dut::pkt<>>(
                 loc,

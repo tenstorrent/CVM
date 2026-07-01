@@ -1,7 +1,5 @@
 load("@rules_hdl//verilog:providers.bzl", "verilog_library")
-load("@rules_hdl//verilog:build_defs.bzl", "verilog_flist")
 load("@rules_verilator//verilator:defs.bzl", "verilator_cc_library")
-load("//test:test.bzl", "linkopts")
 
 cc_test(
     name = "random_test",
@@ -18,18 +16,13 @@ verilog_library(
     name = "random_lfsr_test_sv",
     srcs = ["random_lfsr_test.sv"],
     deps = ["//:random_sv"],
-)
-
-verilog_flist(
-    name = "random_lfsr_test.f",
-    srcs = [":random_lfsr_test_sv"],
+    top_module = "top",
 )
 
 verilator_cc_library(
-    name  = "random_lfsr_test_veri_lib",
-    top_module  = "top",
+    name = "random_lfsr_test_veri_lib",
+    module = ":random_lfsr_test_sv",
     vopts = ["--assert", "--public"],
-    flist = "random_lfsr_test.f",
 )
 
 cc_binary(
@@ -46,7 +39,6 @@ cc_binary(
         "@com_google_googletest//:gtest_main",
         ":random_lfsr_test_veri_lib",
     ],
-    linkopts = linkopts,
 )
 
 sh_test(
@@ -58,5 +50,5 @@ sh_test(
 
 test_suite(
     name = "smoke",
-    tests = ["random_test", ":sh_random_lfsr_test"]
+    tests = ["random_test", ":sh_random_lfsr_test"],
 )

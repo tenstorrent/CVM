@@ -1,7 +1,5 @@
 load("@rules_hdl//verilog:providers.bzl", "verilog_library")
-load("@rules_hdl//verilog:build_defs.bzl", "verilog_flist")
 load("@rules_verilator//verilator:defs.bzl", "verilator_cc_library")
-load("//test:test.bzl", "linkopts")
 
 cc_test(
     name = "callbacks_test",
@@ -11,27 +9,21 @@ cc_test(
         "//src/callbacks:callbacks",
         "//third_party/vpi:vpi",
         "@com_google_googletest//:gtest_main",
-        "@verilator//:libverilated",
+        "@rules_verilator//verilator:verilated_runtime",
     ],
-    linkopts = linkopts,
 )
 
 verilog_library(
     name = "callbacks_sv_test_sv",
     srcs = ["top.sv"],
     deps = ["//:registry_sv"],
-)
-
-verilog_flist(
-    name = "callbacks_sv_test.f",
-    srcs = [":callbacks_sv_test_sv"],
+    top_module = "top",
 )
 
 verilator_cc_library(
     name = "callbacks_sv_test_veri_lib",
-    top_module = "top",
+    module = ":callbacks_sv_test_sv",
     vopts = ["--assert"],
-    flist = "callbacks_sv_test.f",
 )
 
 cc_binary(
@@ -44,7 +36,6 @@ cc_binary(
         ":callbacks_sv_test_veri_lib",
         "@com_google_googletest//:gtest_main",
     ],
-    linkopts = linkopts,
 )
 
 sh_test(

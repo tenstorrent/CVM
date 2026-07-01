@@ -1,6 +1,3 @@
-// SPDX-FileCopyrightText: © 2026 Tenstorrent USA, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 #include <gtest/gtest.h>
 #include <unordered_set>
 #include "cvm/topology.hpp"
@@ -57,4 +54,22 @@ extern "C" void cvm_registry_reset2() {
 
 TEST(Registry, Dummy) {
     EXPECT_EQ(cvm::registry::is_registered<dummy>(), true);
+}
+
+TEST(Topology, ConnectionReferenceResolve) {
+    auto cluster = cvm::topology::get_from_hierarchy("TOP.CLUSTER", 0);
+
+    auto foo0 = cvm::topology::get_from_hierarchy("TOP.CLUSTER.FOO", 0);
+    auto val  = cvm::topology::attr(cluster, "FOO0_ID").second;
+    EXPECT_EQ(val, foo0);
+
+    auto core0 = cvm::topology::get_from_hierarchy("TOP.CLUSTER.CORE", 0);
+    auto val2  = cvm::topology::attr(cluster, "CORE0_ATTR1").second;
+    auto val3  = cvm::topology::attr(core0, "ATTR1").second;
+    EXPECT_EQ(val2, val3);
+
+    auto cluster_attr = cvm::topology::attr(cluster, "CLUSTER_ATTR").second;
+    auto core_cluster_attr = cvm::topology::attr(core0, "CORE_CLUSTER_ATTR").second;
+    EXPECT_EQ(cluster_attr, core_cluster_attr);
+
 }

@@ -1,6 +1,3 @@
-// SPDX-FileCopyrightText: © 2026 Tenstorrent USA, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 package cvm_topology;
 
   localparam int unsigned nil = '0;

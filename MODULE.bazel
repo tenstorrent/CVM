@@ -2,21 +2,35 @@ module(name = "cvm", version = "")
 
 # BCR dependencies
 bazel_dep(name = "bazel_skylib", version = "1.7.1")
-bazel_dep(name = "googletest", version = "1.15.2", repo_name = "com_google_googletest")
+bazel_dep(name = "googletest", version = "1.17.0.bcr.2", repo_name = "com_google_googletest")
 bazel_dep(name = "rules_python", version = "0.40.0")
 bazel_dep(name = "gflags", version = "2.2.2", repo_name = "com_github_gflags_gflags")
 bazel_dep(name = "platforms", version = "1.0.0")
-bazel_dep(name = "rules_hdl", version = "2026.01.16-22.01.28")
 
 # fmt from BCR
 bazel_dep(name = "fmt", version = "9.1.0")
 
-# rules_verilator from registry
-bazel_dep(name = "rules_verilator", version = "2026.01.21-20.15.07")
+# Upstream Verilator + verilog_library rules
+bazel_dep(name = "rules_verilator", version = "1.1.0")
+bazel_dep(name = "rules_verilog", version = "1.1.0")
+# rules_verilator 1.1.0 pulls verilator 5.046.bcr.3, whose build scripts use
+# rules_venv with Python 3.10+ syntax (PEP 604 unions in venv_process_wrapper.py).
+# cvm's Python toolchain is pinned to 3.9 to match deps/requirements_lock.txt,
+# so override to the unpatched 5.046 release (still has the :timing target
+# rules_verilator expects but doesn't use rules_venv).
+single_version_override(
+    module_name = "verilator",
+    version = "5.046",
+)
 
-# Verilator-related internal deps from rules_verilator's extension
-verilator_deps = use_extension("@rules_verilator//verilator:extensions.bzl", "internal_deps")
-use_repo(verilator_deps, "verilator")
+# Local compat shim that publishes the @rules_hdl//verilog:providers.bzl surface
+# downstream Tenstorrent repos still load. Each verilog_library it defines emits
+# both the legacy VerilogInfo and the upstream @rules_verilog VerilogInfo.
+bazel_dep(name = "rules_hdl", version = "0.0.0")
+local_path_override(
+    module_name = "rules_hdl",
+    path = "bazel/rules_hdl_compat",
+)
 
 # Python toolchain - use Python 3.9 to match requirements_lock.txt
 python = use_extension("@rules_python//python/extensions:python.bzl", "python")

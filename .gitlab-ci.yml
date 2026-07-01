@@ -1,0 +1,35 @@
+image:
+    name: "ghcr.io/tenstorrent/cvm:0.1.3"
+
+default:
+    id_tokens:
+        CI_JOB_JWT:
+            aud: https://aus-gitlab.local.tenstorrent.com
+
+stages:
+    - test
+
+.test-template:
+    variables:
+        SCHEDULER_PARAMETERS: "-n 8 -R span[hosts=1]"
+        BAZEL_OPTS: "--jobs=8"
+
+build-bazel6-top:
+    # Downstream consumers run Bazel 6 + WORKSPACE with their own @rules_hdl.
+    # This job verifies cvm's top-level exports still build under that shape.
+    stage: test
+    extends:
+        - .test-template
+    script:
+        - bazel --output_user_root=./bazel_output_user_root build //:all ${BAZEL_OPTS}
+    after_script:
+        - chmod +w -R ./bazel_output_user_root
+
+test-bazel7:
+    stage: test
+    extends:
+        - .test-template
+    script:
+        - bazel-7 --output_user_root=./bazel_output_user_root test //test/... --test_output=all --enable_bzlmod ${BAZEL_OPTS}
+    after_script:
+        - chmod +w -R ./bazel_output_user_root

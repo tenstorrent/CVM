@@ -1,6 +1,3 @@
-// SPDX-FileCopyrightText: © 2026 Tenstorrent USA, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 package cvm_plusargs;
 
     import "DPI-C" cvm_plusargs_get_bool   = function byte    unsigned get_bool    (string plusarg);

@@ -1,6 +1,3 @@
-// SPDX-FileCopyrightText: © 2026 Tenstorrent USA, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 module cvm_lfsr #(
 
     parameter int unsigned WIDTH                = 32'd2,

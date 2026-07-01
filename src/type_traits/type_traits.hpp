@@ -1,12 +1,10 @@
-// SPDX-FileCopyrightText: © 2026 Tenstorrent USA, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 #pragma once
 
 #include <string_view>
 #include <bitset>
 #include <array>
 #include <optional>
+#include <tuple>
 
 namespace cvm {
     // https://stackoverflow.com/questions/35941045/can-i-obtain-c-type-names-in-a-constexpr-way/35943472#35943472

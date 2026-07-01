@@ -11,7 +11,14 @@ top:
       count: 1
       type:
         - core
+      attrs:
+        ATTR1 : 100
+        CORE_CLUSTER_ATTR : "@TOP.CLUSTER.CLUSTER_ATTR"
     dummy:
       count: 1
       type:
         - dummy
+    attrs:
+      FOO0_ID: "@TOP.CLUSTER.FOO[0].ID"
+      CORE0_ATTR1: "@TOP.CLUSTER.CORE.ATTR1"
+      CLUSTER_ATTR: 1000

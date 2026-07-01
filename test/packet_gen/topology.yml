@@ -5,6 +5,7 @@ common_attrs: &common_attrs
     ID_WIDTH:   10
     NAME:       ""
     DOMAIN: 2
+    CORE_CLUSTER_ATTR: "@TOP.CLUSTER.CLUSTER_ATTR"
 axi_0: &axi_0
   <<: *common_attrs
   NAME: AXI0
@@ -41,4 +42,7 @@ top:
       type:
         - axi
       attrs: *axi_list
+    attrs:
+      AXI1_ID: "@TOP.CLUSTER.AXI[1].ID"
+      CLUSTER_ATTR: 1000
 

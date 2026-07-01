@@ -1,50 +1,42 @@
 load("@rules_hdl//verilog:providers.bzl", "verilog_library")
-load("@rules_hdl//verilog:build_defs.bzl", "verilog_flist")
 load("@rules_verilator//verilator:defs.bzl", "verilator_cc_library")
 load("//:defs.bzl", "topology_gen")
-load("//test:test.bzl", "linkopts")
 
 topology_gen(
     name = "topology",
     srcs = ["topology.yml"],
     cc_attrs = {
-        'alwayslink': True,
-        'linkstatic': True,
-    }
+        "alwayslink": True,
+        "linkstatic": True,
+    },
 )
 
 verilog_library(
     name = "top_sv",
     srcs = ["top.sv"],
-)
-
-verilog_flist(
-    name = "top.f",
-    srcs = [":top_sv"],
+    top_module = "top",
 )
 
 verilator_cc_library(
     name = "top_veri_lib",
-    top_module = "top",
+    module = ":top_sv",
     vopts = [
         "--assert",
         "-Wno-DECLFILENAME",
         "+define+TB_EXTERNAL_CLOCK",
     ],
-    flist = "top.f",
 )
 
 cc_binary(
     name = "registry_test",
     srcs = ["sim_main.cpp", "dummy.cpp", "dummy2.cpp", "dummy3.cpp"],
     deps = [
-      "@cvm//:topology",
-      "@cvm//:registry",
-      "@com_google_googletest//:gtest_main",
-      "top_veri_lib",
-      "topology_cc",
+        "@cvm//:topology",
+        "@cvm//:registry",
+        "@com_google_googletest//:gtest_main",
+        "top_veri_lib",
+        "topology_cc",
     ],
-    linkopts = linkopts,
 )
 
 sh_test(

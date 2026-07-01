@@ -1,6 +1,3 @@
-// SPDX-FileCopyrightText: © 2026 Tenstorrent USA, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 #include "${hpp.removeprefix(incdir).lstrip('/')}"
 #include "cvm/registry.hpp"
 #include <type_traits>

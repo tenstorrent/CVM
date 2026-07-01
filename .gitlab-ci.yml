@@ -1,6 +1,3 @@
-# TODO(open-source): re-publish the CI image on a public registry and switch
-# the URL below. The image is built from //Containerfile and contains no
-# internal Tenstorrent code; only the hosting URL is internal for now.
 image:
     name: "ghcr.io/tenstorrent/cvm:0.1.3"
 

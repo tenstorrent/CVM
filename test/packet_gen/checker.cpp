@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © 2026 Tenstorrent USA, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 #include "cvm/topology.hpp"
 #include "cvm/registry.hpp"
 #include "cvm/type_traits.hpp"

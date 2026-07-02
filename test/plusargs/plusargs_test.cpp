@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © 2026 Tenstorrent USA, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 #include "Vplusargs_test.h"
 #include "verilated.h"
 #include "cvm/plusargs.hpp"

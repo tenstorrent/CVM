@@ -1,0 +1,53 @@
+cvm
+Copyright 2026 Tenstorrent USA, Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+================================================================================
+
+Third-Party Dependencies:
+
+This product depends on software developed by third parties, obtained via the
+Bazel WORKSPACE/MODULE and Python requirements. Each dependency is the property
+of its respective owners and is distributed under its own license terms.
+
+- {fmt}
+  Copyright (c) 2012 - present, Victor Zverovich and {fmt} contributors
+  Licensed under the MIT License.
+  https://github.com/fmtlib/fmt
+
+- GoogleTest (googletest)
+  Copyright Google Inc.
+  Licensed under the BSD 3-Clause License.
+  https://github.com/google/googletest
+
+- gflags
+  Copyright (c) 2006, Google Inc.
+  Licensed under the BSD 3-Clause License.
+  https://github.com/gflags/gflags
+
+- Bazel rule sets (rules_python, rules_hdl, rules_verilator, rules_verilog, platforms)
+  Copyright their respective authors.
+  Licensed under the Apache License, Version 2.0.
+
+================================================================================
+
+Bundled Third-Party Files:
+
+The following files are reproduced from the IEEE 1800-2017 SystemVerilog
+standard (Annex I / PLI) and are the property of the IEEE. They are included
+for interface compatibility and are NOT licensed under the Apache License above:
+
+- third_party/dpi/svdpi.h   (SystemVerilog DPI, IEEE 1800-2017 Annex I)
+- third_party/vpi/vpi_user.h (SystemVerilog VPI/PLI, IEEE 1800-2017)
+- deps/vpi_user.h            (SystemVerilog VPI/PLI, IEEE 1800-2017)

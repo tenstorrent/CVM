@@ -1,0 +1,73 @@
+# REUSE (https://reuse.software) annotations for files that do not carry an
+# inline SPDX header. Hand-written C++/SystemVerilog/Python sources under src/
+# and test/ carry their own SPDX-FileCopyrightText / SPDX-License-Identifier
+# headers; the entries below cover everything else so the tree is 100 %
+# REUSE-compliant. Verified with `reuse lint`.
+version = 1
+
+# --- Build system, CI, config, and repo metadata -----------------------------
+# Bazel build files, Starlark, workspace/module files, CI, shell scripts, test
+# fixtures, dependency manifests, and project meta files. All authored by
+# Tenstorrent and licensed the same as the rest of the project (Apache-2.0);
+# they simply have no natural place for a comment header or are data files.
+[[annotations]]
+path = [
+    ".bazelrc",
+    ".gitignore",
+    ".gitlab-ci.yml",
+    "Containerfile",
+    "WORKSPACE",
+    "WORKSPACE.bzlmod",
+    "MODULE.bazel",
+    "BUILD.bazel",
+    "defs.bzl",
+    "LICENSE_understanding",
+    "NOTICE",
+    "**/BUILD.bazel",
+    "**/MODULE.bazel",
+    "**/WORKSPACE",
+    "**/*.bzl",
+    "**/*.sh",
+    "**/*.yml",
+    "deps/requirements.in",
+    "deps/requirements_lock.txt",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "© 2026 Tenstorrent USA, Inc."
+SPDX-License-Identifier = "Apache-2.0"
+
+# --- Code-generation templates -----------------------------------------------
+# These templates are expanded into generated sources at build time. They are
+# intentionally left without an inline SPDX header so the header is not copied
+# verbatim into generated output; their licensing is recorded here instead.
+[[annotations]]
+path = [
+    "src/packet_gen/templates/**",
+    "src/topology/templates/**",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "© 2026 Tenstorrent USA, Inc."
+SPDX-License-Identifier = "Apache-2.0"
+
+# --- Documentation (CC BY 4.0) -----------------------------------------------
+# Prose documentation is licensed under CC BY 4.0 (see LICENSE-DOCS), matching
+# the project's split between code (Apache-2.0) and docs.
+[[annotations]]
+path = ["README.md"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "© 2026 Tenstorrent USA, Inc."
+SPDX-License-Identifier = "CC-BY-4.0"
+
+# --- Bundled IEEE 1800-2017 headers (NOT Apache-2.0) -------------------------
+# Reproduced from the IEEE 1800-2017 SystemVerilog standard for DPI/VPI
+# interface compatibility. These remain IEEE property and are not covered by
+# this project's Apache-2.0 license. See LICENSES/LicenseRef-IEEE-1800-2017.txt.
+[[annotations]]
+path = [
+    "deps/vpi_user.h",
+    "third_party/dpi/svdpi.h",
+    "third_party/vpi/vpi_user.h",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Copyright IEEE. Reproduced from IEEE Std 1800-2017."
+SPDX-License-Identifier = "LicenseRef-IEEE-1800-2017"

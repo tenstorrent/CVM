@@ -21,7 +21,7 @@ path = [
     "MODULE.bazel",
     "BUILD.bazel",
     "defs.bzl",
-    "LICENSE_understanding",
+    "LICENSE_understanding.txt",
     "NOTICE",
     "**/BUILD.bazel",
     "**/MODULE.bazel",
@@ -53,7 +53,12 @@ SPDX-License-Identifier = "Apache-2.0"
 # Prose documentation is licensed under CC BY 4.0 (see LICENSE-DOCS), matching
 # the project's split between code (Apache-2.0) and docs.
 [[annotations]]
-path = ["README.md"]
+path = [
+    "README.md",
+    "CONTRIBUTING.md",
+    "CODE_OF_CONDUCT.md",
+    "SECURITY.md",
+]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "© 2026 Tenstorrent USA, Inc."
 SPDX-License-Identifier = "CC-BY-4.0"

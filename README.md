@@ -2,6 +2,23 @@
 
 This is a library for utilities used in C++ and SV testbenches. There are examples of how to use these under the `test` directory.
 
+## Getting Started
+
+`cvm` builds with [Bazel](https://bazel.build/) and is developed inside a
+container image (`ghcr.io/tenstorrent/cvm`, defined by the `Containerfile` at
+the repo root) that provides the required toolchain (Bazel, clang 20, Python 3).
+
+```sh
+# Build everything
+bazel build //...
+
+# Run the unit tests under test/
+bazel test //test/...
+```
+
+The `test/` directory contains runnable examples for each utility described
+below.
+
 ## plusargs
 
 Portable way to get plusargs from both C++ and SV using [gflags](https://gflags.github.io/gflags/).
@@ -175,3 +192,27 @@ For now, fields using the same qualify should be contiguous. This requirement ma
 + Why can't I call coroutines (`task<T>`) from normal functions?
 
 This is due to function coloring. There's an article about this here https://journal.stuffwithstuff.com/2015/02/01/what-color-is-your-function/. If you really want to do this, check out the `fork` function.
+
+## Contributing
+
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for
+how to build, test, and submit changes, and note that this project follows the
+[Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md). To report a security
+vulnerability, follow the process in [SECURITY.md](SECURITY.md).
+
+## License
+
+Source code in this repository is licensed under the Apache License, Version 2.0
+(see [LICENSE](LICENSE)). Documentation is licensed under CC-BY-4.0 (see
+[LICENSE-DOCS](LICENSE-DOCS)). Bundled third-party files retain their own
+licenses, catalogued in the [LICENSES/](LICENSES) directory and attributed in
+[NOTICE](NOTICE).
+
+Note that while this software assists in programming Tenstorrent products,
+making, using, or selling hardware, models, or IP may require the license of
+rights from Tenstorrent or others — see
+[LICENSE_understanding.txt](LICENSE_understanding.txt).
+
+This repository is [REUSE](https://reuse.software) compliant; per-file license
+and copyright information is available via inline SPDX headers and
+[REUSE.toml](REUSE.toml).

@@ -1,34 +1,43 @@
 # Security Policy
 
-## Reporting a Vulnerability
+## Reporting Security Vulnerabilities
 
-We take the security of this project seriously. If you believe you have found a
-security vulnerability, please report it to us privately. **Do not report
-security vulnerabilities through public GitHub issues, discussions, or pull
-requests.**
+Tenstorrent takes the security of our software products seriously. If you believe you have found a security vulnerability in cvm, please report it to us as described below.
 
-Instead, please use one of the following channels:
+## How to Report a Security Vulnerability
 
-- Open a private report through GitHub's
-  [security advisory](https://github.com/tenstorrent/cvm/security/advisories/new)
-  feature, or
-- Email us at **security@tenstorrent.com**.
+**Please do not report security vulnerabilities through public GitHub issues.**
 
-Please include as much of the following information as you can to help us
-understand and reproduce the issue:
+Instead, please report security vulnerabilities by emailing:
 
-- The type of issue and the affected component(s)
-- Full paths of source file(s) related to the issue
+- **ospo@tenstorrent.com**
+
+Please include the following information in your report (as much as you can provide):
+
+- Type of issue (e.g., buffer overflow, SQL injection, cross-site scripting, etc.)
+- Full paths of source file(s) related to the manifestation of the issue
 - The location of the affected source code (tag/branch/commit or direct URL)
 - Any special configuration required to reproduce the issue
 - Step-by-step instructions to reproduce the issue
-- Proof-of-concept or exploit code, if available
-- The impact of the issue, including how an attacker might exploit it
+- Proof-of-concept or exploit code (if possible)
+- Impact of the issue, including how an attacker might exploit it
 
-## Response
+This information will help us triage your report more quickly.
 
-We will acknowledge receipt of your report, investigate, and keep you informed
-of our progress. We ask that you give us a reasonable amount of time to address
-the issue before any public disclosure.
+## Response Timeline
 
-We appreciate your efforts to responsibly disclose your findings.
+We will acknowledge receipt of your vulnerability report within **2 business days** and will send you regular updates about our progress.
+
+## Security Process
+
+Our security process includes the following steps:
+
+1. **Report Submission**: Submit your security report via email to ospo@tenstorrent.com
+2. **Acknowledgment**: We acknowledge receipt within 2 business days
+3. **Triage**: Our security team evaluates the severity and impact of the vulnerability
+4. **Fix Development**: We develop and test a fix for the vulnerability
+5. **Disclosure**: We coordinate with you on appropriate disclosure timing and issue a security advisory
+
+## Preferred Languages
+
+We prefer all communications to be in English.

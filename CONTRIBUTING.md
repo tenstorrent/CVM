@@ -40,7 +40,7 @@ with `reuse lint`. Every new file must be covered by a license, either by:
 - adding an inline SPDX header to the top of the file:
 
   ```cpp
-  // SPDX-FileCopyrightText: © 2026 Tenstorrent USA, Inc.
+  // SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
   // SPDX-License-Identifier: Apache-2.0
   ```
 

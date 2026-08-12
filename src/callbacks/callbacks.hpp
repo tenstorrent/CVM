@@ -31,11 +31,7 @@ namespace cvm {
                 typename = std::enable_if<std::is_same<T, cb>::value>>
       void push(svScope scope, T&& func)
       {
-        {
-          std::lock_guard<std::mutex> lock(m_);
-          que_.emplace_back(scope, std::forward<T>(func));
-        }
-        c_.notify_one();
+        push([this, scope, f = cb(std::forward<T>(func))]() { call(scope, f); });
       }
 
       void set_scope(cvm::topology::loc_t loc, svScope scope);
@@ -44,17 +40,25 @@ namespace cvm {
                 typename = std::enable_if<std::is_same<T, cb>::value>>
       void push(cvm::topology::loc_t loc, T&& func)
       {
+        push([this, loc, f = cb(std::forward<T>(func))]() { call(loc, f); });
+      }
+
+      // Like push, but runs the callback immediately.
+      template <typename T,
+                typename = std::enable_if<std::is_same<T, cb>::value>>
+      void call(cvm::topology::loc_t loc, T&& func)
+      {
         svScope s;
         {
           std::lock_guard<std::mutex> lock(scope_m_);
           auto it = sv_scopes_.find(loc);
           if (it == sv_scopes_.end()) {
-            cvm::log(cvm::ERROR, "Error: callbacks::push: no svScope registered for loc {}\n", loc);
+            cvm::log(cvm::ERROR, "Error: callbacks::call: no svScope registered for loc {}\n", loc);
             return;
           }
           s = it->second;
         }
-        push(s, std::forward<T>(func));
+        call(s, std::forward<T>(func));
       }
 
       void flush();
@@ -68,11 +72,30 @@ namespace cvm {
 
     private:
 
+      // The single entry point to the queue.
+      void push(cb&& func)
+      {
+        {
+          std::lock_guard<std::mutex> lock(m_);
+          que_.emplace_back(std::move(func));
+        }
+        c_.notify_one();
+      }
+
+      // The single exit point to the dpi callbacks.
+      template <typename T,
+                typename = std::enable_if<std::is_same<T, cb>::value>>
+      void call(svScope scope, T&& func)
+      {
+        svScope prev = svSetScope(scope);
+        func();
+        if (prev) svSetScope(prev);
+      }
+
       std::condition_variable c_;
       std::mutex m_;
 
-      typedef std::tuple<svScope, cb> scoped_cb;
-      std::vector<scoped_cb> que_;
+      std::vector<cb> que_;
 
       std::thread async_;
       std::atomic<bool> quit_ = false;

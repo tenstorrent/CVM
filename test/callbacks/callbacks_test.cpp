@@ -38,3 +38,50 @@ TEST(Callbacks, MultipleLocsDispatchIndependently) {
     EXPECT_EQ(a_count, 2);
     EXPECT_EQ(b_count, 1);
 }
+
+TEST(Callbacks, CallByLocRunsImmediatelyWithRegisteredScope) {
+    cvm::callbacks c;
+    int counter = 0;
+    cvm::topology::loc_t loc = 5;
+    svScope scope = make_fake_scope(0xbeef);
+    c.set_scope(loc, scope);
+    c.call(loc, [&]() {
+        counter++;
+        EXPECT_EQ(svGetScope(), scope);
+    });
+    EXPECT_EQ(counter, 1);
+}
+
+TEST(Callbacks, CallRestoresPreviousScope) {
+    cvm::callbacks c;
+    cvm::topology::loc_t loc = 6;
+    c.set_scope(loc, make_fake_scope(0xbeef));
+    svScope prev = make_fake_scope(0x111);
+    svSetScope(prev);
+    c.call(loc, []() {});
+    EXPECT_EQ(svGetScope(), prev);
+}
+
+TEST(Callbacks, PushByLocDispatchesWithRegisteredScope) {
+    cvm::callbacks c;
+    cvm::topology::loc_t loc = 7;
+    svScope scope = make_fake_scope(0xabc);
+    c.set_scope(loc, scope);
+    int counter = 0;
+    c.push(loc, [&]() {
+        counter++;
+        EXPECT_EQ(svGetScope(), scope);
+    });
+    c.flush();
+    EXPECT_EQ(counter, 1);
+}
+
+TEST(Callbacks, PushBeforeSetScopeDispatchesAtFlush) {
+    cvm::callbacks c;
+    cvm::topology::loc_t loc = 8;
+    int counter = 0;
+    c.push(loc, [&counter]() { counter++; });
+    c.set_scope(loc, make_fake_scope(0xdef));
+    c.flush();
+    EXPECT_EQ(counter, 1);
+}

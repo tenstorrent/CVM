@@ -1,13 +1,15 @@
 # Minimal CI container for cvm. Provides Bazel 6.5.0 + Bazel 7.7.1, clang 20,
 # Python 3, m4 / flex / bison, libatomic (with the .so symlink ld expects).
-FROM debian:bookworm-slim
+
+FROM debian:trixie-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Apt-installed deps. `libgcc-12-dev` + `libstdc++-12-dev` ship
-# /usr/lib/gcc/x86_64-linux-gnu/12/libatomic.so, which clang picks up via its
+# Apt-installed deps. `libgcc-14-dev` + `libstdc++-14-dev` ship
+# /usr/lib/gcc/x86_64-linux-gnu/14/libatomic.so, which clang picks up via its
 # default search path. That's the symlink whose absence forced the hacks the
-# previous Rocky-Linux image required.
+# previous Rocky-Linux image required. libstdc++-14-dev also provides
+# libstdc++exp.a, required to link std::stacktrace (-lstdc++exp).
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
@@ -16,8 +18,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         python3 \
         python3-pip \
         python3-venv \
-        libgcc-12-dev \
-        libstdc++-12-dev \
+        libgcc-14-dev \
+        libstdc++-14-dev \
         libatomic1 \
         liblz4-dev \
         m4 \
@@ -30,7 +32,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN install -d /etc/apt/keyrings \
     && curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key \
         -o /etc/apt/keyrings/llvm-snapshot.asc \
-    && echo "deb [signed-by=/etc/apt/keyrings/llvm-snapshot.asc] https://apt.llvm.org/bookworm/ llvm-toolchain-bookworm-20 main" \
+    && echo "deb [signed-by=/etc/apt/keyrings/llvm-snapshot.asc] https://apt.llvm.org/trixie/ llvm-toolchain-trixie-20 main" \
         > /etc/apt/sources.list.d/llvm-20.list \
     && apt-get update && apt-get install -y --no-install-recommends \
         clang-20 \

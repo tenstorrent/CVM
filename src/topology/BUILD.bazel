@@ -9,8 +9,17 @@ py_library(
 )
 
 cc_library(
+  name = "location_defs",
+  hdrs = ["location_defs.hpp"],
+  strip_include_prefix = "//src/topology",
+  include_prefix = "cvm",
+  visibility = ["//visibility:public"],
+)
+
+cc_library(
   name = "topology",
   hdrs = ["topology.hpp"],
+  deps = [":location_defs"],
   strip_include_prefix = "//src/topology",
   include_prefix = "cvm",
   visibility = ["//visibility:public"],

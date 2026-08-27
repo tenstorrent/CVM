@@ -3,7 +3,7 @@ cc_library(
     hdrs = ["messenger.hpp"],
     srcs = ["messenger.cpp"],
     deps = [
-        "//:topology",
+        "//:location_defs",
         "//:logger",
         "//:type_traits",
         "//:random",

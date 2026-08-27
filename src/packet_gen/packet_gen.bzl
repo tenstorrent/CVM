@@ -79,7 +79,7 @@ _packet_gen = rule(
     ],
 )
 
-def packet_gen(name, topology, package = "", visibility = None, cc_attrs = {}, **kwargs):
+def packet_gen(name, topology, registry = None, package = "", visibility = None, cc_attrs = {}, **kwargs):
 
     hpp = name + ".hpp"
     cpp = name + ".cpp"
@@ -110,7 +110,7 @@ def packet_gen(name, topology, package = "", visibility = None, cc_attrs = {}, *
         hdrs = [hpp],
         deps = [
             "@cvm//:bitmanip",
-            "@cvm//:registry",
+            registry or (topology + "_registry"),
         ],
         visibility = visibility,
         strip_include_prefix = name if package else ".",

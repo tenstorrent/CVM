@@ -1,4 +1,5 @@
 load("@rules_hdl//verilog:providers.bzl", "verilog_library")
+load("@cvm//src/registry:registry.bzl", "registry_gen")
 
 def _topology_gen_impl(ctx):
   name = ctx.attr.name
@@ -93,6 +94,13 @@ def topology_gen(name, visibility = None, cc_attrs = {}, **kwargs):
       include_prefix = "cvm",
       visibility = visibility,
       **cc_attrs,
+  )
+
+  registry_gen(
+      name = name + '_registry',
+      topology = name,
+      visibility = visibility,
+      cc_attrs = cc_attrs,
   )
 
   verilog_library(

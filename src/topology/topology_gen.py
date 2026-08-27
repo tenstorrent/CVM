@@ -103,6 +103,103 @@ class Topology:
       locations.append(Location(node.name, node.types, path_id, path, [child.name for child in node.children], node.shard, instances, node.attributes, shards=node.shards))
     return cls(locations, types)
 
+  def _instance_groups(self, location):
+    """Per-instance group index, the group's own instance count, and the
+    location total, matching how the runtime tables are populated."""
+    if location.is_array:
+      groups = [g for g, sh in enumerate(location.shards) for _ in range(sh)]
+      return groups, location.shards, sum(location.shards)
+    return [0] * len(location.instances), [location.shard], len(location.instances)
+
+  def locations_by_type(self):
+    items = {t.upper(): [] for t in self.types}
+    for location in self.locations:
+      for instance in location.instances:
+        for typ in location.types:
+          items[typ.upper()].append(instance.loc)
+    return items
+
+  def locations_by_hierarchy(self):
+    # setdefault mirrors str_hierarchy.insert(), which leaves an existing key
+    # untouched rather than overwriting it.
+    items = dict()
+    for location in self.locations:
+      locs = [instance.loc for instance in location.instances]
+      items.setdefault(location.path, locs)
+      if location.is_array:
+        start = 0
+        for group, shard in enumerate(location.shards):
+          items.setdefault(f"{location.path}[{group}]", locs[start:start + shard])
+          start += shard
+    return items
+
+  def _attributes_by_location(self, wanted):
+    items = dict()
+    for location in self.locations:
+      if not location.attributes:
+        continue
+      groups, shards, total = self._instance_groups(location)
+      for index, instance in enumerate(location.instances):
+        group = groups[index]
+        declared = location.attributes[group] if location.is_array else location.attributes
+        entries = {name.upper(): value for (name, value) in declared if type(value) is wanted}
+        if wanted is int:
+          entries = {"SHARD": shards[group], "TOTAL": total, **entries}
+        if entries:
+          items[instance.loc] = entries
+    return items
+
+  def attributes_by_location(self):
+    return self._attributes_by_location(int)
+
+  def list_attributes_by_location(self):
+    return self._attributes_by_location(list)
+
+  def names_by_location(self):
+    return {instance.loc: location.name.upper()
+            for location in self.locations for instance in location.instances}
+
+  def constexpr_tables(self):
+    """Flatten the lookup tables into sorted, index-plus-pool form so the
+    generated header can resolve them with lower_bound rather than a linear
+    chain of comparisons over every key."""
+
+    def flatten(mapping):
+      pool, index = list(), list()
+      for key in sorted(mapping):
+        values = mapping[key]
+        index.append((key, len(pool), len(values)))
+        pool.extend(values)
+      return pool, index
+
+    type_pool, type_index = flatten(self.locations_by_type())
+    hierarchy_pool, hierarchy_index = flatten(self.locations_by_hierarchy())
+
+    attributes = [(loc, key, value)
+                  for loc, entries in self.attributes_by_location().items()
+                  for key, value in sorted(entries.items())]
+    attributes.sort(key=lambda e: (e[0], e[1]))
+
+    list_pool, list_index = list(), list()
+    for loc, entries in sorted(self.list_attributes_by_location().items()):
+      for key, values in sorted(entries.items()):
+        list_index.append((loc, key, len(list_pool), len(values)))
+        list_pool.extend(values)
+
+    names = self.names_by_location()
+    name_table = [names.get(loc, "") for loc in range(max(names, default=0) + 1)]
+
+    return {
+      "type_pool": type_pool,
+      "type_index": type_index,
+      "hierarchy_pool": hierarchy_pool,
+      "hierarchy_index": hierarchy_index,
+      "attributes": attributes,
+      "list_pool": list_pool,
+      "list_index": list_index,
+      "names": name_table,
+    }
+
 class TopologyGen:
 
   root = Node("top")
@@ -283,6 +380,7 @@ if __name__ == "__main__":
   parser = argparse.ArgumentParser()
   parser.add_argument("--definitions", nargs='+', help="yml files describing topology", required=True)
   parser.add_argument("--cpp", help="cpp file to generate", required=True)
+  parser.add_argument("--hpp", help="constexpr header to generate", required=True)
   parser.add_argument("--sv", help="sv file to generate", required=True)
   parser.add_argument("--json", help="populate json to be parsed by topology_query library", required=True)
   parser.add_argument("--merged", help="hierarchical topology to generate", required=True)
@@ -292,6 +390,6 @@ if __name__ == "__main__":
   # parse yaml for topology structure
   p = TopologyGen(args.definitions, args.merged)
   # generate SV and C++ headers
-  for typ in ["cpp", "sv", "json"]:
+  for typ in ["cpp", "hpp", "sv", "json"]:
     with open(getattr(args, typ), 'w') as f:
       p.generate(f, typ)

@@ -4,6 +4,7 @@ def _topology_gen_impl(ctx):
   name = ctx.attr.name
 
   cpp = ctx.outputs.cpp
+  hpp = ctx.outputs.hpp
   sv = ctx.outputs.sv
   json = ctx.outputs.json
   merged = ctx.outputs.merged
@@ -11,11 +12,12 @@ def _topology_gen_impl(ctx):
   args = ctx.actions.args()
   args.add_all("--definitions", ctx.files.srcs)
   args.add("--cpp", cpp)
+  args.add("--hpp", hpp)
   args.add("--sv", sv)
   args.add("--json", json)
   args.add("--merged", merged)
 
-  outputs = [cpp, sv, json, merged]
+  outputs = [cpp, hpp, sv, json, merged]
 
   ctx.actions.run(
       arguments = [args],
@@ -40,6 +42,8 @@ _topology_gen = rule(
       ),
       "cpp" : attr.output(
       ),
+      "hpp" : attr.output(
+      ),
       "sv" : attr.output(
       ),
       "json" : attr.output(
@@ -60,6 +64,9 @@ _topology_gen = rule(
 def topology_gen(name, visibility = None, cc_attrs = {}, **kwargs):
 
   cpp = name + ".cpp"
+  # Fixed basename under a per-target directory so consumers include a stable
+  # "cvm/topology_defs.hpp" regardless of which topology they are built against.
+  hpp = name + "/topology_defs.hpp"
   sv = name + ".sv"
   json = name + ".json"
   merged = name + "_merged.yml"
@@ -67,6 +74,7 @@ def topology_gen(name, visibility = None, cc_attrs = {}, **kwargs):
   _topology_gen(
       name = name,
       cpp = cpp,
+      hpp = hpp,
       sv = sv,
       json = json,
       merged = merged,
@@ -77,9 +85,12 @@ def topology_gen(name, visibility = None, cc_attrs = {}, **kwargs):
   native.cc_library(
       name = name + '_cc',
       srcs = [cpp],
+      hdrs = [hpp],
       deps = [
         "@cvm//src/topology:topology"
       ],
+      strip_include_prefix = name,
+      include_prefix = "cvm",
       visibility = visibility,
       **cc_attrs,
   )

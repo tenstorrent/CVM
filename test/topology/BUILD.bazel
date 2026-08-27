@@ -1,0 +1,17 @@
+load("//:defs.bzl", "topology_gen")
+
+topology_gen(
+    name = "topology",
+    srcs = ["topology.yml"],
+)
+
+cc_test(
+    name = "topology_test",
+    size = "small",
+    srcs = ["topology_test.cpp"],
+    deps = [
+        "topology_cc",
+        "//:topology",
+        "@com_google_googletest//:gtest_main",
+    ],
+)

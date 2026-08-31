@@ -1,18 +1,14 @@
 def registry_gen(name, topology, visibility = None, cc_attrs = {}, **kwargs):
-  """Registry bound to one topology.
+  """Compatibility shim for the registry-bound-to-a-topology target.
 
-  Depending on this target instead of @cvm//:registry puts that topology's
-  generated cvm/topology_defs.hpp on the include path, which is what the
-  compile-time registration macros expand against. Emitted automatically by
-  topology_gen as <topology>_registry.
+  The topology target emitted by topology_gen now carries CcInfo for the
+  generated tables merged with @cvm//:registry, so depending on the topology
+  label directly is sufficient. Kept as an alias so existing deps on
+  <topology>_registry keep resolving to the single compiled copy.
   """
 
-  native.cc_library(
+  native.alias(
       name = name,
-      deps = [
-        "@cvm//:registry",
-        topology + "_cc",
-      ],
+      actual = topology,
       visibility = visibility,
-      **cc_attrs,
   )

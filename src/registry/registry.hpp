@@ -325,8 +325,8 @@ namespace _registry {
 //
 //   #include "cvm/topology_defs.hpp"
 //
-// which is what depending on a registry_gen target rather than @cvm//:registry
-// provides. The _required forms reject a path the topology does not contain;
+// which is what depending on the topology_gen target rather than
+// @cvm//:registry provides. The _required forms reject a path the topology does not contain;
 // the plain forms skip it, as the runtime macros do.
 #define CVM_REGISTRY_REGISTER_(type, module, id, reset_domain, required, ...) \
     namespace _registry { \

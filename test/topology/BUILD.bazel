@@ -5,12 +5,21 @@ topology_gen(
     srcs = ["topology.yml"],
 )
 
+cc_library(
+    name = "sim_stubs",
+    srcs = ["sim_stubs.cpp"],
+    alwayslink = True,
+    linkstatic = True,
+)
+
 cc_test(
     name = "topology_test",
     size = "small",
     srcs = ["topology_test.cpp"],
+    linkstatic = True,
     deps = [
-        "topology_cc",
+        ":topology",
+        ":sim_stubs",
         "//:topology",
         "@com_google_googletest//:gtest_main",
     ],

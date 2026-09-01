@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+env:
+  BAZEL_OPTS: --jobs=8
+
+jobs:
+  license-check:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/tenstorrent/cvm:0.1.4
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: reuse lint
+        run: |
+          python3 -m venv /tmp/reuse-venv
+          /tmp/reuse-venv/bin/pip install --quiet --no-cache-dir "reuse[charset-normalizer]==6.2.0"
+          /tmp/reuse-venv/bin/reuse lint
+
+  build-bazel6-top:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/tenstorrent/cvm:0.1.4
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: bazel 6 build //:all
+        run: bazel --output_user_root=./bazel_output_user_root build //:all ${BAZEL_OPTS}
+      - name: unlock bazel output tree
+        if: always()
+        run: chmod +w -R ./bazel_output_user_root || true
+
+  test-bazel7:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/tenstorrent/cvm:0.1.4
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: bazel 7 test //test/...
+        run: bazel-7 --output_user_root=./bazel_output_user_root test //test/... --test_output=all --enable_bzlmod ${BAZEL_OPTS}
+      - name: unlock bazel output tree
+        if: always()
+        run: chmod +w -R ./bazel_output_user_root || true

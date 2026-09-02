@@ -16,6 +16,15 @@
 #include "cvm/callbacks.hpp"
 #include "cvm/topology.hpp"
 
+// The registration macros resolve module paths against cvm::static_topology,
+// generated per topology target. The header exists only in translation units
+// compiled against a topology (deps = [topology]); guarded so registry.hpp
+// stays includable from topology-agnostic code that does not expand the
+// macros.
+#if __has_include("cvm/topology_defs.hpp")
+#include "cvm/topology_defs.hpp"
+#endif
+
 namespace _registry {
 
   // A string literal cannot be a non-type template parameter directly; this
@@ -313,40 +322,29 @@ namespace _registry {
       static bool REGISTRY_CONCAT(_, __COUNTER__) = std::invoke([]() -> bool { return __VA_ARGS__; }); \
     }
 
-// this should be used in source file
-#define REGISTRY_register_with_reset_(type, module, id, reset_domain, ...) \
-    REGISTRY_REGISTER_IMPL_(cvm::registry::regist<RemoveBrackets<void (type)>::Type>( #module, id, reset_domain __VA_OPT__(,) __VA_ARGS__))
-#define REGISTRY_register_with_reset(...) REGISTRY_register_with_reset_(__VA_ARGS__)
-
-// if reset domain not specified, default to 0
-#define REGISTRY_register_(type, module, id, ...) \
-    REGISTRY_REGISTER_IMPL_(cvm::registry::regist<RemoveBrackets<void (type)>::Type>( #module, id, 0 __VA_OPT__(,) __VA_ARGS__))
-#define REGISTRY_register(...) REGISTRY_register_(__VA_ARGS__) // allows using ENUMS / #defines instead of numbers
-
-// Compile-time registration. Resolves the module path against
-// cvm::static_topology during translation, so the expanding source file must
-// include the topology it is built against:
-//
-//   #include "cvm/topology_defs.hpp"
-//
-// which is what depending on the topology_gen target rather than
-// @cvm//:registry provides. The _required forms reject a path the topology does not contain;
-// the plain forms skip it, as the runtime macros do.
-#define CVM_REGISTRY_REGISTER_(type, module, id, reset_domain, required, ...) \
+// Registration expands at namespace scope in a source file. The module path
+// and instance id resolve against cvm::static_topology during translation,
+// so the expanding translation unit must be compiled against a topology
+// target (deps = [topology]) — registry.hpp then picks up
+// cvm/topology_defs.hpp through the guarded include above. The _required
+// forms reject a path the topology does not contain; the plain forms skip
+// it, preserving the silent-skip semantics of the former runtime macros.
+#define REGISTRY_REGISTER_STATIC_(type, module, id, reset_domain, required, ...) \
     REGISTRY_REGISTER_IMPL_(cvm::registry::regist_static<cvm::static_topology, RemoveBrackets<void (type)>::Type, #module, id, required>(reset_domain __VA_OPT__(,) __VA_ARGS__))
 
-#define CVM_REGISTRY_register_(type, module, id, ...) \
-    CVM_REGISTRY_REGISTER_(type, module, id, 0, false __VA_OPT__(,) __VA_ARGS__)
-#define CVM_REGISTRY_register(...) CVM_REGISTRY_register_(__VA_ARGS__)
+// id accepts ENUMS / #defines / constexpr ints; reset domain defaults to 0
+#define REGISTRY_register_(type, module, id, ...) \
+    REGISTRY_REGISTER_STATIC_(type, module, id, 0, false __VA_OPT__(,) __VA_ARGS__)
+#define REGISTRY_register(...) REGISTRY_register_(__VA_ARGS__)
 
-#define CVM_REGISTRY_register_required_(type, module, id, ...) \
-    CVM_REGISTRY_REGISTER_(type, module, id, 0, true __VA_OPT__(,) __VA_ARGS__)
-#define CVM_REGISTRY_register_required(...) CVM_REGISTRY_register_required_(__VA_ARGS__)
+#define REGISTRY_register_required_(type, module, id, ...) \
+    REGISTRY_REGISTER_STATIC_(type, module, id, 0, true __VA_OPT__(,) __VA_ARGS__)
+#define REGISTRY_register_required(...) REGISTRY_register_required_(__VA_ARGS__)
 
-#define CVM_REGISTRY_register_with_reset_(type, module, id, reset_domain, ...) \
-    CVM_REGISTRY_REGISTER_(type, module, id, reset_domain, false __VA_OPT__(,) __VA_ARGS__)
-#define CVM_REGISTRY_register_with_reset(...) CVM_REGISTRY_register_with_reset_(__VA_ARGS__)
+#define REGISTRY_register_with_reset_(type, module, id, reset_domain, ...) \
+    REGISTRY_REGISTER_STATIC_(type, module, id, reset_domain, false __VA_OPT__(,) __VA_ARGS__)
+#define REGISTRY_register_with_reset(...) REGISTRY_register_with_reset_(__VA_ARGS__)
 
-#define CVM_REGISTRY_register_required_with_reset_(type, module, id, reset_domain, ...) \
-    CVM_REGISTRY_REGISTER_(type, module, id, reset_domain, true __VA_OPT__(,) __VA_ARGS__)
-#define CVM_REGISTRY_register_required_with_reset(...) CVM_REGISTRY_register_required_with_reset_(__VA_ARGS__)
+#define REGISTRY_register_required_with_reset_(type, module, id, reset_domain, ...) \
+    REGISTRY_REGISTER_STATIC_(type, module, id, reset_domain, true __VA_OPT__(,) __VA_ARGS__)
+#define REGISTRY_register_required_with_reset(...) REGISTRY_register_required_with_reset_(__VA_ARGS__)

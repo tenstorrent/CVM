@@ -32,9 +32,8 @@ cc_binary(
     srcs = ["sim_main.cpp", "dummy.cpp", "dummy2.cpp", "dummy3.cpp", "dummy_static.cpp"],
     deps = [
         "@cvm//:topology",
-        # Covers both dependency shapes in one binary: the bare topology
-        # target for the compile-time macros, @cvm//:registry for the runtime
-        # ones, and the :topology_registry alias for unmigrated consumers.
+        # Covers both dependency spellings in one binary: the bare topology
+        # target and the :topology_registry compatibility alias.
         "@cvm//:registry",
         ":topology",
         ":topology_registry",

@@ -51,9 +51,9 @@ class dummy_static_absent {
     };
 };
 
-CVM_REGISTRY_register_required_with_reset(dummy_static, DUMMY, (cvm::registry::all), 1)
-CVM_REGISTRY_register_required_with_reset(dummy_static_hierarchy, TOP.CLUSTER.CORE, 0, 1)
-CVM_REGISTRY_register_with_reset(dummy_static_absent, TOP.CLUSTER.NOT_PRESENT, 0, 1)
+REGISTRY_register_required_with_reset(dummy_static, DUMMY, (cvm::registry::all), 1)
+REGISTRY_register_required_with_reset(dummy_static_hierarchy, TOP.CLUSTER.CORE, 0, 1)
+REGISTRY_register_with_reset(dummy_static_absent, TOP.CLUSTER.NOT_PRESENT, 0, 1)
 
 // The predicate the _required macros assert on, checked directly so both
 // answers are covered without a build that is expected to fail.

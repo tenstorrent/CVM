@@ -187,6 +187,93 @@ For now, fields using the same qualify should be contiguous. This requirement ma
             width: [[2, 2, 4]] # multi-dimensional field of 2x2, each with width of 4. This can be mixed with variants. 
 ```
 
+## replay
+
+Replays a recorded vector stream against an arbitrary Verilog module:
+drives the module's inputs from the recorded timeline and checks its outputs
+against the recorded values. Useful for turning a full-chip capture into a
+block-level regression, or for reproducing a failure without the surrounding
+environment.
+
+The vector source today is EVCD (`$dumpports` output), which is the only format
+that records *which side* of each port is driving; that is the `//:evcd` library,
+kept separate so the format can be swapped without touching replay.
+
+A checked-in YAML spec is the source of truth. It generates a SystemVerilog
+*interposer* and nothing else, and that file is only wiring: all the behaviour
+lives in the hand-written `cvm_replay_engine` module it instantiates. The
+interposer hands its port layout to the runtime at time zero, and that is also
+the conformance check, so there is no generated C++. Because nothing is generated *from* a dump, **one build replays
+any number of conforming dumps**.
+
+```yaml
+# alu_ports.yml
+alu_replay:
+  dut: alu
+  strobe: 1          # settle delay before sampling a checked output
+  ports:
+    clk:    { width: 1, dir: in }
+    opa:    { width: 4, dir: in }
+    result: { width: 5, dir: out }
+    valid:  { width: 1, dir: out, check: false }   # passed through, not compared
+    dbg:    { width: 4, dir: in, dump_name: dbg_bus }  # dump uses another name
+    tclk:   { width: 1, dir: in, source: external }    # always TB-driven
+```
+
+```python
+load("@cvm//:defs.bzl", "replay")
+
+replay(name = "alu_replay", srcs = ["alu_ports.yml"])   # topology optional
+```
+
+`dir` is **always** from the DUT's perspective: `in` means driven *into* the DUT.
+
+The generated module is an interposer: the DUT's IO flows through it, so every
+port appears on both sides (`*_tb` towards the testbench, `*_dut` towards the
+DUT). It never instantiates the DUT and never calls `$finish`, so it drops into a
+larger testbench. `enable`'s rising edge is the time origin, and every recorded
+timestamp is applied relative to it, which lets a testbench initialise first and
+then hand over. When `enable` falls, or the dump runs out, the DUT's inputs revert
+to the testbench side.
+
+```systemverilog
+alu_replay #(.HIER("top.u_replay")) u_replay (
+    .enable(enable), .done(done),
+    .clk_tb(clk_tb), .clk_dut(clk_dut), /* ... */ );
+alu u_dut (.clk(clk_dut), /* ... */ );
+```
+
+Runtime plusargs, so mode and vector file need no recompile:
+
++ `+cvm_replay_file=<path>`, or `+cvm_replay_file=<key>=<path>,<key>=<path>` keyed by
+  each instance's `HIER` parameter
++ `+cvm_replay_strict_x` -- compare recorded X/Z exactly instead of skipping
+  those bits. Only meaningful on a 4-state simulator.
++ `+cvm_replay_mode=REPLAY|BYPASS` -- `REPLAY` drives the DUT from the dump,
+  `BYPASS` lets the testbench drive and makes the interposer a transparent wire.
+  Mode affects *only* who drives the DUT's inputs, so external monitors work
+  unchanged either way.
+
+Two things to be aware of:
+
++ **A mismatch does not fail a test on its own.** It is reported with
+  `cvm::log(cvm::ERROR, ...)`, and the logger's handlers are empty by default, so
+  register one or mismatches are merely printed:
+  `cvm::set_logger_handler(cvm::ERROR, [] { /* fail the test */ });`
++ **The timescale is ignored.** Recorded deltas are applied as raw numbers in
+  whatever timescale the testbench established, so a testbench compiled at `1ns`
+  replaying a `1ps` dump runs a thousand times too slow and nothing detects it.
+  Matching them is the integrator's responsibility.
+
+Verilator is 2-state, so a recorded `X` collapses to a concrete value when
+driven, and the default of skipping unknown bits is required there.
+`+cvm_replay_strict_x` compares X against X exactly on a 4-state simulator.
+
+Requires Verilator's `--timing` (the `timing = True` attribute on
+`verilator_cc_library`, never a `vopts` entry) and a sim main that advances time
+with `nextTimeSlot()`; see `test/replay/sim_main.cpp`.
+
+
 ## FAQ
 
 + Why can't I call coroutines (`task<T>`) from normal functions?

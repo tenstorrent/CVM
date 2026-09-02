@@ -77,3 +77,9 @@ cc_library(
     deps = ["//src/type_traits:type_traits"],
     visibility = ["//visibility:public"],
 )
+
+cc_library(
+    name = "evcd",
+    deps = ["//src/evcd:evcd"],
+    visibility = ["//visibility:public"],
+)

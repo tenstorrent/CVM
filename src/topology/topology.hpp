@@ -5,16 +5,15 @@
 
 #include <string>
 #include <vector>
+#include <fstream>
 #include <utility>
 #include <cstdint>
-// Downstream translation units rely on this header transitively providing
-// <fstream>; drop only alongside a sweep of those consumers.
-#include <fstream>
-
-#include "cvm/location_defs.hpp"
 
 namespace cvm {
   namespace topology {
+
+    typedef uint32_t loc_t;
+    inline constexpr loc_t null = 0;
 
     std::vector<loc_t> get_from_type(const std::string& type);
     std::vector<loc_t> get_from_hierarchy(const std::string& hierarchy);

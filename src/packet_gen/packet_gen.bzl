@@ -28,17 +28,9 @@ def _packet_gen_impl(ctx):
     else:
       args.add("--name"      , package)
 
-    # The topology attribute accepts either a bare topology_gen target
-    # (multi-file DefaultInfo) or a plain json file, so the json is selected
-    # by extension rather than with allow_single_file.
-    topology_json = [f for f in ctx.files.topology if f.extension == "json"]
-    if len(topology_json) != 1:
-        fail("topology must provide exactly one .json file, got: %s" % [f.path for f in ctx.files.topology])
-    topology_json = topology_json[0]
+    args.add("--topology"  , ctx.file.topology)
 
-    args.add("--topology"  , topology_json)
-
-    inputs = ctx.files.srcs + [topology_json]
+    inputs = ctx.files.srcs + [ctx.file.topology]
     outputs = [hpp, cpp, sv, merged]
 
     ctx.actions.run(
@@ -64,7 +56,7 @@ _packet_gen = rule(
         ),
         "topology": attr.label(
             mandatory = True,
-            allow_files = True,
+            allow_single_file = [".json"],
         ),
         "package": attr.string(
         ),
@@ -87,7 +79,7 @@ _packet_gen = rule(
     ],
 )
 
-def packet_gen(name, topology, registry = None, package = "", visibility = None, cc_attrs = {}, **kwargs):
+def packet_gen(name, topology, package = "", visibility = None, cc_attrs = {}, **kwargs):
 
     hpp = name + ".hpp"
     cpp = name + ".cpp"
@@ -106,7 +98,7 @@ def packet_gen(name, topology, registry = None, package = "", visibility = None,
         cpp  = cpp,
         sv   = sv,
         merged = merged,
-        topology = topology,
+        topology = topology + "_json",
         package = package,
         visibility = visibility,
         **kwargs,
@@ -118,7 +110,7 @@ def packet_gen(name, topology, registry = None, package = "", visibility = None,
         hdrs = [hpp],
         deps = [
             "@cvm//:bitmanip",
-            registry or topology,
+            topology,
         ],
         visibility = visibility,
         strip_include_prefix = name if package else ".",

@@ -44,37 +44,41 @@ class dummy_static_hierarchy {
     };
 };
 
-class dummy_static_absent {
+class dummy_static_group {
   public:
-    dummy_static_absent(cvm::topology::loc_t, unsigned) {
-      ADD_FAILURE() << "constructed for a path the topology does not contain";
+    dummy_static_group(cvm::topology::loc_t loc, unsigned) {
+      // Group 1 is the third shard instance: groups hold 2 + 1 instances.
+      EXPECT_EQ(loc, cvm::topology::get_from_hierarchy("TOP.SHARD")[2]);
     };
 };
 
-REGISTRY_register_required_with_reset(dummy_static, DUMMY, (cvm::registry::all), 1)
-REGISTRY_register_required_with_reset(dummy_static_hierarchy, TOP.CLUSTER.CORE, 0, 1)
-REGISTRY_register_with_reset(dummy_static_absent, TOP.CLUSTER.NOT_PRESENT, 0, 1)
+REGISTRY_register_with_reset(dummy_static, DUMMY, (cvm::registry::all), 1)
+REGISTRY_register_with_reset(dummy_static_hierarchy, TOP.CLUSTER.CORE, 0, 1)
+REGISTRY_register_with_reset(dummy_static_group, TOP.SHARD[1], 0, 1)
 
-// The predicate the _required macros assert on, checked directly so both
-// answers are covered without a build that is expected to fail.
-static_assert(cvm::registry::resolvable<cvm::static_topology, "DUMMY", cvm::registry::all>());
-static_assert(cvm::registry::resolvable<cvm::static_topology, "TOP.CLUSTER.CORE", 0>());
-static_assert(not cvm::registry::resolvable<cvm::static_topology, "TOP.CLUSTER.NOT_PRESENT", 0>());
-static_assert(not cvm::registry::resolvable<cvm::static_topology, "NOT_A_TYPE", cvm::registry::all>());
-static_assert(not cvm::registry::resolvable<cvm::static_topology, "DUMMY", 99>());
+// The predicate the registration macros assert on, checked directly so the
+// negative answers are covered without a build that is expected to fail.
+static_assert(cvm::registry::resolvable<cvm::static_topology>("DUMMY", cvm::registry::all));
+static_assert(cvm::registry::resolvable<cvm::static_topology>("TOP.CLUSTER.CORE", 0));
+static_assert(not cvm::registry::resolvable<cvm::static_topology>("TOP.CLUSTER.NOT_PRESENT", 0));
+static_assert(not cvm::registry::resolvable<cvm::static_topology>("NOT_A_TYPE", cvm::registry::all));
+static_assert(not cvm::registry::resolvable<cvm::static_topology>("DUMMY", 99));
+static_assert(cvm::registry::resolvable<cvm::static_topology>("TOP.SHARD[1]", 0));
+static_assert(not cvm::registry::resolvable<cvm::static_topology>("TOP.SHARD[2]", 0));
+
+// The generated identifier structs carry the same paths the tables index.
+static_assert(decltype(cvm::static_topology::mods().TOP.CLUSTER.CORE)::path == std::string_view("TOP.CLUSTER.CORE"));
+static_assert(decltype(cvm::static_topology::mods().DUMMY)::path == std::string_view("DUMMY"));
+static_assert(cvm::static_topology::mods().TOP.SHARD[1].group == 1);
 
 TEST(Registry, StaticRegistrationResolvesLikeRuntime) {
   EXPECT_TRUE(cvm::registry::is_registered<dummy_static>());
   EXPECT_TRUE(cvm::registry::is_registered<dummy_static_hierarchy>());
 
-  const auto by_type = cvm::static_topology::locations_of_type("DUMMY");
+  const auto by_type = cvm::static_topology::get_from_type("DUMMY");
   EXPECT_EQ(std::vector<cvm::topology::loc_t>(by_type.begin(), by_type.end()),
             cvm::topology::get_from_type("DUMMY"));
 
-  EXPECT_EQ(cvm::static_topology::location_of_hierarchy("TOP.CLUSTER.CORE", 0),
+  EXPECT_EQ(cvm::static_topology::get_from_hierarchy("TOP.CLUSTER.CORE", 0),
             cvm::topology::get_from_hierarchy("TOP.CLUSTER.CORE", 0));
-}
-
-TEST(Registry, StaticRegistrationSkipsAbsentPaths) {
-  EXPECT_FALSE(cvm::registry::is_registered<dummy_static_absent>());
 }

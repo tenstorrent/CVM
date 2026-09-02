@@ -19,25 +19,25 @@ namespace cvm {
   namespace topology {
 
     std::vector<loc_t> get_from_type(const std::string& type) {
-      const auto locations = cvm::static_topology::locations_of_type(type);
+      const auto locations = cvm::static_topology::get_from_type(type);
       return std::vector<loc_t>(locations.begin(), locations.end());
     }
 
     std::vector<loc_t> get_from_hierarchy(const std::string& hierarchy) {
-      const auto locations = cvm::static_topology::locations_of_hierarchy(hierarchy);
+      const auto locations = cvm::static_topology::get_from_hierarchy(hierarchy);
       return std::vector<loc_t>(locations.begin(), locations.end());
     }
 
     loc_t get_from_type(const std::string& type, unsigned id) {
-      return cvm::static_topology::location_of_type(type, id);
+      return cvm::static_topology::get_from_type(type, id);
     }
 
     loc_t get_from_hierarchy(const std::string& hierarchy, unsigned id) {
-      return cvm::static_topology::location_of_hierarchy(hierarchy, id);
+      return cvm::static_topology::get_from_hierarchy(hierarchy, id);
     }
 
     std::pair<bool, uint32_t> attr(loc_t loc, const std::string& attribute) {
-      const auto value = cvm::static_topology::attribute(loc, attribute);
+      const auto value = cvm::static_topology::attr(loc, attribute);
 
       if (not value)
         return std::make_pair(false, uint32_t(0));
@@ -46,7 +46,7 @@ namespace cvm {
     }
 
     std::pair<bool, std::vector<uint32_t>> list_attr(loc_t loc, const std::string& attribute) {
-      const auto values = cvm::static_topology::list_attribute(loc, attribute);
+      const auto values = cvm::static_topology::list_attr(loc, attribute);
 
       if (not values)
         return std::make_pair(false, std::vector<uint32_t>{});

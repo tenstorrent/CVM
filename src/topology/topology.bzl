@@ -28,11 +28,6 @@ def _topology_gen_impl(ctx):
       mnemonic = "CVMTopologyGen"
   )
 
-  # The generated tables are compiled here, inside the rule, so the topology
-  # label itself carries CcInfo and downstream deps lists can name the
-  # topology directly instead of deriving sibling target names. The registry
-  # is merged into that CcInfo because the compile-time registration macros
-  # are unusable without both.
   cc_toolchain = find_cpp_toolchain(ctx)
   feature_configuration = cc_common.configure_features(
       ctx = ctx,
@@ -126,8 +121,6 @@ _topology_gen = rule(
 def topology_gen(name, visibility = None, cc_attrs = {}, **kwargs):
 
   cpp = name + ".cpp"
-  # Fixed basename under a per-target directory so consumers include a stable
-  # "cvm/topology_defs.hpp" regardless of which topology they are built against.
   hpp = name + "/topology_defs.hpp"
   sv = name + ".sv"
   json = name + ".json"
@@ -142,22 +135,6 @@ def topology_gen(name, visibility = None, cc_attrs = {}, **kwargs):
       merged = merged,
       visibility = visibility,
       **kwargs,
-  )
-
-  # Compatibility aliases for consumers that still derive sibling target
-  # names. Aliases rather than cc_library wrappers so the generated tables
-  # are compiled and linked exactly once regardless of which spelling a
-  # consumer depends on.
-  native.alias(
-      name = name + '_cc',
-      actual = name,
-      visibility = visibility,
-  )
-
-  native.alias(
-      name = name + '_registry',
-      actual = name,
-      visibility = visibility,
   )
 
   verilog_library(

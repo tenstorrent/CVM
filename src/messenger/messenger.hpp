@@ -22,7 +22,7 @@
 #include <gflags/gflags.h>
 #include <span>
 #include <optional>
-#include "cvm/location_defs.hpp"
+#include "cvm/topology.hpp"
 #include "cvm/type_traits.hpp"
 #include "cvm/logger.hpp"
 #include "cvm/random.hpp"
@@ -83,7 +83,7 @@ namespace cvm {
 
                       typedef std::function<typename F::function_type> listener_t;
 
-                      void add_listener(cvm::location_defs::loc_t loc, std::function<typename F::function_type> f) {
+                      void add_listener(cvm::topology::loc_t loc, std::function<typename F::function_type> f) {
                           assert((!listeners_.contains(loc)) && "listener already exists");
 
                           listeners_[loc] = f;
@@ -91,14 +91,14 @@ namespace cvm {
                       }
 
                       template <typename... Args>
-                      return_type_t<F> run(cvm::location_defs::loc_t loc, Args... args) {
+                      return_type_t<F> run(cvm::topology::loc_t loc, Args... args) {
                           auto f = listeners_[loc];
                           cvm::log(cvm::DEBUG, "[messenger] procedure call running listener at loc {}, type {}\n", loc, cvm::type_traits::name<decltype(f)>());
                           return f(args...);
                       }
 
                   private:
-                      std::unordered_map<cvm::location_defs::loc_t, listener_t> listeners_;
+                      std::unordered_map<cvm::topology::loc_t, listener_t> listeners_;
               };
 
               template <typename T = void>
@@ -213,11 +213,11 @@ namespace cvm {
                       virtual ~pool() {}
 
                       typedef std::function<void(const T&)> listener;
-                      void add_long_running(cvm::location_defs::loc_t loc, const listener& handle, const std::function<bool(const T&)>& filter) {
+                      void add_long_running(cvm::topology::loc_t loc, const listener& handle, const std::function<bool(const T&)>& filter) {
                           long_runnings_[loc].emplace_back(handle, filter);
                       }
 
-                      bool run(cvm::location_defs::loc_t loc, T t) {
+                      bool run(cvm::topology::loc_t loc, T t) {
 
                           std::vector<std::coroutine_handle<>> handles;
 
@@ -320,10 +320,10 @@ namespace cvm {
                           return clean;
                       }
 
-                      task<T> wait(cvm::location_defs::loc_t loc) {
+                      task<T> wait(cvm::topology::loc_t loc) {
                           struct awaiter {
                               pool<T>& self;
-                              cvm::location_defs::loc_t loc;
+                              cvm::topology::loc_t loc;
 
                               T t;
 
@@ -336,8 +336,8 @@ namespace cvm {
                       }
 
                       // messenger managed channel
-                      struct channel_info{ size_t id; cvm::location_defs::loc_t loc; };
-                      auto create_channel(cvm::location_defs::loc_t loc) {
+                      struct channel_info{ size_t id; cvm::topology::loc_t loc; };
+                      auto create_channel(cvm::topology::loc_t loc) {
                           channels_[loc].emplace_back();
                           return channel_info{channels_[loc].size() - 1, loc};
                       }
@@ -528,7 +528,7 @@ namespace cvm {
                           listener l;
                           std::function<bool(const T&)> filter;
                       };
-                      std::unordered_map<cvm::location_defs::loc_t, std::vector<long_running>> long_runnings_;
+                      std::unordered_map<cvm::topology::loc_t, std::vector<long_running>> long_runnings_;
 
                       struct moment {
                           moment(T* val, std::coroutine_handle<> handle) : val(val), handle(handle) {};
@@ -536,7 +536,7 @@ namespace cvm {
                           T* val;
                           std::coroutine_handle<> handle;
                       };
-                      std::unordered_map<cvm::location_defs::loc_t, std::vector<moment>> moments_;
+                      std::unordered_map<cvm::topology::loc_t, std::vector<moment>> moments_;
 
                       struct channel {
                           channel() = default;
@@ -560,13 +560,13 @@ namespace cvm {
                           std::deque<T> orphans; // We insert here if there's no waiters matching on new message.
                           std::vector<channel_waiter> waiters; // Per-coroutine handle.
                       };
-                      std::unordered_map<cvm::location_defs::loc_t, std::vector<channel>> channels_;
+                      std::unordered_map<cvm::topology::loc_t, std::vector<channel>> channels_;
               };
 
               // TODO: use variadic templates
               template <typename T>
-              void connect(cvm::location_defs::loc_t loc, const typename pool<T>::listener& l, const std::function<bool(const T& t)>& filter = nullptr) {
-                  if (loc == cvm::location_defs::null) {
+              void connect(cvm::topology::loc_t loc, const typename pool<T>::listener& l, const std::function<bool(const T& t)>& filter = nullptr) {
+                  if (loc == cvm::topology::null) {
                       assert(false && "attempting to connect to null location");
                       return;
                   }
@@ -603,9 +603,9 @@ namespace cvm {
               };
 
               template <typename T, typename E, typename A = const T&&>
-              void _signal(cvm::location_defs::loc_t loc, const A m, priority prio = default_priority, launch l = immediate) {
+              void _signal(cvm::topology::loc_t loc, const A m, priority prio = default_priority, launch l = immediate) {
 
-                  if (loc == cvm::location_defs::null) {
+                  if (loc == cvm::topology::null) {
                       cvm::log(cvm::ERROR,
                           "Error: messenger: attempting to signal to null location, packet type={} payload type={}\n",
                           cvm::type_traits::name<T>(),
@@ -620,7 +620,7 @@ namespace cvm {
                   cvm::log(cvm::DEBUG, "[messenger] signal to location {} of type {}\n", loc, cvm::type_traits::name<decltype(m)>());
 
                   static const auto key = std::type_index(typeid(E));
-                  typedef std::vector<std::pair<cvm::location_defs::loc_t, E>> storage_t;
+                  typedef std::vector<std::pair<cvm::topology::loc_t, E>> storage_t;
 
                   static constexpr auto f = [](std::size_t idx, messenger& m, decltype(signal_storage_[0])& s) {
                       storage_t& storage = std::any_cast<storage_t&>(s[key]);
@@ -668,22 +668,22 @@ namespace cvm {
             public:
 
               template <typename T>
-              void signal(cvm::location_defs::loc_t loc, const T& m) {
+              void signal(cvm::topology::loc_t loc, const T& m) {
                   _signal<T, T, const T&>(loc, m, default_priority, immediate);
               }
 
               template <typename T>
-              void signal_async(cvm::location_defs::loc_t loc, const T& m, priority prio = default_priority) {
+              void signal_async(cvm::topology::loc_t loc, const T& m, priority prio = default_priority) {
                   _signal<T, T, const T&>(loc, m, prio, async);
               }
 
               template <typename T, typename E, typename A = const T&&>
-              void signal_async(cvm::location_defs::loc_t loc, const A m, priority prio = default_priority) {
+              void signal_async(cvm::topology::loc_t loc, const A m, priority prio = default_priority) {
                   _signal<T, E, A>(loc, m, prio, async);
               }
 
               template <typename T>
-              task<T> wait(cvm::location_defs::loc_t loc) {
+              task<T> wait(cvm::topology::loc_t loc) {
                   co_return co_await message_pool<T>()->wait(loc);
               }
 
@@ -770,7 +770,7 @@ namespace cvm {
               }
 
               template <typename T>
-              auto channel(cvm::location_defs::loc_t loc) {
+              auto channel(cvm::topology::loc_t loc) {
                   return message_pool<T>()->create_channel(loc);
               }
 
@@ -792,18 +792,18 @@ namespace cvm {
               }
 
               template<typename F>
-              void procedure(cvm::location_defs::loc_t loc, std::function<typename F::function_type> listener) {
+              void procedure(cvm::topology::loc_t loc, std::function<typename F::function_type> listener) {
                   // Connect a listener to the appropriate remote_call
                   cvm::log(cvm::DEBUG, "[messenger] procedure location {} with type {}\n", loc, typeid(F).name());
-                  assert((loc != cvm::location_defs::null) && "attempting to register procedure to a null location");
+                  assert((loc != cvm::topology::null) && "attempting to register procedure to a null location");
                   procedure_calls<F>()->add_listener(loc, listener);
               }
 
               template<typename F, typename... Args>
-              [[nodiscard]] return_type_t<F> call(cvm::location_defs::loc_t loc, Args&&... args) {
+              [[nodiscard]] return_type_t<F> call(cvm::topology::loc_t loc, Args&&... args) {
                   // Find a remote call and call it's function for a specified location
                   cvm::log(cvm::DEBUG, "[messenger] call location {} with type {}\n", loc, typeid(F).name());
-                  assert((loc != cvm::location_defs::null) && "attempting to call procedure to a null location");
+                  assert((loc != cvm::topology::null) && "attempting to call procedure to a null location");
                   return procedure_calls<F>()->template run<Args...>(loc, args...);
               }
 

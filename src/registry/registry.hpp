@@ -4,8 +4,10 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <functional>
+#include <utility>
 #include <string_view>
 #include <typeinfo>
 #include <unordered_set>
@@ -15,31 +17,6 @@
 #include "cvm/messenger.hpp"
 #include "cvm/callbacks.hpp"
 #include "cvm/topology.hpp"
-
-// The registration macros resolve module paths against cvm::static_topology,
-// generated per topology target. The header exists only in translation units
-// compiled against a topology (deps = [topology]); guarded so registry.hpp
-// stays includable from topology-agnostic code that does not expand the
-// macros.
-#if __has_include("cvm/topology_defs.hpp")
-#include "cvm/topology_defs.hpp"
-#endif
-
-namespace _registry {
-
-  // A string literal cannot be a non-type template parameter directly; this
-  // wrapper is a structural type, so the module path a registration names can
-  // be carried into the template and resolved against the topology.
-  template <size_t N>
-  struct StringLiteral {
-    constexpr StringLiteral(const char (&literal)[N]) { std::copy_n(literal, N, value); }
-
-    constexpr operator std::string_view() const { return std::string_view(value, N - 1); }
-
-    char value[N];
-  };
-
-}
 
 namespace cvm {
 
@@ -155,43 +132,56 @@ namespace cvm {
       inline static ::cvm::messenger messenger;
       inline static ::cvm::callbacks callbacks;
 
-      // Whether a module path names anything in the given topology. A path
-      // containing a '.' is matched against the hierarchy, otherwise against
-      // the type table, which is how the runtime regist() reads it too.
-      template<typename Topology, _registry::StringLiteral module, int id>
-      static constexpr bool resolvable() {
-        constexpr std::string_view path = module;
-        constexpr bool from_hierarchy = path.find('.') != std::string_view::npos;
+      template<typename Topology>
+      static constexpr bool resolvable(std::string_view path, int id) {
+        const bool from_hierarchy = path.find('.') != std::string_view::npos;
 
-        if constexpr (id == all)
+        if (id == all)
           return from_hierarchy ? Topology::hierarchy_exists(path) : Topology::type_exists(path);
         else
-          return (from_hierarchy ? Topology::location_of_hierarchy(path, id)
-                                 : Topology::location_of_type(path, id)) != Topology::null;
+          return (from_hierarchy ? Topology::get_from_hierarchy(path, id)
+                                 : Topology::get_from_type(path, id)) != Topology::null;
       }
 
-      // Compile-time counterpart of regist(). The module path and instance id
-      // are template parameters, so the locations are resolved against the
-      // topology during translation rather than looked up at start-up.
-      //
-      // A path the topology does not contain is skipped, matching regist()'s
-      // false return; instantiate with required = true to make it a
-      // translation error instead.
-      template<typename Topology, typename T, _registry::StringLiteral module, int id, bool required, typename... Args>
-      static bool regist_static(Args&&... args) {
-        constexpr std::string_view path = module;
-        constexpr bool from_hierarchy = path.find('.') != std::string_view::npos;
-        constexpr bool found = resolvable<Topology, module, id>();
+      // Rebuilds the lookup key from a mods node: the node's path, plus the
+      // "[g]" suffix when a group was selected through operator[]. Static
+      // storage so the string_view handed to the tables stays valid.
+      template<auto module_node>
+      struct module_key {
+        static constexpr auto storage = [] {
+          constexpr std::string_view base = module_node.path;
+          std::array<char, base.size() + 13> buf{};
+          size_t n = 0;
+          for (char c : base) buf[n++] = c;
+          if (module_node.group >= 0) {
+            buf[n++] = '[';
+            char digits[12]{};
+            size_t d = 0;
+            int g = module_node.group;
+            do { digits[d++] = static_cast<char>('0' + g % 10); g /= 10; } while (g > 0);
+            while (d > 0) buf[n++] = digits[--d];
+            buf[n++] = ']';
+          }
+          return std::pair{buf, n};
+        }();
 
-        static_assert(found or not required,
+        static constexpr std::string_view value{storage.first.data(), storage.second};
+      };
+
+      // module_node is a node of Topology::mods, so a mistyped path fails
+      // member lookup at the macro expansion; the assert covers an id or
+      // group the topology does not have.
+      template<typename Topology, typename T, auto module_node, int id, typename... Args>
+      static bool regist_static(Args&&... args) {
+        constexpr std::string_view path = module_key<module_node>::value;
+        constexpr bool from_hierarchy = path.find('.') != std::string_view::npos;
+
+        static_assert(resolvable<Topology>(path, id),
                       "registered module path does not exist in this topology");
 
-        if constexpr (not found) {
-          return false;
-        }
-        else if constexpr (id == all) {
-          constexpr auto locs = from_hierarchy ? Topology::locations_of_hierarchy(path)
-                                               : Topology::locations_of_type(path);
+        if constexpr (id == all) {
+          constexpr auto locs = from_hierarchy ? Topology::get_from_hierarchy(path)
+                                               : Topology::get_from_type(path);
 
           for (const auto& loc : locs)
             components().emplace_back(identity<T>{}, loc, type_nums<T>(), args...);
@@ -200,8 +190,8 @@ namespace cvm {
           return true;
         }
         else {
-          constexpr auto loc = from_hierarchy ? Topology::location_of_hierarchy(path, id)
-                                              : Topology::location_of_type(path, id);
+          constexpr auto loc = from_hierarchy ? Topology::get_from_hierarchy(path, id)
+                                              : Topology::get_from_type(path, id);
 
           components().emplace_back(identity<T>{}, loc, type_nums<T>(), args...);
 
@@ -211,14 +201,14 @@ namespace cvm {
       }
 
       template<typename T, typename... Args>
-      static bool regist(const std::string& module, int id, Args&&... args) {
-        bool from_hierarchy = module.find('.') != std::string::npos;
+      static bool regist(const std::string& module_path, int id, Args&&... args) {
+        bool from_hierarchy = module_path.find('.') != std::string::npos;
         if (id == all) {
           std::vector<cvm::topology::loc_t> locs;
           if (from_hierarchy)
-            locs = cvm::topology::get_from_hierarchy(module);
+            locs = cvm::topology::get_from_hierarchy(module_path);
           else
-            locs = cvm::topology::get_from_type(module);
+            locs = cvm::topology::get_from_type(module_path);
 
           if (locs.empty())
             return false;
@@ -230,9 +220,9 @@ namespace cvm {
           cvm::topology::loc_t loc;
 
           if (from_hierarchy)
-            loc = cvm::topology::get_from_hierarchy(module, id);
+            loc = cvm::topology::get_from_hierarchy(module_path, id);
           else
-            loc = cvm::topology::get_from_type(module, id);
+            loc = cvm::topology::get_from_type(module_path, id);
 
           if (loc == cvm::topology::null)
             return false;
@@ -314,37 +304,13 @@ namespace _registry {
   };
 }
 
-// Shared static-initializer skeleton. Both macro families differ only in the
-// registration call they run; variadic so the call expression may contain
-// commas from template arguments.
-#define REGISTRY_REGISTER_IMPL_(...) \
+#define REGISTRY_register_with_reset_(type, module_path, id, reset_domain, ...) \
     namespace _registry { \
-      static bool REGISTRY_CONCAT(_, __COUNTER__) = std::invoke([]() -> bool { return __VA_ARGS__; }); \
+      static bool REGISTRY_CONCAT(_, __COUNTER__) = std::invoke([]() -> bool { return cvm::registry::regist_static<cvm::static_topology, RemoveBrackets<void (type)>::Type, cvm::static_topology::mods().module_path, id>(reset_domain __VA_OPT__(,) __VA_ARGS__); }); \
     }
-
-// Registration expands at namespace scope in a source file. The module path
-// and instance id resolve against cvm::static_topology during translation,
-// so the expanding translation unit must be compiled against a topology
-// target (deps = [topology]) — registry.hpp then picks up
-// cvm/topology_defs.hpp through the guarded include above. The _required
-// forms reject a path the topology does not contain; the plain forms skip
-// it, preserving the silent-skip semantics of the former runtime macros.
-#define REGISTRY_REGISTER_STATIC_(type, module, id, reset_domain, required, ...) \
-    REGISTRY_REGISTER_IMPL_(cvm::registry::regist_static<cvm::static_topology, RemoveBrackets<void (type)>::Type, #module, id, required>(reset_domain __VA_OPT__(,) __VA_ARGS__))
-
-// id accepts ENUMS / #defines / constexpr ints; reset domain defaults to 0
-#define REGISTRY_register_(type, module, id, ...) \
-    REGISTRY_REGISTER_STATIC_(type, module, id, 0, false __VA_OPT__(,) __VA_ARGS__)
-#define REGISTRY_register(...) REGISTRY_register_(__VA_ARGS__)
-
-#define REGISTRY_register_required_(type, module, id, ...) \
-    REGISTRY_REGISTER_STATIC_(type, module, id, 0, true __VA_OPT__(,) __VA_ARGS__)
-#define REGISTRY_register_required(...) REGISTRY_register_required_(__VA_ARGS__)
-
-#define REGISTRY_register_with_reset_(type, module, id, reset_domain, ...) \
-    REGISTRY_REGISTER_STATIC_(type, module, id, reset_domain, false __VA_OPT__(,) __VA_ARGS__)
 #define REGISTRY_register_with_reset(...) REGISTRY_register_with_reset_(__VA_ARGS__)
 
-#define REGISTRY_register_required_with_reset_(type, module, id, reset_domain, ...) \
-    REGISTRY_REGISTER_STATIC_(type, module, id, reset_domain, true __VA_OPT__(,) __VA_ARGS__)
-#define REGISTRY_register_required_with_reset(...) REGISTRY_register_required_with_reset_(__VA_ARGS__)
+// id accepts ENUMS / #defines / constexpr ints; reset domain defaults to 0
+#define REGISTRY_register_(type, module_path, id, ...) \
+    REGISTRY_register_with_reset_(type, module_path, id, 0 __VA_OPT__(,) __VA_ARGS__)
+#define REGISTRY_register(...) REGISTRY_register_(__VA_ARGS__)

@@ -37,12 +37,6 @@ cc_library(
 )
 
 cc_library(
-    name = "location_defs",
-    deps = ["//src/topology:location_defs"],
-    visibility = ["//visibility:public"],
-)
-
-cc_library(
     name = "topology",
     deps = ["//src/topology:topology"],
     visibility = ["//visibility:public"],

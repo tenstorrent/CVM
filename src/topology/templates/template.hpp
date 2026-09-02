@@ -32,7 +32,7 @@
 #include <span>
 #include <string_view>
 
-#include "cvm/location_defs.hpp"
+#include "cvm/topology.hpp"
 
 namespace cvm {
 
@@ -40,9 +40,11 @@ namespace cvm {
 
     public:
 
-      using loc_t = cvm::location_defs::loc_t;
+      using loc_t = cvm::topology::loc_t;
 
-      static constexpr loc_t null = cvm::location_defs::null;
+      static constexpr loc_t null = cvm::topology::null;
+
+${t["mods_struct"]}
 
       struct range_entry {
         std::string_view key;
@@ -109,33 +111,33 @@ namespace cvm {
 
     public:
 
-      static constexpr std::span<const loc_t> locations_of_type(std::string_view type) {
+      static constexpr std::span<const loc_t> get_from_type(std::string_view type) {
         return find_range(type_index_, type_pool_, type);
       }
 
-      static constexpr loc_t location_of_type(std::string_view type, unsigned id) {
-        const auto locations = locations_of_type(type);
+      static constexpr loc_t get_from_type(std::string_view type, unsigned id) {
+        const auto locations = get_from_type(type);
         return id < locations.size() ? locations[id] : null;
       }
 
       static constexpr bool type_exists(std::string_view type) {
-        return not locations_of_type(type).empty();
+        return not get_from_type(type).empty();
       }
 
-      static constexpr std::span<const loc_t> locations_of_hierarchy(std::string_view hierarchy) {
+      static constexpr std::span<const loc_t> get_from_hierarchy(std::string_view hierarchy) {
         return find_range(hierarchy_index_, hierarchy_pool_, hierarchy);
       }
 
-      static constexpr loc_t location_of_hierarchy(std::string_view hierarchy, unsigned id) {
-        const auto locations = locations_of_hierarchy(hierarchy);
+      static constexpr loc_t get_from_hierarchy(std::string_view hierarchy, unsigned id) {
+        const auto locations = get_from_hierarchy(hierarchy);
         return id < locations.size() ? locations[id] : null;
       }
 
       static constexpr bool hierarchy_exists(std::string_view hierarchy) {
-        return not locations_of_hierarchy(hierarchy).empty();
+        return not get_from_hierarchy(hierarchy).empty();
       }
 
-      static constexpr std::optional<uint32_t> attribute(loc_t loc, std::string_view key) {
+      static constexpr std::optional<uint32_t> attr(loc_t loc, std::string_view key) {
         const auto found = find_attribute(attribute_index_, loc, key);
         if (found == attribute_index_.end())
           return std::nullopt;
@@ -143,7 +145,7 @@ namespace cvm {
       }
 
       static constexpr std::optional<std::span<const uint32_t>>
-      list_attribute(loc_t loc, std::string_view key) {
+      list_attr(loc_t loc, std::string_view key) {
         const auto found = find_attribute(list_index_, loc, key);
         if (found == list_index_.end())
           return std::nullopt;

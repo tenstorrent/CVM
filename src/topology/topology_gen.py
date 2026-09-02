@@ -159,6 +159,60 @@ class Topology:
     return {instance.loc: location.name.upper()
             for location in self.locations for instance in location.instances}
 
+  def module_struct(self, base_indent=3):
+    """C++ source for nested identifier structs mirroring the topology, so a
+    registration names its module as a member-access chain the compiler
+    checks, rather than a string resolved against the tables."""
+    identifier = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+    tree = dict()
+    # Per-group shard keys ("PATH[g]") are not identifiers; their base node
+    # gets a constexpr operator[] instead, and registration composes the
+    # bracketed key back at compile time.
+    array_paths = set()
+    for path in sorted(self.locations_by_hierarchy()):
+      if "[" in path:
+        array_paths.add(path[:path.index("[")])
+        continue
+      node = tree
+      for part in path.split("."):
+        if not identifier.match(part):
+          raise ValueError(f"hierarchy segment '{part}' in '{path}' is not a C++ identifier")
+        node = node.setdefault(part, dict())
+
+    for name in sorted(self.locations_by_type()):
+      if not identifier.match(name):
+        raise ValueError(f"type name '{name}' is not a C++ identifier")
+      tree.setdefault(name, dict())
+
+    lines = []
+
+    def emit(name, children, prefix, indent):
+      if f"{name}_" in children or (prefix == "" and f"{name}_" in tree):
+        raise ValueError(f"module name '{name}_' collides with the struct tag for '{name}'")
+      pad = "  " * (base_indent + indent)
+      path = f"{prefix}.{name}" if prefix else name
+      lines.append(f"{pad}struct {name}_ {{")
+      lines.append(f'{pad}  static constexpr std::string_view path = "{path}";')
+      lines.append(f"{pad}  int group = -1;")
+      if path in array_paths:
+        lines.append(f"{pad}  constexpr {name}_ operator[](int g) const {{ {name}_ n{{}}; n.group = g; return n; }}")
+      for child in sorted(children):
+        emit(child, children[child], path, indent + 1)
+      lines.append(f"{pad}}};")
+      lines.append(f"{pad}{name}_ {name};")
+
+    pad = "  " * base_indent
+    lines.append(f"{pad}struct mods_t {{")
+    for name in sorted(tree):
+      emit(name, tree[name], "", 1)
+    lines.append(f"{pad}}};")
+    # A function, not a data member: its body is a complete-class context, so
+    # the nested default member initializers are permitted there while an
+    # in-class `mods {}` member would not be.
+    lines.append(f"{pad}static constexpr mods_t mods() {{ return {{}}; }}")
+    return "\n".join(lines)
+
   def constexpr_tables(self):
     """Flatten the lookup tables into sorted, index-plus-pool form so the
     generated header can resolve them with lower_bound rather than a linear
@@ -198,6 +252,7 @@ class Topology:
       "list_pool": list_pool,
       "list_index": list_index,
       "names": name_table,
+      "mods_struct": self.module_struct(),
     }
 
 class TopologyGen:

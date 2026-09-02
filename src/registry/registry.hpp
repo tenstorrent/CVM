@@ -305,18 +305,22 @@ namespace _registry {
   };
 }
 
+// Shared static-initializer skeleton. Both macro families differ only in the
+// registration call they run; variadic so the call expression may contain
+// commas from template arguments.
+#define REGISTRY_REGISTER_IMPL_(...) \
+    namespace _registry { \
+      static bool REGISTRY_CONCAT(_, __COUNTER__) = std::invoke([]() -> bool { return __VA_ARGS__; }); \
+    }
+
 // this should be used in source file
 #define REGISTRY_register_with_reset_(type, module, id, reset_domain, ...) \
-    namespace _registry { \
-      static bool REGISTRY_CONCAT(_, __COUNTER__) = std::invoke([]() -> bool { return cvm::registry::regist<RemoveBrackets<void (type)>::Type>( #module, id, reset_domain __VA_OPT__(,) __VA_ARGS__); }); \
-    }
+    REGISTRY_REGISTER_IMPL_(cvm::registry::regist<RemoveBrackets<void (type)>::Type>( #module, id, reset_domain __VA_OPT__(,) __VA_ARGS__))
 #define REGISTRY_register_with_reset(...) REGISTRY_register_with_reset_(__VA_ARGS__)
 
 // if reset domain not specified, default to 0
 #define REGISTRY_register_(type, module, id, ...) \
-    namespace _registry { \
-      static bool REGISTRY_CONCAT(_, __COUNTER__) = std::invoke([]() -> bool { return cvm::registry::regist<RemoveBrackets<void (type)>::Type>( #module, id, 0 __VA_OPT__(,) __VA_ARGS__); }); \
-    }
+    REGISTRY_REGISTER_IMPL_(cvm::registry::regist<RemoveBrackets<void (type)>::Type>( #module, id, 0 __VA_OPT__(,) __VA_ARGS__))
 #define REGISTRY_register(...) REGISTRY_register_(__VA_ARGS__) // allows using ENUMS / #defines instead of numbers
 
 // Compile-time registration. Resolves the module path against
@@ -329,9 +333,7 @@ namespace _registry {
 // @cvm//:registry provides. The _required forms reject a path the topology does not contain;
 // the plain forms skip it, as the runtime macros do.
 #define CVM_REGISTRY_REGISTER_(type, module, id, reset_domain, required, ...) \
-    namespace _registry { \
-      static bool REGISTRY_CONCAT(_, __COUNTER__) = std::invoke([]() -> bool { return cvm::registry::regist_static<cvm::static_topology, RemoveBrackets<void (type)>::Type, #module, id, required>(reset_domain __VA_OPT__(,) __VA_ARGS__); }); \
-    }
+    REGISTRY_REGISTER_IMPL_(cvm::registry::regist_static<cvm::static_topology, RemoveBrackets<void (type)>::Type, #module, id, required>(reset_domain __VA_OPT__(,) __VA_ARGS__))
 
 #define CVM_REGISTRY_register_(type, module, id, ...) \
     CVM_REGISTRY_REGISTER_(type, module, id, 0, false __VA_OPT__(,) __VA_ARGS__)

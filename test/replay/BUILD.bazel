@@ -1,0 +1,127 @@
+load("@cvm//:defs.bzl", "replay")
+load("@rules_hdl//verilog:providers.bzl", "verilog_library")
+load("@rules_verilator//verilator:defs.bzl", "verilator_cc_library")
+
+cc_test(
+    name = "replay_test",
+    size = "small",
+    srcs = ["replay_test.cpp"],
+    deps = [
+        "//:replay",
+        "//third_party/vpi:vpi",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+# No topology: replaying an arbitrary module should not require one.
+replay(
+    name = "alu_replay",
+    srcs = ["alu_ports.yml"],
+)
+
+verilog_library(
+    name = "tb_top_sv",
+    srcs = [
+        "dut.sv",
+        "tb_top.sv",
+    ],
+    deps = [":alu_replay_sv"],
+    top_module = "top",
+)
+
+verilator_cc_library(
+    name = "tb_top_veri_lib",
+    module = ":tb_top_sv",
+    timing = True,
+    vopts = ["--assert"],
+)
+
+cc_binary(
+    name = "sim",
+    srcs = ["sim_main.cpp"],
+    deps = [
+        ":tb_top_veri_lib",
+        "//:replay",
+        "//:logger",
+        "//:plusargs",
+        "@com_github_gflags_gflags//:gflags",
+        "@com_google_googletest//:gtest",
+    ],
+)
+
+# One build, driven entirely by plusargs: replay, a second dump, bypass, and a
+# corrupted dump that must fail.
+[
+    sh_test(
+        name = "sh_" + scenario["name"],
+        srcs = ["sim.sh"],
+        args = ["$(location :sim)"] + scenario["args"],
+        data = [
+            ":sim",
+            "//test/replay/fixtures:evcds",
+        ],
+    )
+    for scenario in [
+        {
+            "name": "replay",
+            "args": [
+                "+cvm_replay_file=test/replay/fixtures/alu.evcd",
+                "+cvm_replay_mode=REPLAY",
+                "+expect_errors=0",
+                "+expect_replay_result=3",
+                "+expect_last_result=11",
+                "+expect_done_time=43",
+            ],
+        },
+        {
+            "name": "replay_second_dump",
+            "args": [
+                "+cvm_replay_file=test/replay/fixtures/alu2.evcd",
+                "+cvm_replay_mode=REPLAY",
+                "+expect_errors=0",
+                "+expect_replay_result=7",
+                "+expect_last_result=11",
+            ],
+        },
+        {
+            "name": "replay_keyed_dump",
+            "args": [
+                "+cvm_replay_file=top.u_replay=test/replay/fixtures/alu2.evcd",
+                "+cvm_replay_mode=REPLAY",
+                "+expect_errors=0",
+                "+expect_replay_result=7",
+                "+expect_last_result=11",
+            ],
+        },
+        {
+            "name": "bypass",
+            "args": [
+                "+cvm_replay_file=test/replay/fixtures/alu.evcd",
+                "+cvm_replay_mode=BYPASS",
+                "+expect_errors=0",
+                "+expect_last_result=11",
+            ],
+        },
+        {
+            "name": "replay_mismatch_detected",
+            "args": [
+                "+cvm_replay_file=test/replay/fixtures/alu_bad.evcd",
+                "+cvm_replay_mode=REPLAY",
+                "+expect_errors=2",
+                "+expect_replay_result=3",
+            ],
+        },
+    ]
+]
+
+test_suite(
+    name = "smoke",
+    tests = [
+        "replay_test",
+        ":sh_bypass",
+        ":sh_replay",
+        ":sh_replay_keyed_dump",
+        ":sh_replay_mismatch_detected",
+        ":sh_replay_second_dump",
+    ],
+)

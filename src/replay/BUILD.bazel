@@ -1,0 +1,57 @@
+load("@rules_hdl//verilog:providers.bzl", "verilog_library")
+load("@cvm_pypi//:requirements.bzl", "requirement")
+
+cc_library(
+    name = "replay_core",
+    hdrs = ["replay.hpp"],
+    srcs = ["replay.cpp"],
+    deps = [
+        "//:evcd",
+        "//:logger",
+    ],
+    strip_include_prefix = ".",
+    include_prefix = "cvm",
+    visibility = ["//:__pkg__"],
+)
+
+cc_library(
+    name = "replay_dpi",
+    srcs = ["replay_dpi.cpp"],
+    deps = [
+        ":replay_core",
+        "//third_party/dpi:dpi",
+        "@com_github_gflags_gflags//:gflags",
+    ],
+    alwayslink = True,
+    linkstatic = True,
+)
+
+# What a testbench depends on: the replay layer plus the DPI entry points.
+cc_library(
+    name = "replay",
+    deps = [
+        ":replay_core",
+        ":replay_dpi",
+    ],
+    visibility = ["//:__pkg__"],
+)
+
+verilog_library(
+    name = "replay_sv",
+    srcs = [
+        "cvm_replay_engine.sv",
+        "cvm_replay_pkg.sv",
+    ],
+    visibility = ["//:__pkg__"],
+)
+
+py_binary(
+    name = "replay_gen",
+    srcs = ["replay_gen.py"],
+    deps = [
+        requirement("Mako"),
+        requirement("PyYAML"),
+    ],
+    data = glob(["templates/template.*"]),
+    visibility = ["//visibility:public"],
+)

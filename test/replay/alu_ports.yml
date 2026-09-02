@@ -1,0 +1,12 @@
+alu_replay:
+  dut: alu
+  # Outputs are sampled STROBE units after the recorded timestamp so the
+  # non-blocking assignments in the DUT have settled.
+  strobe: 1
+  ports:
+    clk:    { width: 1, dir: in }
+    rst_n:  { width: 1, dir: in }
+    opa:    { width: 4, dir: in }
+    opb:    { width: 4, dir: in }
+    result: { width: 5, dir: out }
+    valid:  { width: 1, dir: out }

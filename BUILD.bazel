@@ -83,3 +83,15 @@ cc_library(
     deps = ["//src/evcd:evcd"],
     visibility = ["//visibility:public"],
 )
+
+cc_library(
+    name = "replay",
+    deps = ["//src/replay:replay"],
+    visibility = ["//visibility:public"],
+)
+
+verilog_library(
+    name = "replay_sv",
+    deps = ["//src/replay:replay_sv"],
+    visibility = ["//visibility:public"],
+)

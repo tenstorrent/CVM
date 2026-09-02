@@ -1,0 +1,33 @@
+$date Tue Sep 1 12:00:00 2026 $end
+$version cvm replay hand-written fixture $end
+$timescale 1ps $end
+$scope module tb.u_alu $end
+$var port 1 <0 clk $end
+$var port 1 <1 rst_n $end
+$var port [3:0] <2 opa $end
+$var port [3:0] <3 opb $end
+$var port [4:0] <4 result $end
+$var port 1 <5 valid $end
+$upscope $end
+$enddefinitions $end
+#0
+$dumpports
+pD 6 0 <0
+pD 6 0 <1
+pNNNN 6 6 <2
+pNNNN 6 6 <3
+pXXXXX 0 6 <4
+pX 0 6 <5
+$end
+#10
+pU 0 6 <1
+pDDDU 6 0 <2
+pDDUD 6 0 <3
+#20
+pU 0 6 <0
+pLLHLH 0 6 <4
+pH 0 6 <5
+#30
+pD 6 0 <0
+#40
+pU 0 6 <0

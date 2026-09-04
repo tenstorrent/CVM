@@ -5,6 +5,7 @@
 #include <unordered_set>
 #include "cvm/topology.hpp"
 #include "cvm/registry.hpp"
+#include "cvm/topology_defs.hpp"
 
 std::unordered_set<cvm::topology::loc_t> locations;
 std::unordered_set<unsigned> ids;

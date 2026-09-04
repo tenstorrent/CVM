@@ -3,6 +3,7 @@
 
 #include "cvm/topology.hpp"
 #include "cvm/registry.hpp"
+#include "cvm/topology_defs.hpp"
 #include "cvm/type_traits.hpp"
 #include "transactions.hpp"
 #include <gtest/gtest.h>

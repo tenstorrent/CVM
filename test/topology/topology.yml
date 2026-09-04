@@ -1,0 +1,62 @@
+# SPDX-FileCopyrightText: © 2026 Tenstorrent USA, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# Exercises every shape the generator supports: shared attributes across
+# several parents, per-group (array) attributes, list-valued attributes,
+# string attributes (dropped), attribute-less locations, multi-type locations
+# and cross-location references.
+#
+# The array location sits under a single-instance parent: an attrs-list under a
+# parent with count > 1 is not a shape the generator currently handles.
+
+port_defaults: &port_defaults
+  ADDR_WIDTH: 52
+  DATA_WIDTH: 256
+  LABEL: ""
+
+port_a: &port_a
+  <<: *port_defaults
+  ID_WIDTH: 12
+  LABEL: PORT_A
+
+port_b: &port_b
+  <<: *port_defaults
+  count: 2
+  ADDR_WIDTH: 64
+  ID_WIDTH: 10
+  LABEL: PORT_B
+
+port_list: &port_list [*port_a, *port_b]
+
+top:
+  cluster:
+    count: 2
+    type:
+      - cluster
+      - fabric
+    core:
+      count: 3
+      type:
+        - core
+      attrs:
+        WIDTH: 2
+        LANES: [1, 2, 3]
+        SINGLETON: [7]
+        EMPTY_LIST: []
+    scratch:
+      count: 1
+      type:
+        - scratch
+    attrs:
+      CLUSTER_ATTR: 1000
+      CORE_WIDTH: "@TOP.CLUSTER.CORE.WIDTH"
+  io:
+    count: 1
+    type:
+      - io
+    port:
+      type:
+        - port
+      attrs: *port_list
+    attrs:
+      PORT1_ID: "@TOP.IO.PORT[1].ID"

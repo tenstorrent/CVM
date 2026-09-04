@@ -110,7 +110,7 @@ def packet_gen(name, topology, package = "", visibility = None, cc_attrs = {}, *
         hdrs = [hpp],
         deps = [
             "@cvm//:bitmanip",
-            "@cvm//:registry",
+            topology,
         ],
         visibility = visibility,
         strip_include_prefix = name if package else ".",

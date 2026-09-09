@@ -1,0 +1,32 @@
+# SPDX-FileCopyrightText: © 2026 Tenstorrent USA, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+load("@rules_hdl//verilog:providers.bzl", "verilog_library")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["sim.sh"])
+
+# Shared main(), listed in a simulation binary's srcs rather than its deps: it
+# includes Vtop.h, which comes from the verilated library in that same binary,
+# so it cannot be compiled on its own.
+#
+# Requires the top module to be named `top`, and the binary to depend on
+# //:logger and //:plusargs.
+filegroup(
+    name = "sim_main",
+    srcs = ["sim_main.cpp"],
+)
+
+cc_library(
+    name = "sim_dpi",
+    srcs = ["sim_dpi.cpp"],
+    alwayslink = True,
+    linkstatic = True,
+    deps = ["//:logger"],
+)
+
+verilog_library(
+    name = "sim_sv",
+    srcs = ["cvm_sim_pkg.sv"],
+)

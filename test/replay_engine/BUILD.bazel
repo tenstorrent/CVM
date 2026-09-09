@@ -1,0 +1,114 @@
+load("@rules_hdl//verilog:providers.bzl", "verilog_library")
+load("@rules_verilator//verilator:defs.bzl", "verilator_cc_library")
+
+verilog_library(
+    name = "tb_engine_sv",
+    srcs = [
+        "dut.sv",
+        "tb_engine.sv",
+    ],
+    deps = [
+        "//:plusargs_sv",
+        "//:replay_sv",
+        "//:sim_sv",
+    ],
+    top_module = "top",
+)
+
+verilator_cc_library(
+    name = "tb_engine_veri_lib",
+    module = ":tb_engine_sv",
+    timing = True,
+    vopts = ["--assert"],
+)
+
+cc_binary(
+    name = "sim",
+    srcs = [
+        "tb_engine_dpi.cpp",
+        # main() only; the checks are in tb_engine.sv.
+        "//:sim_main",
+    ],
+    deps = [
+        ":tb_engine_veri_lib",
+        "//:logger",
+        "//:pipe",
+        "//:plusargs",
+        "//:replay",
+        "//:sim_dpi",
+        "@com_github_gflags_gflags//:gflags",
+    ],
+)
+
+# One build, one testbench, switched by plusarg.
+[
+    sh_test(
+        name = "sh_" + scenario["name"],
+        srcs = ["//src/sim:sim.sh"],
+        args = [
+            "$(location :sim)",
+            # PIPE_DEPTH is 64, so keep the epoch and headroom under it.
+            "+cvm_pipe_epoch=16",
+            "+cvm_pipe_headroom=8",
+        ] + scenario["args"],
+        data = [":sim"],
+    )
+    for scenario in [
+        {
+            "name": "clean",
+            "args": [
+                "+scenario=0",
+                "+expect_mismatches=0",
+            ],
+        },
+        # The alignment test: pair each input with the output it causes, which
+        # is what a recording never does, and it must fail. This is the exact
+        # mistake that put an extra delay stage in the engine.
+        {
+            "name": "shifted",
+            "args": [
+                "+scenario=1",
+                "+expect_mismatches=-1",
+                "+expect_errors=1",
+            ],
+        },
+        {
+            "name": "not_cared_about",
+            "args": [
+                "+scenario=2",
+                "+expect_mismatches=0",
+            ],
+        },
+        {
+            "name": "sparse",
+            "args": [
+                "+scenario=3",
+                "+expect_mismatches=0",
+            ],
+        },
+        # Pins the alignment depth rather than merely detecting it: the
+        # expectation recorded at cycle 10 describes the outputs standing during
+        # cycle 10, which are read one cycle later, so corrupting it must be
+        # caught at cycle 11 and nowhere else.
+        {
+            "name": "one_wrong_bit",
+            "args": [
+                "+scenario=4",
+                "+expect_mismatches=1",
+                "+expect_first_fail_cycle=11",
+                "+expect_errors=1",
+            ],
+        },
+    ]
+]
+
+test_suite(
+    name = "smoke",
+    tests = [
+        ":sh_clean",
+        ":sh_not_cared_about",
+        ":sh_one_wrong_bit",
+        ":sh_shifted",
+        ":sh_sparse",
+    ],
+)

@@ -8,87 +8,118 @@
 #include <istream>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace cvm {
-namespace evcd {
+  namespace evcd {
 
-// Value a driver is presenting. `none` means that side is not driving.
-enum class drive : std::uint8_t { none,
-                                  zero,
-                                  one,
-                                  unknown,
-                                  highz };
+    enum class drive : std::uint8_t { none,
+                                      zero,
+                                      one,
+                                      unknown,
+                                      highz };
 
-// Both sides of one port. Two fields because the standard's unknown-direction
-// characters genuinely record two values at once: `A` is input 0 *and* output
-// 1, `B` is input 1 and output 0. That is a drive conflict on a bidirectional
-// port, which is a large part of why EVCD exists. For the single-direction
-// characters the inactive side is `none`, meaning the recording says nothing
-// about it, which is distinct from `highz`, meaning it was recorded as
-// three-stated.
-//
-// Replay picks a side per port: an input takes `ext`, an output takes `dut`.
-struct port_state {
-  drive ext = drive::none; // test fixture
-  drive dut = drive::none; // device under test
-};
+    class port_state {
+      public:
+        constexpr port_state() = default;
+        constexpr port_state(drive in, drive out) : bits_(pack(in, out)) {}
 
-// nullopt outside the standard set; callers must treat that as a parse error.
-std::optional<port_state> decode_state(char c);
+        constexpr drive dut_in() const { return static_cast<drive>(bits_ & kMask); }
+        constexpr drive dut_out() const {
+          return static_cast<drive>(bits_ >> kBits);
+        }
 
-// A port as the dump declares it.
-struct dump_port {
-  std::string name;
-  std::size_t width = 0;
-};
+        bool operator==(const port_state&) const = default;
 
-// One port's recorded value: a run of state characters, MSB first.
-struct change {
-  std::size_t port = 0; // index into parser::ports()
-  std::string state;
-};
+      private:
+        static constexpr unsigned kBits = 3;
+        static constexpr unsigned kMask = (1u << kBits) - 1u;
 
-struct step {
-  std::uint64_t time = 0;
-  std::vector<change> changes;
-  // $dumpportsoff (18.3.2): the recording stops here, and says so by declaring
-  // every port unknown from this time forward. It is a statement about the
-  // recording, not about the design -- the ports did not become X, the
-  // recording simply stopped tracking them. Replay drives X and checks nothing
-  // until $dumpportson, rather than holding stale values it can no longer
-  // vouch for.
-  //
-  // A flag rather than a change, because every state character also picks a
-  // side and so cannot express "unknown, both sides".
-  bool all_ports_unknown = false;
-};
+        static constexpr std::uint8_t pack(drive in, drive out) {
+          if (static_cast<unsigned>(in) > kMask || static_cast<unsigned>(out) > kMask)
+            throw "drive no longer fits in three bits";
+          return static_cast<std::uint8_t>(static_cast<unsigned>(in) |
+                                           (static_cast<unsigned>(out) << kBits));
+        }
 
-// Streaming EVCD reader. Knows the file format and nothing else.
-class parser {
-public:
-  // Header only. False on failure, with error() set.
-  bool open(std::istream& in);
-  bool next(step& out);
+        std::uint8_t bits_ = 0;
+    };
 
-  const std::vector<dump_port>& ports() const { return ports_; }
-  const std::string& error() const { return error_; }
+    static_assert(sizeof(port_state) == 1, "a decoded run must not cost more than "
+                                           "the characters it replaces");
+    static_assert(port_state{drive::highz, drive::highz}.dut_in() == drive::highz);
+    static_assert(port_state{drive::highz, drive::highz}.dut_out() == drive::highz);
+    static_assert(port_state{}.dut_in() == drive::none);
 
-private:
-  bool token(std::string& t);
-  bool skip_to_end();
-  bool parse_var();
-  bool fail(const std::string& msg);
+    // nullopt means parse error
+    std::optional<port_state> decode_state(char c);
 
-  std::vector<dump_port> ports_;
-  std::string error_;
-  std::istream* in_ = nullptr;
-  bool header_done_ = false;
-  bool eof_ = false;
-  bool dumping_ = true;
-  std::uint64_t pending_time_ = 0;
-  bool have_pending_ = false;
-};
+    // A port as the dump declares it.
+    struct dump_port {
+        std::string name;
+        std::size_t width = 0;
+    };
 
-} // namespace evcd
+    // One port's recorded value, decoded, LSB first: state[b] is bit b.
+    struct change {
+        std::size_t port = 0; // index into reader::ports()
+        std::vector<port_state> state;
+    };
+
+    struct step {
+        std::uint64_t time = 0;
+        std::vector<change> changes;
+        // $dumpportsoff  - recording paused, drive X and don't check
+        bool all_ports_unknown = false;
+    };
+
+    // Streaming EVCD reader
+    class reader {
+      public:
+        // Reads the header. `name` appears in diagnostics; pass the path the stream
+        // came from. Check ok() before calling next().
+        reader(std::istream& in, std::string name);
+
+        bool ok() const { return state_ != state::failed; }
+        bool next(step& out);
+
+        const std::vector<dump_port>& ports() const { return ports_; }
+        const std::string& error() const { return error_; }
+
+      private:
+        enum class state : std::uint8_t {
+          header,  // before $enddefinitions
+          dumping, // recording value changes
+          paused,  // between $dumpportsoff and $dumpportson
+          at_end,  // stream exhausted
+          failed,
+        };
+
+        bool read_header();
+        bool token(std::string& t);
+        bool skip_to_end();
+        bool parse_var();
+        bool identifier(std::string& id);
+        bool fail(const std::string& msg);
+
+        std::istream& in_;
+        std::string name_;
+
+        std::vector<dump_port> ports_;
+        std::unordered_map<std::string, std::size_t> port_of_id_;
+
+        std::string error_;
+        state state_ = state::header;
+
+        // Tokenizing is line-based so a failure can quote the line it happened on.
+        std::string line_;
+        std::size_t pos_ = 0;
+        std::size_t line_no_ = 0;
+
+        std::uint64_t pending_time_ = 0;
+        bool have_pending_ = false;
+    };
+
+  } // namespace evcd
 } // namespace cvm

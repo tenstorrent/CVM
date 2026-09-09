@@ -1,29 +1,19 @@
 // SPDX-FileCopyrightText: © 2026 Tenstorrent USA, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// The EVCD state-character table, from IEEE Std 1364-2005 subclause 18.4.3.1.
-//
-// Isolated in its own translation unit because it is the single place
-// correctness concentrates: a wrong entry gives a silently wrong replay rather
-// than a parse error. The character's class is what picks the driving side,
-// which is why decoding yields a pair rather than a value.
-//
-// `d`/`u` and `l`/`h` are strength-conflict resolutions (18.4.3.2): both sides
-// drive, but only the winner's value is recorded, so the loser is left `none`.
-// Drive strengths themselves are not represented -- replay reconstructs logic
-// values, not analogue contention -- so the two strength digits are discarded.
+// The EVCD state-character table
+// Strength is discarded
 
 #include "cvm/evcd.hpp"
 
 namespace cvm {
-namespace evcd {
+  namespace evcd {
 
-std::optional<port_state>
-decode_state(char c) {
-  // clang-format off
-  // Kept as an aligned table: this file exists so the mapping can be read
-  // against the standard's text at a glance, and ColumnLimit: 0 would
-  // otherwise put every case label and value on separate lines.
+    std::optional<port_state>
+    decode_state(char c) {
+      // clang-format off
+  // Aligned on purpose: this file exists so the mapping reads against the
+  // standard at a glance.
   switch (c) {
     // INPUT (test fixture drives; DUT side not recorded)
     case 'D': return port_state{drive::zero,    drive::none};
@@ -56,8 +46,8 @@ decode_state(char c) {
 
     default: return std::nullopt;
   }
-  // clang-format on
-}
+      // clang-format on
+    }
 
-} // namespace evcd
+  } // namespace evcd
 } // namespace cvm

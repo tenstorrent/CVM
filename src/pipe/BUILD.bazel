@@ -1,0 +1,46 @@
+load("@rules_hdl//verilog:providers.bzl", "verilog_library")
+
+cc_library(
+    name = "pipe_core",
+    hdrs = [
+        "pipe.hpp",
+        "pipe_internal.hpp",
+    ],
+    srcs = ["pipe.cpp"],
+    strip_include_prefix = ".",
+    include_prefix = "cvm",
+    visibility = ["//:__subpackages__"],
+)
+
+cc_library(
+    name = "pipe_dpi",
+    srcs = ["pipe_dpi.cpp"],
+    deps = [
+        ":pipe_core",
+        "//src/registry:registry",
+        "//:logger",
+        "//third_party/dpi:dpi",
+        "@com_github_gflags_gflags//:gflags",
+    ],
+    alwayslink = True,
+    linkstatic = True,
+)
+
+# What a testbench depends on.
+cc_library(
+    name = "pipe",
+    deps = [
+        ":pipe_core",
+        ":pipe_dpi",
+    ],
+    visibility = ["//:__subpackages__"],
+)
+
+verilog_library(
+    name = "pipe_sv",
+    srcs = [
+        "cvm_pipe_in.sv",
+        "cvm_pipe_pkg.sv",
+    ],
+    visibility = ["//:__subpackages__"],
+)

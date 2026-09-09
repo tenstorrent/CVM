@@ -1,98 +1,218 @@
 // SPDX-FileCopyrightText: © 2026 Tenstorrent USA, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// The whole replay mechanism: mode resolution, opening the recording, advancing
-// time, driving the DUT's inputs, and checking its outputs. The generated
-// interposer instantiates one of these and does nothing but pack and unpack.
-//
-// Ports are flattened into single vectors so this module is width-generic and
-// needs no knowledge of any particular port list:
+// Cycle-based replay: synchronous, reset-based and synthesizable, so it runs on
+// a hardware emulator as well as a simulator. One clock, one edge, setup off
+// reset, and no $time, delays, forever loop or per-cycle DPI traffic.
 //
 //   observed - the DUT boundary as it stands: the testbench's value on each
 //              input slice, the DUT's value on each output slice
 //   driven   - what to drive onto the DUT's inputs
 //
-// LAYOUT carries the port list as `name:width:offset:is_output:check;...`, so
-// binding, the conformance check, and output checking all happen in the runtime.
+// Elements arrive over cvm_pipe, one per cycle that changes anything; see
+// cvm_replay_elem_width for the layout. The host resolves X first, so every
+// platform replays identical bits.
 module cvm_replay_engine #(
-    parameter string  HIER   = "",
-    parameter int     PADDED = 32,
-    parameter longint STROBE = 0,
-    parameter string  LAYOUT = ""
+    parameter string HIER       = "",
+    parameter int    PADDED     = 32,
+    // Elements buffered in the transport. Sizes a memory, so a parameter.
+    parameter int    PIPE_DEPTH = 4096,
+    // In elements. The generator computes the epoch cap from the payload
+    // width: one element is 1 + 3*(PADDED/32) words against a fixed push
+    // formal, so any constant default fails to elaborate above some width.
+    parameter int    RELIEF_DEPTH = 8,
+    parameter int    EPOCH_MAX_ELEMENTS = 1024
 ) (
-    input  logic              enable,
-    output logic              done,
+    input  logic clk,
+    input  logic reset_n,
+    input  logic enable,
+    output logic done,
+
     input  logic [PADDED-1:0] observed,
-    output logic [PADDED-1:0] driven
+    output logic [PADDED-1:0] driven,
+
+    // Also handed to the host at done; exposed so a testbench need not use DPI.
+    output logic [31:0]       mismatches,
+    output logic [31:0]       first_fail_cycle,
+    output logic [PADDED-1:0] fail_bits
 );
 
     import cvm_replay_pkg::*;
+    import cvm_pipe_pkg::*;
 
+    localparam int EW     = 32 + 3 * PADDED;
     localparam int NWORDS = (PADDED + 31) / 32;
 
-    logic [PADDED-1:0] vec;
-    logic              drive = 1'b0;
-    int                handle = -1;
-    time               origin;
+    logic          pipe_valid, pipe_pop, pipe_eos;
+    logic [EW-1:0] pipe_data;
+    logic [31:0]   pipe_min_occupancy, pipe_reliefs;
+
+    cvm_pipe_in #(
+        .NAME               (HIER),
+        .WIDTH              (EW),
+        .DEPTH              (PIPE_DEPTH),
+        .RELIEF_DEPTH       (RELIEF_DEPTH),
+        .EPOCH_MAX_ELEMENTS (EPOCH_MAX_ELEMENTS)
+    ) u_pipe (
+        .clk             (clk),
+        .reset_n         (reset_n),
+        .valid           (pipe_valid),
+        .data            (pipe_data),
+        .pop             (pipe_pop),
+        .eos             (pipe_eos),
+        .requests        (),
+        .reliefs         (pipe_reliefs),
+        .min_occupancy_o (pipe_min_occupancy)
+    );
+
+    logic [31:0]       e_cycle;
+    logic [PADDED-1:0] e_in, e_exp, e_care;
+    assign e_cycle = pipe_data[31:0];
+    assign e_in    = pipe_data[32               +: PADDED];
+    assign e_exp   = pipe_data[32 +     PADDED  +: PADDED];
+    assign e_care  = pipe_data[32 + 2 * PADDED  +: PADDED];
+
+    logic              running, drive, opened, is_replay, reported, fail_seen;
+    logic [31:0]       cyc;
+    logic [PADDED-1:0] drive_q;
+    // Registers, not a queue: the check runs every cycle, and a cycle with no
+    // element keeps the previous expectation.
+    logic [PADDED-1:0] exp_cur, care_cur;
 
     // In BYPASS, or once replay is over, the testbench drives straight through.
-    assign driven = drive ? vec : observed;
+    assign driven = drive ? drive_q : observed;
 
-    task automatic run();
-        longint unsigned at;
-        time target;
-        forever begin
-            if (cvm_replay_next(handle, at) == 0) break;
+    // Consume the element for this cycle, and only this cycle.
+    assign pipe_pop = running && pipe_valid && (e_cycle == cyc);
 
-            // Wait until the recorded time measured from the origin, rather
-            // than accumulating deltas: STROBE would otherwise push every
-            // subsequent vector later and the replay would drift.
-            target = origin + at;
-            // The guard proves the delay is non-zero, but the expression is not
-            // statically known, which is exactly what ZERODLY flags.
-            /* verilator lint_off ZERODLY */
-            if ($time < target) #(target - $time);
-            /* verilator lint_on ZERODLY */
-            if (!enable) break;  // enable falling stops replay permanently
+    // The main off-by-one risk, and it turns on what a recording contains: at
+    // cycle k the dump holds in[k] beside the outputs *present* during cycle k,
+    // which for a registered DUT are the response to in[k-1]. A dump never
+    // pairs an input with the output it is about to cause.
+    //
+    //   posedge k    drive_q <= in[k], exp_cur <= out[k]
+    //   cycle  k     the DUT's outputs are out[k], as recorded
+    //   posedge k+1  reading `observed` yields what cycle k held
+    //
+    // So compare `observed` against out[k] at posedge k+1 -- which is what
+    // reading exp_cur there gives, since reading a register in always_ff is
+    // itself the one cycle of delay. No explicit stage. Add one and every
+    // expectation is checked against the next cycle's outputs, while everything
+    // still runs; only a test built on the real convention notices.
+    logic [PADDED-1:0] miss;
+    assign miss = (observed ^ exp_cur) & care_cur;
 
-            for (int i = 0; i < NWORDS; i++) begin
-                vec[i*32 +: 32] = word(handle, i);
-            end
+    // Flopped, not printed: a $display in the datapath routes to the host on
+    // some platforms, which is the stall the block split exists to avoid.
+    logic        late_seen;
+    logic [31:0] late_cycle, late_arrived;
 
-            if (STROBE > 0) #(STROBE);
-
-            // Hand the settled boundary to the runtime and let it compare.
-            // Doing this synchronously, rather than signalling the interposer,
-            // is what keeps the check on the right vector: the runtime replaces
-            // its current vector as soon as the loop asks for the next one.
-            for (int i = 0; i < NWORDS; i++) begin
-                cvm_replay_observed(handle, i, observed[i*32 +: 32]);
-            end
-            void'(cvm_replay_check(handle, longint'($time)));
+    // --- CFG: resolves the mode once, out of reset. Its own block because a
+    // returning import stalls the clock, and sharing would mark that block. ---
+    always_ff @(posedge clk) begin
+        if (!reset_n) begin
+            opened    <= 1'b0;
+            is_replay <= 1'b0;
+        end else if (!opened) begin
+            opened    <= 1'b1;
+            // From a plusarg, so a runtime read, but it cannot change mid-run.
+            is_replay <= cvm_replay_mode(HIER) == int'(CVM_REPLAY);
         end
-    endtask
+    end
 
-    initial begin
-        done = 1'b0;
-        vec  = 'x;
+    // --- Datapath: no DPI, no $error ---
+    always_ff @(posedge clk) begin
+        if (!reset_n) begin
+            done             <= 1'b0;
+            running          <= 1'b0;
+            drive            <= 1'b0;
+            fail_seen        <= 1'b0;
+            cyc              <= '0;
+            drive_q          <= '0;
+            exp_cur          <= '0;
+            // Zero so the check is inert until an element sets it.
+            care_cur         <= '0;
+            mismatches       <= '0;
+            first_fail_cycle <= 32'hFFFF_FFFF;
+            fail_bits        <= '0;
+            late_seen        <= 1'b0;
+            late_cycle       <= '0;
+            late_arrived     <= '0;
+        end else begin
+            if (opened && !running && !done) begin
+                if (enable) begin
+                    if (is_replay) begin
+                        running <= 1'b1;
+                        drive   <= 1'b1;
+                    end else begin
+                        // BYPASS is a transparent wire: nothing to replay.
+                        done <= 1'b1;
+                    end
+                end
+            end
 
-        // enable's rising edge is the time origin: recorded timestamps are
-        // applied relative to it, so the testbench can initialise first.
-        if (enable !== 1'b1) @(posedge enable);
-        origin = $time;
+            if (running) begin
+                cyc <= cyc + 32'd1;
 
-        if (cvm_replay_mode(HIER) == CVM_REPLAY) begin
-            handle = cvm_replay_open(HIER, LAYOUT);
-            if (handle >= 0) begin
-                drive = 1'b1;
-                run();
+                if (pipe_valid && e_cycle == cyc) begin
+                    drive_q  <= e_in;
+                    exp_cur  <= e_exp;
+                    care_cur <= e_care;
+                end else if (pipe_valid && e_cycle < cyc && !late_seen) begin
+                    // Stimulus arrived after its cycle passed, so everything
+                    // after it is shifted -- and a shifted replay still runs.
+                    late_seen    <= 1'b1;
+                    late_cycle   <= e_cycle;
+                    late_arrived <= cyc;
+                end
+
+                if (miss != '0) begin
+                    mismatches <= mismatches + 32'($countones(miss));
+                    fail_bits  <= fail_bits | miss;
+                    if (!fail_seen) begin
+                        fail_seen        <= 1'b1;
+                        first_fail_cycle <= cyc;
+                    end
+                end
+
+                // The last element is popped at posedge L, so eos is visible
+                // at L+1 -- the same edge that compares its expectation. Both
+                // happen here, so finishing now still includes it.
+                if (pipe_eos) begin
+                    running <= 1'b0;
+                    drive   <= 1'b0;
+                    done    <= 1'b1;
+                end
             end
         end
+    end
 
-        // Hand the inputs back to the testbench, matching the pre-start
-        // behaviour so there are two regimes rather than three.
-        drive = 1'b0;
-        done  = 1'b1;
+    // --- REPORT: everything that talks to the host or a console ---
+    logic late_reported;
+    always_ff @(posedge clk) begin
+        if (!reset_n) begin
+            reported      <= 1'b0;
+            late_reported <= 1'b0;
+        end else begin
+            if (late_seen && !late_reported) begin
+                late_reported <= 1'b1;
+                $error("cvm_replay(%s): element for cycle %0d arrived at cycle %0d",
+                       HIER, late_cycle, late_arrived);
+            end
+
+            // The cycle after done, so the final comparison is included. Both
+            // imports are void, so neither stalls.
+            if (done && !reported) begin
+                reported <= 1'b1;
+                for (int i = 0; i < NWORDS; i++) begin
+                    cvm_replay_report_word(HIER, i, fail_bits[i*32 +: 32]);
+                end
+                cvm_replay_report(HIER, int'(mismatches),
+                                  fail_seen ? int'(first_fail_cycle) : -1,
+                                  int'(cyc), int'(pipe_min_occupancy),
+                                  int'(pipe_reliefs));
+            end
+        end
     end
 
 endmodule

@@ -11,7 +11,7 @@ cc_library(
     ],
     strip_include_prefix = ".",
     include_prefix = "cvm",
-    visibility = ["//:__pkg__"],
+    visibility = ["//:__subpackages__"],
 )
 
 cc_library(
@@ -19,6 +19,7 @@ cc_library(
     srcs = ["replay_dpi.cpp"],
     deps = [
         ":replay_core",
+        "//src/pipe:pipe_core",
         "//third_party/dpi:dpi",
         "@com_github_gflags_gflags//:gflags",
     ],
@@ -32,6 +33,8 @@ cc_library(
     deps = [
         ":replay_core",
         ":replay_dpi",
+        # Replay's transport, so a testbench needs only //:replay.
+        "//src/pipe:pipe",
     ],
     visibility = ["//:__pkg__"],
 )
@@ -42,6 +45,7 @@ verilog_library(
         "cvm_replay_engine.sv",
         "cvm_replay_pkg.sv",
     ],
+    deps = ["//src/pipe:pipe_sv"],
     visibility = ["//:__pkg__"],
 )
 

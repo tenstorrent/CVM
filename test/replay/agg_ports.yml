@@ -1,0 +1,13 @@
+agg_replay:
+  dut: agg
+  x_fill: zero
+  # Every aggregate is described by its total width and nothing else. A packed
+  # struct, a packed array of structs and a multi-dimensional packed array are
+  # all just bits here, which is also how $dumpports records them: one signal of
+  # the total width, named after the port.
+  ports:
+    rst_n: { width: 1,  dir: in }
+    cmd:   { width: 22, dir: in }   # bundle_t
+    mat:   { width: 8,  dir: in }   # logic [1:0][3:0]
+    resp:  { width: 9,  dir: out }  # lane_t
+    sum:   { width: 8,  dir: out }

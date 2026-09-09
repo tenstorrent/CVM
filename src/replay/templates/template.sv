@@ -17,9 +17,18 @@
 // the flat vectors that module works in.
 module ${spec.name} #(
     // Key this instance's recording is looked up under in +cvm_replay_file.
-    parameter string  HIER   = "${spec.name}",
-    parameter longint STROBE = ${spec.strobe}
+    parameter string HIER = "${spec.name}",
+    // Elements buffered in the transport. Sizes a memory, so a parameter.
+    parameter int    PIPE_DEPTH = ${spec.pipe_depth},
+    // Transport sizing, in elements. One element is ${spec.element_words} words at this width,
+    // which is why the epoch cap is computed rather than left at a fixed default.
+    parameter int    RELIEF_DEPTH = ${spec.relief_depth},
+    parameter int    EPOCH_MAX_ELEMENTS = ${spec.epoch_max_elements}
 ) (
+    // Infrastructure, not spec ports: all of the DUT's IO is on this clock, and
+    // the recording's own clock signal, if it has one, is ignored.
+    input  logic clk,
+    input  logic reset_n,
     input  logic enable,
     output logic done,
 % for p in ports:
@@ -33,7 +42,13 @@ module ${spec.name} #(
 % endfor
 );
 
+    import cvm_replay_pkg::*;
+
     localparam int PADDED = ${spec.padded_bits};
+    // Unknown recorded *input* bits resolve to this. An emulator has no X, so
+    // resolving on the host is what makes every platform replay the same bits.
+    localparam int X_FILL_ONE = ${1 if spec.x_fill == 'one' else 0};
+    localparam string LAYOUT = "${layout}";
 
     logic [PADDED-1:0] observed;
     logic [PADDED-1:0] driven;
@@ -58,16 +73,36 @@ module ${spec.name} #(
     assign ${p.name}${tb} = ${p.name}${du};
 % endfor
 
+    // Sourcing the recording is the interposer's job, not the engine's: the
+    // engine consumes elements and knows nothing of files or layouts, which is
+    // what lets it be driven by a generator instead. One call, out of reset.
+    logic loaded;
+    always_ff @(posedge clk) begin
+        if (!reset_n) begin
+            loaded <= 1'b0;
+        end else if (!loaded) begin
+            loaded <= 1'b1;
+            if (cvm_replay_load(HIER, LAYOUT, PADDED, X_FILL_ONE) < 0)
+                $error("${spec.name}(%s): could not load the recording", HIER);
+        end
+    end
+
     cvm_replay_engine #(
-        .HIER   (HIER),
-        .PADDED (PADDED),
-        .STROBE (STROBE),
-        .LAYOUT ("${layout}")
+        .HIER               (HIER),
+        .PADDED             (PADDED),
+        .PIPE_DEPTH         (PIPE_DEPTH),
+        .RELIEF_DEPTH       (RELIEF_DEPTH),
+        .EPOCH_MAX_ELEMENTS (EPOCH_MAX_ELEMENTS)
     ) u_engine (
-        .enable   (enable),
-        .done     (done),
-        .observed (observed),
-        .driven   (driven)
+        .clk              (clk),
+        .reset_n          (reset_n),
+        .enable           (enable),
+        .done             (done),
+        .observed         (observed),
+        .driven           (driven),
+        .mismatches       (),
+        .first_fail_cycle (),
+        .fail_bits        ()
     );
 
 endmodule
@@ -75,7 +110,12 @@ endmodule
 
 // Convenience top for standalone block regression. An integrated testbench
 // should instantiate ${spec.name} itself.
-module ${spec.name}_top (input logic enable, output logic done);
+module ${spec.name}_top (
+    input  logic clk,
+    input  logic reset_n,
+    input  logic enable,
+    output logic done
+);
 
 % for p in ports:
     logic ${p.sv_range()} ${p.name}${tb};
@@ -83,6 +123,8 @@ module ${spec.name}_top (input logic enable, output logic done);
 % endfor
 
     ${spec.name} u_replay (
+        .clk(clk),
+        .reset_n(reset_n),
         .enable(enable),
         .done(done),
 % for p in ports:

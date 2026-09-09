@@ -1,0 +1,100 @@
+load("@rules_hdl//verilog:providers.bzl", "verilog_library")
+load("@rules_verilator//verilator:defs.bzl", "verilator_cc_library")
+
+cc_test(
+    name = "pipe_test",
+    size = "small",
+    srcs = ["pipe_test.cpp"],
+    deps = [
+        # The core only: the DPI shim references SV-side symbols that exist
+        # solely when linked with a simulator.
+        "//src/pipe:pipe_core",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+verilog_library(
+    name = "tb_pipe_sv",
+    srcs = ["tb_pipe.sv"],
+    deps = [
+        "//:pipe_sv",
+        "//:plusargs_sv",
+    ],
+    top_module = "top",
+)
+
+verilator_cc_library(
+    name = "tb_pipe_veri_lib",
+    module = ":tb_pipe_sv",
+    timing = True,
+    vopts = ["--assert"],
+)
+
+cc_binary(
+    name = "sim",
+    srcs = [
+        "tb_pipe_dpi.cpp",
+        # main() only; the checks are in tb_pipe.sv so they travel to other
+        # simulators.
+        "//:sim_main",
+    ],
+    deps = [
+        ":tb_pipe_veri_lib",
+        "//:logger",
+        "//:pipe",
+        "//:plusargs",
+        "@com_github_gflags_gflags//:gflags",
+    ],
+)
+
+sh_test(
+    name = "sh_pipe_sim",
+    srcs = ["//src/sim:sim.sh"],
+    args = [
+        "$(location :sim)",
+        # DEPTH is 64, so size the epoch and headroom under it: this run should
+        # turn over many epochs rather than fitting in one push.
+        "+cvm_pipe_epoch=32",
+        "+cvm_pipe_headroom=16",
+    ],
+    data = [":sim"],
+)
+
+# Same build, same checks, with nothing queued up front: every element comes
+# from a producer the transport pulls. Proves the demand signal reaches the
+# producer, and that returning 0 carries end of stream.
+sh_test(
+    name = "sh_pipe_sim_on_demand",
+    srcs = ["//src/sim:sim.sh"],
+    args = [
+        "$(location :sim)",
+        "+cvm_pipe_epoch=32",
+        "+cvm_pipe_headroom=16",
+        "+produce_on_demand",
+    ],
+    data = [":sim"],
+)
+
+# Same build, same checks, with the push path disabled so delivery has to fall
+# back to the inline relief fetch.
+sh_test(
+    name = "sh_pipe_sim_relief",
+    srcs = ["//src/sim:sim.sh"],
+    args = [
+        "$(location :sim)",
+        "+cvm_pipe_epoch=32",
+        "+cvm_pipe_headroom=16",
+        "+cvm_pipe_suppress_push=1",
+    ],
+    data = [":sim"],
+)
+
+test_suite(
+    name = "smoke",
+    tests = [
+        "pipe_test",
+        ":sh_pipe_sim",
+        ":sh_pipe_sim_on_demand",
+        ":sh_pipe_sim_relief",
+    ],
+)

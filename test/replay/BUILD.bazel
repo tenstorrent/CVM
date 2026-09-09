@@ -7,17 +7,92 @@ cc_test(
     size = "small",
     srcs = ["replay_test.cpp"],
     deps = [
-        "//:replay",
+        # The core only: the DPI shim references SV-side symbols that exist
+        # solely when linked with a simulator.
+        "//src/replay:replay_core",
         "//third_party/vpi:vpi",
         "@com_google_googletest//:gtest_main",
     ],
 )
 
-# No topology: replaying an arbitrary module should not require one.
 replay(
     name = "alu_replay",
     srcs = ["alu_ports.yml"],
 )
+
+replay(
+    name = "agg_replay",
+    srcs = ["agg_ports.yml"],
+)
+
+verilog_library(
+    name = "tb_agg_sv",
+    srcs = [
+        "agg_dut.sv",
+        "agg_pkg.sv",
+        "tb_agg.sv",
+    ],
+    deps = [
+        ":agg_replay_sv",
+        "//:plusargs_sv",
+        "//:sim_sv",
+    ],
+    top_module = "top",
+)
+
+verilator_cc_library(
+    name = "tb_agg_veri_lib",
+    module = ":tb_agg_sv",
+    timing = True,
+    vopts = ["--assert"],
+)
+
+cc_binary(
+    name = "sim_agg",
+    srcs = ["//:sim_main"],
+    deps = [
+        ":tb_agg_veri_lib",
+        ":tb_flags",
+        "//:logger",
+        "//:plusargs",
+        "//:replay",
+        "//:sim_dpi",
+    ],
+)
+
+# Packed aggregates: each is one recorded signal of its total width, so replay
+# needs nothing beyond the width. These scenarios are what proves it.
+[
+    sh_test(
+        name = "sh_" + scenario["name"],
+        srcs = ["//src/sim:sim.sh"],
+        args = ["$(location :sim_agg)"] + scenario["args"],
+        data = [
+            ":sim_agg",
+            "//test/replay/fixtures:evcds",
+        ],
+    )
+    for scenario in [
+        {
+            "name": "agg_replay",
+            "args": [
+                "+cvm_replay_file=test/replay/fixtures/agg.evcd",
+                "+cvm_replay_mode=REPLAY",
+                "+expect_errors=0",
+            ],
+        },
+        # One recorded resp.data bit is wrong, inside a packed struct inside
+        # the flattened vector. The report must name that bit.
+        {
+            "name": "agg_mismatch_detected",
+            "args": [
+                "+cvm_replay_file=test/replay/fixtures/agg_bad.evcd",
+                "+cvm_replay_mode=REPLAY",
+                "+expect_errors=1",
+            ],
+        },
+    ]
+]
 
 verilog_library(
     name = "tb_top_sv",
@@ -25,7 +100,11 @@ verilog_library(
         "dut.sv",
         "tb_top.sv",
     ],
-    deps = [":alu_replay_sv"],
+    deps = [
+        ":alu_replay_sv",
+        "//:plusargs_sv",
+        "//:sim_sv",
+    ],
     top_module = "top",
 )
 
@@ -36,16 +115,27 @@ verilator_cc_library(
     vopts = ["--assert"],
 )
 
+# Declares the scenario expectations so gflags validates them.
+cc_library(
+    name = "tb_flags",
+    srcs = ["tb_flags.cpp"],
+    alwayslink = True,
+    linkstatic = True,
+    deps = ["@com_github_gflags_gflags//:gflags"],
+)
+
 cc_binary(
     name = "sim",
-    srcs = ["sim_main.cpp"],
+    # main() only; the checks are in tb_top.sv so they travel to other
+    # simulators.
+    srcs = ["//:sim_main"],
     deps = [
+        ":tb_flags",
         ":tb_top_veri_lib",
-        "//:replay",
         "//:logger",
         "//:plusargs",
-        "@com_github_gflags_gflags//:gflags",
-        "@com_google_googletest//:gtest",
+        "//:replay",
+        "//:sim_dpi",
     ],
 )
 
@@ -54,7 +144,7 @@ cc_binary(
 [
     sh_test(
         name = "sh_" + scenario["name"],
-        srcs = ["sim.sh"],
+        srcs = ["//src/sim:sim.sh"],
         args = ["$(location :sim)"] + scenario["args"],
         data = [
             ":sim",
@@ -62,17 +152,20 @@ cc_binary(
         ],
     )
     for scenario in [
+        # Runs to cycle 4, recorded result 7. Afterwards the testbench drives
+        # 1 + 2, so a last result of 3 shows the inputs were handed back.
         {
             "name": "replay",
             "args": [
                 "+cvm_replay_file=test/replay/fixtures/alu.evcd",
                 "+cvm_replay_mode=REPLAY",
                 "+expect_errors=0",
-                "+expect_replay_result=3",
-                "+expect_last_result=11",
-                "+expect_done_time=43",
+                "+expect_replay_result=7",
+                "+expect_last_result=3",
+                "+expect_done_cycles=7",
             ],
         },
+        # Shorter, so the run length demonstrably comes from the recording.
         {
             "name": "replay_second_dump",
             "args": [
@@ -80,9 +173,11 @@ cc_binary(
                 "+cvm_replay_mode=REPLAY",
                 "+expect_errors=0",
                 "+expect_replay_result=7",
-                "+expect_last_result=11",
+                "+expect_last_result=3",
+                "+expect_done_cycles=5",
             ],
         },
+        # Same recording, selected by key rather than as a bare path.
         {
             "name": "replay_keyed_dump",
             "args": [
@@ -90,25 +185,34 @@ cc_binary(
                 "+cvm_replay_mode=REPLAY",
                 "+expect_errors=0",
                 "+expect_replay_result=7",
-                "+expect_last_result=11",
+                "+expect_last_result=3",
+                "+expect_done_cycles=5",
             ],
         },
+        # A transparent wire, finished immediately, but the monitor must still
+        # see traffic.
         {
             "name": "bypass",
             "args": [
                 "+cvm_replay_file=test/replay/fixtures/alu.evcd",
                 "+cvm_replay_mode=BYPASS",
                 "+expect_errors=0",
-                "+expect_last_result=11",
+                "+expect_last_result=3",
+                "+expect_done_cycles=1",
             ],
         },
+        # Load bearing: the only scenario that fails if the checker stops
+        # running. One recorded result bit is wrong, so exactly one summary
+        # must appear; the stimulus is untouched.
         {
             "name": "replay_mismatch_detected",
             "args": [
                 "+cvm_replay_file=test/replay/fixtures/alu_bad.evcd",
                 "+cvm_replay_mode=REPLAY",
-                "+expect_errors=2",
-                "+expect_replay_result=3",
+                "+expect_errors=1",
+                "+expect_replay_result=7",
+                "+expect_last_result=3",
+                "+expect_done_cycles=7",
             ],
         },
     ]
@@ -117,6 +221,8 @@ cc_binary(
 test_suite(
     name = "smoke",
     tests = [
+        ":sh_agg_mismatch_detected",
+        ":sh_agg_replay",
         "replay_test",
         ":sh_bypass",
         ":sh_replay",

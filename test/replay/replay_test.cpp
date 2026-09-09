@@ -22,29 +22,30 @@ vpi_get_vlog_info(p_vpi_vlog_info vlog_info_p) {
 
 using cvm::replay::logic_word;
 using cvm::replay::replay_vector;
+using cvm::replay::cycle_element;
 using cvm::replay::source;
 
 namespace {
 
-constexpr bool kInput = false;
-constexpr bool kOutput = true;
+  constexpr bool kInput = false;
+  constexpr bool kOutput = true;
 
-std::string
-header(const std::string& vars) {
-  return "$timescale 1ps $end\n$scope module tb.dut $end\n" + vars +
-         "$upscope $end\n$enddefinitions $end\n";
-}
+  std::string
+  header(const std::string& vars) {
+    return "$timescale 1ps $end\n$scope module tb.dut $end\n" + vars +
+           "$upscope $end\n$enddefinitions $end\n";
+  }
 
-// The 4-state character a bit of the flattened vector holds.
-char bit_at(const replay_vector& v, std::size_t bit) {
-  const logic_word& w = v.value[bit / 32];
-  const std::uint32_t mask = 1u << (bit % 32);
-  const bool a = (w.aval & mask) != 0;
-  const bool b = (w.bval & mask) != 0;
-  if (!b)
-    return a ? '1' : '0';
-  return a ? 'x' : 'z';
-}
+  // The 4-state character a bit of the flattened vector holds.
+  char bit_at(const replay_vector& v, std::size_t bit) {
+    const logic_word& w = v.value[bit / 32];
+    const std::uint32_t mask = 1u << (bit % 32);
+    const bool a = (w.aval & mask) != 0;
+    const bool b = (w.bval & mask) != 0;
+    if (!b)
+      return a ? '1' : '0';
+    return a ? 'x' : 'z';
+  }
 
 } // namespace
 
@@ -212,6 +213,116 @@ TEST(Flatten, DumpPortsOffDrivesEveryPortUnknown) {
   ASSERT_TRUE(s.next(v));
   EXPECT_EQ(v.time, 10u);
   EXPECT_EQ(bit_at(v, 0), 'x');
+}
+
+// --- cycle encoding, which is what the engine consumes ---
+
+namespace {
+
+  // Two inputs and one output, so the split by direction is visible.
+  std::string
+  two_in_one_out() {
+    return header("$var port 1 <0 a $end\n"
+                  "$var port 1 <1 b $end\n"
+                  "$var port 1 <2 y $end\n");
+  }
+
+  bool bit_set(const std::vector<std::uint32_t>& words, std::size_t bit) {
+    return (words[bit / 32] & (1u << (bit % 32))) != 0;
+  }
+
+} // namespace
+
+TEST(Encode, SplitsByDirectionAndKeepsTheRecordedTimestampAsTheCycle) {
+  std::istringstream in(two_in_one_out() +
+                        "#0\npU 6 0 <0\npD 6 0 <1\npH 0 6 <2\n#7\npD 6 0 <0\n");
+  source s;
+  ASSERT_TRUE(s.open(in, "")) << s.error();
+  ASSERT_EQ(s.bind("a", 1, kInput, 0), 0);
+  ASSERT_EQ(s.bind("b", 1, kInput, 1), 1);
+  ASSERT_EQ(s.bind("y", 1, kOutput, 2), 2);
+
+  cycle_element e;
+  ASSERT_TRUE(s.next_cycle(e, false));
+  EXPECT_EQ(e.cycle, 0u);
+  EXPECT_TRUE(bit_set(e.in, 0));
+  EXPECT_FALSE(bit_set(e.in, 1));
+  EXPECT_FALSE(bit_set(e.in, 2)) << "an output must not appear in the stimulus";
+  EXPECT_TRUE(bit_set(e.exp, 2));
+  EXPECT_TRUE(bit_set(e.care, 2));
+  EXPECT_FALSE(bit_set(e.care, 0)) << "inputs are driven, never compared";
+
+  ASSERT_TRUE(s.next_cycle(e, false));
+  // One `#1` is one clock, so a timestamp is already a cycle index.
+  EXPECT_EQ(e.cycle, 7u);
+}
+
+TEST(Encode, ResolvesUnknownInputBitsBothWays) {
+  // An emulator has no X, so this is settled on the host rather than left to
+  // whatever a simulator collapses it to.
+  std::istringstream in(two_in_one_out() + "#0\npN 6 0 <0\n");
+  source s;
+  ASSERT_TRUE(s.open(in, "")) << s.error();
+  ASSERT_EQ(s.bind("a", 1, kInput, 0), 0);
+
+  cycle_element e;
+  ASSERT_TRUE(s.next_cycle(e, false));
+  EXPECT_FALSE(bit_set(e.in, 0));
+
+  std::istringstream again(two_in_one_out() + "#0\npN 6 0 <0\n");
+  source t;
+  ASSERT_TRUE(t.open(again, "")) << t.error();
+  ASSERT_EQ(t.bind("a", 1, kInput, 0), 0);
+  ASSERT_TRUE(t.next_cycle(e, true));
+  EXPECT_TRUE(bit_set(e.in, 0));
+}
+
+TEST(Encode, UnknownOutputBitsAreNotCompared) {
+  std::istringstream in(two_in_one_out() + "#0\npX 0 6 <2\n#1\npH 0 6 <2\n");
+  source s;
+  ASSERT_TRUE(s.open(in, "")) << s.error();
+  ASSERT_EQ(s.bind("y", 1, kOutput, 2), 0);
+
+  cycle_element e;
+  ASSERT_TRUE(s.next_cycle(e, false));
+  EXPECT_FALSE(bit_set(e.care, 2)) << "nothing to compare an X against";
+
+  ASSERT_TRUE(s.next_cycle(e, false));
+  EXPECT_TRUE(bit_set(e.care, 2));
+}
+
+TEST(Encode, CareSurvivesCyclesThatDoNotRewriteTheOutput) {
+  // The engine holds an expectation until the next element, so what may be
+  // compared has to persist with it. Keying care off "written at this
+  // timestamp" would drop checking on every cycle that changed only an input,
+  // and a dropped check reads exactly like a pass.
+  std::istringstream in(two_in_one_out() +
+                        "#0\npD 6 0 <0\npH 0 6 <2\n#1\npU 6 0 <0\n");
+  source s;
+  ASSERT_TRUE(s.open(in, "")) << s.error();
+  ASSERT_EQ(s.bind("a", 1, kInput, 0), 0);
+  ASSERT_EQ(s.bind("y", 1, kOutput, 2), 1);
+
+  cycle_element e;
+  ASSERT_TRUE(s.next_cycle(e, false));
+  ASSERT_TRUE(bit_set(e.care, 2));
+
+  ASSERT_TRUE(s.next_cycle(e, false));
+  EXPECT_EQ(e.cycle, 1u);
+  EXPECT_TRUE(bit_set(e.exp, 2)) << "unchanged values carry forward";
+  EXPECT_TRUE(bit_set(e.care, 2));
+}
+
+TEST(Encode, ReportsFailingBitsByPortName) {
+  std::istringstream in(two_in_one_out() + "#0\npH 0 6 <2\n");
+  source s;
+  ASSERT_TRUE(s.open(in, "")) << s.error();
+  ASSERT_EQ(s.bind("y", 1, kOutput, 2), 0);
+
+  // The engine reports bit indices because it has no idea what a port is.
+  const std::vector<std::string> names = s.failing_bits({0b100u});
+  ASSERT_EQ(names.size(), 1u);
+  EXPECT_EQ(names[0], "y[0]");
 }
 
 // --- plusarg path resolution ---

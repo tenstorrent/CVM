@@ -1,10 +1,11 @@
 alu_replay:
   dut: alu
-  # Outputs are sampled STROBE units after the recorded timestamp so the
-  # non-blocking assignments in the DUT have settled.
-  strobe: 1
+  # Unknown recorded input bits resolve to 0. An emulator has no X, so this is
+  # resolved on the host and every platform replays identical bits.
+  x_fill: zero
+  # clk is not listed: all of the DUT's IO is on one clock, which the
+  # interposer takes as infrastructure rather than as a replayed port.
   ports:
-    clk:    { width: 1, dir: in }
     rst_n:  { width: 1, dir: in }
     opa:    { width: 4, dir: in }
     opb:    { width: 4, dir: in }

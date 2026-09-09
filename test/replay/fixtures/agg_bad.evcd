@@ -1,0 +1,29 @@
+$date Tue Sep 1 12:00:00 2026 $end
+$version cvm replay hand-written fixture, cycle indexed, packed aggregates $end
+$timescale 1ps $end
+$scope module tb.u_agg $end
+$var port 1 <0 rst_n $end
+$var port [21:0] <1 cmd $end
+$var port [7:0] <2 mat $end
+$var port [8:0] <3 resp $end
+$var port [7:0] <4 sum $end
+$upscope $end
+$enddefinitions $end
+#0
+$dumpports
+pD 6 0 <0
+pDDDUDDDDDDUDUDDDDDDUUU 6 0 <1
+pDDDUDDUD 6 0 <2
+pLLLLLLLLL 0 6 <3
+pLLLLLLLL 0 6 <4
+$end
+#1
+pU 6 0 <0
+#2
+pDDDDDDDDDUDDDDDDDDUDUU 6 0 <1
+pDDUUDUDD 6 0 <2
+pLLLLLHLLH 0 6 <3
+pLLLLLLHH 0 6 <4
+#3
+pLLLLHLLHL 0 6 <3
+pLLLLLHHH 0 6 <4

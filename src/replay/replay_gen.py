@@ -23,8 +23,10 @@ INTERPOLATION = re.compile(r"\$\{([^}]*)\}")
 
 DIRECTIONS = ("in", "out", "inout")
 
-# Must match CVM_REPLAY_MAX_PORT in src/replay/cvm_replay_pkg.sv.
-MAX_PORT_WIDTH = 1024
+# Must match CVM_PIPE_MAX_WORDS in src/pipe/cvm_pipe_pkg.sv: the size of the
+# push export's array formal, which is fixed because a DPI function has one
+# signature per name.
+PIPE_MAX_WORDS = 8192
 
 
 def interpolate(value, topology, where):
@@ -69,7 +71,14 @@ class Spec:
     name: str
     dut: str
     ports: List[Port]
-    strobe: int = 0
+    # Unknown recorded input bits resolve to this. Not "whatever the simulator
+    # collapses X to": that is neither reproducible nor available on an
+    # emulator.
+    x_fill: str = "zero"
+    pipe_depth: int = 4096
+    relief_depth: int = 8
+    # 0 means "compute it from the payload width"; see epoch_max_elements.
+    epoch_max: int = 0
     tb_suffix: str = "_tb"
     dut_suffix: str = "_dut"
     standalone_top: bool = False
@@ -82,6 +91,25 @@ class Spec:
     @property
     def padded_bits(self) -> int:
         return self.words * 32
+
+    @property
+    def element_words(self) -> int:
+        """Words the transport carries per cycle: a cycle number plus the
+        stimulus, the expectation and the care mask."""
+        return 1 + 3 * self.words
+
+    @property
+    def epoch_max_elements(self) -> int:
+        """Most elements one push may carry.
+
+        Computed from the width rather than left at a fixed default: the push
+        formal is a fixed number of *words*, so a default in elements that
+        suits a 32-bit DUT fails to elaborate for a 128-bit one. Emitted into
+        the generated source so the number is visible rather than implied.
+        """
+        if self.epoch_max:
+            return self.epoch_max
+        return max(1, PIPE_MAX_WORDS // self.element_words)
 
     def inputs(self) -> List[Port]:
         return [p for p in self.ports if p.dir == "in"]
@@ -126,7 +154,10 @@ class Spec:
             name=name,
             dut=dut,
             ports=[],
-            strobe=int(interpolate(body.get("strobe", 0), topology, name)),
+            x_fill=str(interpolate(body.get("x_fill", "zero"), topology, name)),
+            pipe_depth=int(interpolate(body.get("pipe_depth", 4096), topology, name)),
+            relief_depth=int(interpolate(body.get("relief_depth", 8), topology, name)),
+            epoch_max=int(interpolate(body.get("epoch_max", 0), topology, name)),
             tb_suffix=suffixes.get("tb", "_tb"),
             dut_suffix=suffixes.get("dut", "_dut"),
             standalone_top=bool(body.get("standalone_top", False)),
@@ -141,10 +172,6 @@ class Spec:
             assert width is not None, f"{where}: `width` is required"
             width = int(width)
             assert width > 0, f"{where}: width must be positive, got {width}"
-            assert width <= MAX_PORT_WIDTH, (
-                f"{where}: width {width} exceeds cvm_replay_pkg's "
-                f"CVM_REPLAY_MAX_PORT ({MAX_PORT_WIDTH})"
-            )
 
             direction = attrs.get("dir")
             assert direction in DIRECTIONS, (
@@ -179,6 +206,19 @@ class Spec:
             offset += width
 
         spec.total_bits = offset
+
+        # The limit that actually exists, replacing a per-port width cap that
+        # mirrored a constant no longer in cvm_replay_pkg.sv. Nothing carries a
+        # single port any more: ports are slices of one flat vector, and what is
+        # bounded is how much of it fits in one push.
+        if spec.epoch_max_elements * spec.element_words > PIPE_MAX_WORDS:
+            sys.exit(
+                f"{name}: {spec.total_bits} bits of ports need "
+                f"{spec.element_words} words per element, so an epoch of "
+                f"{spec.epoch_max_elements} exceeds the push formal "
+                f"({PIPE_MAX_WORDS} words). Lower `epoch_max`, or raise "
+                "CVM_PIPE_MAX_WORDS in src/pipe/cvm_pipe_pkg.sv."
+            )
         return spec
 
 

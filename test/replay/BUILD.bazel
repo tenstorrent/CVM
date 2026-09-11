@@ -1,6 +1,16 @@
 load("@cvm//:defs.bzl", "replay")
 load("@rules_hdl//verilog:providers.bzl", "verilog_library")
 load("@rules_verilator//verilator:defs.bzl", "verilator_cc_library")
+load("//:defs.bzl", "topology_gen")
+
+topology_gen(
+    name = "topology",
+    srcs = ["topology.yml"],
+    cc_attrs = {
+        "alwayslink": True,
+        "linkstatic": True,
+    },
+)
 
 cc_test(
     name = "replay_test",
@@ -33,6 +43,7 @@ verilog_library(
         "tb_agg.sv",
     ],
     deps = [
+        ":topology_sv",
         ":agg_replay_sv",
         "//:plusargs_sv",
         "//:sim_sv",
@@ -55,6 +66,9 @@ cc_binary(
         ":tb_flags",
         "//:logger",
         "//:plusargs",
+        "//:registry",
+        "//:topology",
+        ":topology_cc",
         "//:replay",
         "//:sim_dpi",
     ],
@@ -101,6 +115,7 @@ verilog_library(
         "tb_top.sv",
     ],
     deps = [
+        ":topology_sv",
         ":alu_replay_sv",
         "//:plusargs_sv",
         "//:sim_sv",
@@ -134,6 +149,9 @@ cc_binary(
         ":tb_top_veri_lib",
         "//:logger",
         "//:plusargs",
+        "//:registry",
+        "//:topology",
+        ":topology_cc",
         "//:replay",
         "//:sim_dpi",
     ],

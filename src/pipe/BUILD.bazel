@@ -2,11 +2,13 @@ load("@rules_hdl//verilog:providers.bzl", "verilog_library")
 
 cc_library(
     name = "pipe_core",
-    hdrs = [
-        "pipe.hpp",
-        "pipe_internal.hpp",
-    ],
+    hdrs = ["pipe.hpp"],
     srcs = ["pipe.cpp"],
+    deps = [
+        "//src/registry:registry",
+        "//src/topology:topology",
+        "//:logger",
+    ],
     strip_include_prefix = ".",
     include_prefix = "cvm",
     visibility = ["//:__subpackages__"],
@@ -18,6 +20,7 @@ cc_library(
     deps = [
         ":pipe_core",
         "//src/registry:registry",
+        "//src/topology:topology",
         "//:logger",
         "//third_party/dpi:dpi",
         "@com_github_gflags_gflags//:gflags",
@@ -41,6 +44,10 @@ verilog_library(
     srcs = [
         "cvm_pipe_in.sv",
         "cvm_pipe_pkg.sv",
+    ],
+    deps = [
+        "//:registry_sv",
+        "//:topology_sv",
     ],
     visibility = ["//:__subpackages__"],
 )

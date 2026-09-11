@@ -1,5 +1,15 @@
 load("@rules_hdl//verilog:providers.bzl", "verilog_library")
 load("@rules_verilator//verilator:defs.bzl", "verilator_cc_library")
+load("//:defs.bzl", "topology_gen")
+
+topology_gen(
+    name = "topology",
+    srcs = ["topology.yml"],
+    cc_attrs = {
+        "alwayslink": True,
+        "linkstatic": True,
+    },
+)
 
 cc_test(
     name = "pipe_test",
@@ -9,6 +19,10 @@ cc_test(
         # The core only: the DPI shim references SV-side symbols that exist
         # solely when linked with a simulator.
         "//src/pipe:pipe_core",
+        "//:topology",
+        ":topology_cc",
+        "//third_party/dpi:dpi",
+        "//third_party/vpi:vpi",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -17,8 +31,9 @@ verilog_library(
     name = "tb_pipe_sv",
     srcs = ["tb_pipe.sv"],
     deps = [
+        ":topology_sv",
         "//:pipe_sv",
-        "//:plusargs_sv",
+        "//:sim_sv",
     ],
     top_module = "top",
 )
@@ -43,58 +58,118 @@ cc_binary(
         "//:logger",
         "//:pipe",
         "//:plusargs",
+        "//:registry",
+        "//:sim_dpi",
+        "//:topology",
+        ":topology_cc",
         "@com_github_gflags_gflags//:gflags",
     ],
 )
 
-sh_test(
-    name = "sh_pipe_sim",
-    srcs = ["//src/sim:sim.sh"],
-    args = [
-        "$(location :sim)",
-        # DEPTH is 64, so size the epoch and headroom under it: this run should
-        # turn over many epochs rather than fitting in one push.
-        "+cvm_pipe_epoch=32",
-        "+cvm_pipe_headroom=16",
-    ],
-    data = [":sim"],
-)
-
-# Same build, same checks, with nothing queued up front: every element comes
-# from a producer the transport pulls. Proves the demand signal reaches the
-# producer, and that returning 0 carries end of stream.
-sh_test(
-    name = "sh_pipe_sim_on_demand",
-    srcs = ["//src/sim:sim.sh"],
-    args = [
-        "$(location :sim)",
-        "+cvm_pipe_epoch=32",
-        "+cvm_pipe_headroom=16",
-        "+produce_on_demand",
-    ],
-    data = [":sim"],
-)
-
-# Same build, same checks, with the push path disabled so delivery has to fall
-# back to the inline relief fetch.
-sh_test(
-    name = "sh_pipe_sim_relief",
-    srcs = ["//src/sim:sim.sh"],
-    args = [
-        "$(location :sim)",
-        "+cvm_pipe_epoch=32",
-        "+cvm_pipe_headroom=16",
-        "+cvm_pipe_suppress_push=1",
-    ],
-    data = [":sim"],
-)
+# Scenarios off one build. DEPTH is 64 against 500 elements, so none of them
+# can finish without repeatedly refilling.
+[
+    sh_test(
+        name = "sh_" + scenario["name"],
+        srcs = ["//src/sim:sim.sh"],
+        args = ["$(location :sim)"] + scenario["args"],
+        data = [":sim"],
+    )
+    for scenario in [
+        # Credit returned on every element: the steady state, where demand
+        # should only fire at cold start.
+        {
+            "name": "pipe_sim",
+            "args": [
+                "+cvm_pipe_demand_watermark=16",
+                "+expect_max_demands=3",
+            ],
+        },
+        # Credit returned once every eight elements, so the host's view of free
+        # space lags and demand has to make up the difference.
+        {
+            "name": "pipe_sim_coarse_credits",
+            "args": [
+                "+cvm_pipe_demand_watermark=16",
+                "+cvm_pipe_credit_every=8",
+                "+expect_max_demands=3",
+            ],
+        },
+        # A producer that is dry without being finished, which is the only
+        # thing the retry status is for. Credits are coarse too, or the queue
+        # never drops far enough for demand to fire and find nothing.
+        {
+            "name": "pipe_sim_dry_producer",
+            "args": [
+                # Watermark near DEPTH, or the queue never drops far enough for
+                # demand to fire and find the producer dry. Coarse credits keep
+                # it from being refilled behind demand's back.
+                "+cvm_pipe_demand_watermark=60",
+                "+cvm_pipe_credit_every=16",
+                "+dry_every=2",
+                "+expect_min_demands=50",
+            ],
+        },
+        # Credit effectively switched off: demand carries the whole run,
+        # because it reports the read pointer too. Proves the transport does
+        # not depend on the credit path at all.
+        {
+            "name": "pipe_sim_demand_only",
+            "args": [
+                "+cvm_pipe_demand_watermark=48",
+                "+cvm_pipe_credit_every=100000",
+                "+expect_min_credits=0",
+                "+expect_min_demands=10",
+            ],
+        },
+        # Signals serviced on another thread, which is why demand waits on a
+        # flag rather than reading a status the handler has not written yet.
+        # No demand bound: a deferred credit leaves the host's view of the read
+        # pointer lagging, so demand does the refilling here and its count is
+        # not a measure of anything. What this asserts is that every element
+        # still arrives, in order, across the thread boundary.
+        {
+            "name": "pipe_sim_async",
+            "args": [
+                "+signal_async=1",
+                "+cvm_pipe_demand_watermark=16",
+            ],
+        },
+        # Both workers on: the callback queue is drained by its own thread
+        # while the messenger services credits and demands on another. This is
+        # the only configuration where the push interlock is contended, so it
+        # is the only one that reaches demand's "someone else is pushing"
+        # answer. No count assertions -- they are thread timing -- just that
+        # every element still arrives in order.
+        {
+            "name": "pipe_sim_all_async",
+            "args": [
+                "+signal_async=1",
+                "+cb_async=1",
+                "+cvm_pipe_demand_watermark=16",
+            ],
+        },
+        # Keyed by topology path rather than a bare value, so the key
+        # resolution is exercised rather than just its bare-value shortcut.
+        {
+            "name": "pipe_sim_keyed",
+            "args": [
+                "+cvm_pipe_demand_watermark=16",
+                "+cvm_pipe_credit_every=TOP.PIPE=4",
+                "+expect_max_demands=3",
+            ],
+        },
+    ]
+]
 
 test_suite(
     name = "smoke",
     tests = [
         "pipe_test",
         ":sh_pipe_sim",
-        ":sh_pipe_sim_on_demand",
-        ":sh_pipe_sim_relief",
+        ":sh_pipe_sim_coarse_credits",
+        ":sh_pipe_sim_demand_only",
+        ":sh_pipe_sim_dry_producer",
+        ":sh_pipe_sim_keyed",
     ],
 )

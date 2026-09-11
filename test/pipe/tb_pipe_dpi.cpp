@@ -1,80 +1,88 @@
 // SPDX-FileCopyrightText: © 2026 Tenstorrent USA, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// The host side of tb_pipe.sv. Only what the testbench cannot do in
-// SystemVerilog: queue the elements, and report what is still queued.
+// The host side of tb_pipe.sv: the producer, and what it still holds.
 
+#include <atomic>
 #include <cstdint>
-#include <map>
 #include <memory>
-#include <string>
-#include <vector>
 
 #include <gflags/gflags.h>
 
+#include "cvm/logger.hpp"
 #include "cvm/pipe.hpp"
-#include "svdpi.h"
+#include "cvm/registry.hpp"
 
-// Declared here rather than in a sim main() so the wrapper stays generic.
-DEFINE_bool(produce_on_demand, false,
-            "generate elements from a producer the transport pulls, instead of "
-            "queueing them all up front");
+// Fault injection: a producer that has nothing *right now* but is not finished,
+// which is what the demand retry status exists for.
+DEFINE_int32(dry_every, 0, "return no elements on every Nth producer call");
+// Guards against a scenario going vacuous: a run meant to exercise the retry
+// status has to show demand actually firing.
+DEFINE_int32(expect_min_demands, 0, "fail if fewer demands than this occurred");
+DEFINE_int32(expect_min_credits, 1, "fail if fewer credit returns than this");
+// The discriminator for the credit path: if credit is doing the refilling,
+// demand should barely fire. 0 means no limit.
+DEFINE_int32(expect_max_demands, 0, "fail if more demands than this occurred");
 
-namespace {
+// The owner registers the pipe, not the pipe library.
+REGISTRY_register(cvm::pipe_in, PIPE, cvm::registry::all)
 
-  // Kept alive for the run; the testbench refers to a stream by name.
-  std::map<std::string, std::unique_ptr<cvm::pipe::in_stream>>& streams() {
-    static std::map<std::string, std::unique_ptr<cvm::pipe::in_stream>> s;
-    return s;
-  }
-
-} // namespace
-
-extern "C" void tb_pipe_stimulus(const char* name, int elements,
-                                 int words_per_element) {
-  auto& slot = streams()[name];
-  slot = std::make_unique<cvm::pipe::in_stream>(
-      name, static_cast<std::size_t>(words_per_element));
-
+    extern "C" void tb_pipe_stimulus(unsigned int location, int total,
+                                     int words_per_element) {
   const std::size_t wpe = static_cast<std::size_t>(words_per_element);
-  const std::uint32_t total = static_cast<std::uint32_t>(elements);
+  auto next = std::make_shared<std::uint32_t>(0);
+  auto calls = std::make_shared<std::uint32_t>(0);
+  const std::uint32_t count = static_cast<std::uint32_t>(total);
 
-  // Element i is {i, ~i, i + 1}: the trailing words let the testbench tell a
-  // whole element from a partly delivered one.
-  const auto fill = [wpe](std::uint32_t* e, std::uint32_t i) {
-    for (std::size_t w = 0; w < wpe; ++w) {
-      e[w] = (w == 0) ? i : ((w == 1) ? ~i : i + 1);
+  cvm::pipe_producer producer;
+  producer.words_per_element = wpe;
+  producer.fill =
+      [location, next, calls, count, wpe](std::uint32_t* out,
+                                          std::size_t max_elements) -> std::size_t {
+    ++*calls;
+    if (FLAGS_dry_every > 0 &&
+        (*calls % static_cast<std::uint32_t>(FLAGS_dry_every)) == 0)
+      return 0;
+
+    std::size_t n = 0;
+    while (n < max_elements && *next < count) {
+      const std::uint32_t i = (*next)++;
+      std::uint32_t* e = out + n * wpe;
+      for (std::size_t w = 0; w < wpe; ++w)
+        e[w] = (w == 0) ? i : ((w == 1) ? ~i : i + 1);
+      ++n;
     }
+    if (*next >= count)
+      cvm::registry::messenger.signal<cvm::pipe_close>(location, {});
+    return n;
   };
-
-  if (FLAGS_produce_on_demand) {
-    // Nothing is queued up front. The transport pulls when it runs short, which
-    // is what lets a producer stream something it cannot hold in memory.
-    auto next = std::make_shared<std::uint32_t>(0);
-    slot->on_demand([fill, next, total, wpe](std::uint32_t* out,
-                                             std::size_t max_elements) {
-      std::size_t n = 0;
-      while (n < max_elements && *next < total) {
-        fill(out + n * wpe, (*next)++);
-        ++n;
-      }
-      // 0 means the producer is finished, and the stream closes itself.
-      return n;
-    });
-    return;
-  }
-
-  std::vector<std::uint32_t> words(wpe);
-  for (std::uint32_t i = 0; i < total; ++i) {
-    fill(words.data(), i);
-    slot->push(words);
-  }
-  slot->close();
+  // Async at the same priority as the pipe's own DPIs, so this install is
+  // serviced on the same thread and in order with them.
+  cvm::registry::messenger.signal_async<cvm::pipe_producer>(
+      location, producer, cvm::messenger::highest_priority);
 }
 
-extern "C" int tb_pipe_pending(const char* name) {
-  const auto it = streams().find(name);
-  if (it == streams().end())
-    return 0;
-  return static_cast<int>(it->second->pending());
+extern "C" int tb_pipe_expect_max_demands() {
+  return FLAGS_expect_max_demands;
+}
+
+extern "C" int tb_pipe_expect_min_credits() {
+  return FLAGS_expect_min_credits;
+}
+
+extern "C" int tb_pipe_expect_retries() {
+  return FLAGS_dry_every > 0 ? 1 : 0;
+}
+
+extern "C" int tb_pipe_expect_min_demands() {
+  return FLAGS_expect_min_demands;
+}
+
+extern "C" int tb_pipe_pending(unsigned int location) {
+  std::size_t elements = 0;
+  std::atomic<bool> done(false);
+  cvm::registry::messenger.signal_async<cvm::pipe_pending>(
+      location, {&elements, &done}, cvm::messenger::highest_priority);
+  done.wait(false);
+  return static_cast<int>(elements);
 }

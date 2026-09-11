@@ -3,41 +3,49 @@
 
 package cvm_pipe_pkg;
 
-    // Size of the push export's array formal, in words. Fixed, not
-    // per-instance: a DPI function has one signature per name, so two
-    // instances declaring different formal sizes is an error. Costs no
-    // registers, being a function argument.
-    localparam int CVM_PIPE_MAX_WORDS = 8192;
+    // A DPI function has one signature per name, so a family of names is what
+    // lets each instance use an array formal that fits it.
+    localparam int CVM_PIPE_MAX_WORDS = 32768;
 
-    // Binds this instance's scope to `name` and states how many elements one
-    // push may carry, so the host clamps to what the formal holds.
-    import "DPI-C" context function int cvm_pipe_open(
-        string name,
-        int    epoch_max_elements
+    // Smallest formal that holds `words`, or 0 if none does.
+    function automatic int cvm_pipe_slot(input int words);
+        if (words <=     8) return     8;
+        if (words <=    32) return    32;
+        if (words <=   128) return   128;
+        if (words <=   512) return   512;
+        if (words <=  2048) return  2048;
+        if (words <=  8192) return  8192;
+        if (words <= 32768) return 32768;
+        return 0;
+    endfunction
+
+    // Reports this instance's geometry and zeroes the C-owned write pointer
+    // through the export. Called once out of reset, as axi_sw_reset_ptrs is.
+    import "DPI-C" function void cvm_pipe_reset(
+        int unsigned location,
+        int unsigned depth,
+        int unsigned words_per_element,
+        int unsigned push_slot_words
     );
 
-    // Confirms `epoch` consumed and asks for the next.
-    //
-    // void on purpose: a returning import stops the emulation clock, and this
-    // is the call the normal path makes every epoch. The data arrives later on
-    // the push path. `room` bounds the batch so the host cannot overrun.
-    import "DPI-C" function void cvm_pipe_request(int handle, int epoch, int room);
+    // Runtime knobs, read once at setup. Returning imports, so they must not
+    // be called per cycle.
+    import "DPI-C" function int cvm_pipe_credit_every(int unsigned location);
+    import "DPI-C" function int cvm_pipe_demand_watermark(int unsigned location);
+    import "DPI-C" function int cvm_pipe_demand_every(int unsigned location);
 
-    // Fallback when a push has not landed in time: returns elements inline, so
-    // progress is guaranteed rather than likely. The host reclaims whatever
-    // push is outstanding and returns it here, so nothing is delivered twice.
-    // The only steady-state call that stops the clock.
-    //
-    // Open array so each instance can size its own relief buffer; a fixed
-    // formal would force every consumer to allocate the largest one.
-    import "DPI-C" function int cvm_pipe_relief(
-        input  int handle,
-        input  int max_elements,
-        output int unsigned data_words[],
-        output int unsigned is_last
+    // Returns credit by reporting the absolute read pointer. void, so the
+    // clock keeps running: this is the call the normal path makes.
+    import "DPI-C" function void cvm_pipe_credits(
+        int unsigned location,
+        int unsigned rptr
     );
 
-    import "DPI-C" function int cvm_pipe_epoch_size(string name);
-    import "DPI-C" function int cvm_pipe_headroom(string name);
+    // Asks for elements now. 1 pushed, 0 nothing pending, -1 retry next cycle.
+    // The only call with a return value, so the only one that stalls.
+    import "DPI-C" function int cvm_pipe_demand(
+        int unsigned location,
+        int unsigned rptr
+    );
 
 endpackage

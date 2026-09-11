@@ -43,7 +43,12 @@ module top;
 
     // HIER keys the recording, so several interposers can replay different
     // ones.
-    alu_replay #(.HIER("top.u_replay")) u_replay (
+    localparam cvm_topology_gen::topology_t topo = cvm_topology_gen::mods;
+
+    alu_replay #(
+        .HIER     ("top.u_replay"),
+        .LOCATION (cvm_topology_gen::get_location(topo.TOP.REPLAY.ID, 0))
+    ) u_replay (
         .clk      (clk),
         .reset_n  (reset_n),
         .enable   (enable),

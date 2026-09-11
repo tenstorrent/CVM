@@ -10,9 +10,13 @@
 #include <thread>
 #include <atomic>
 #include <unordered_map>
+#include <gflags/gflags_declare.h>
 #include "svdpi.h"
 #include "cvm/topology.hpp"
 #include "cvm/logger.hpp"
+
+// Whether a worker thread owns the queue; see callbacks::flush().
+DECLARE_bool(cb_async);
 
 namespace cvm {
 

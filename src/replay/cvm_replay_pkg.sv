@@ -14,6 +14,7 @@ package cvm_replay_pkg;
     // Opens the recording and installs the encoder the transport pulls from.
     // Returns 0, or -1 on failure. Called once, out of reset.
     import "DPI-C" function int cvm_replay_load (
+        int unsigned location,
         string hier,
         string layout,
         int    padded,
@@ -44,7 +45,7 @@ package cvm_replay_pkg;
         int    first_fail_cycle,   // -1 if none
         int    cycles,
         int    min_occupancy,      // closest the transport came to running dry
-        int    reliefs
+        int    demands
     );
 
 endpackage

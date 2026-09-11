@@ -15,7 +15,9 @@
 
 #include <gflags/gflags.h>
 
+#include "cvm/logger.hpp"
 #include "cvm/pipe.hpp"
+#include "cvm/registry.hpp"
 
 // Declared here rather than in a sim main() so the wrapper stays generic.
 DEFINE_int32(scenario, 0,
@@ -30,11 +32,6 @@ DEFINE_int32(expect_errors, 0,
              "how many ERROR-level reports this scenario should produce");
 
 namespace {
-
-  std::unique_ptr<cvm::pipe::in_stream>& stream() {
-    static std::unique_ptr<cvm::pipe::in_stream> s;
-    return s;
-  }
 
   constexpr int kCycles = 40;
   // The cycle whose expectation scenario 4 corrupts.
@@ -62,12 +59,13 @@ namespace {
 
 } // namespace
 
-extern "C" void tb_engine_stimulus(const char* hier, int padded) {
+extern "C" void tb_engine_stimulus(unsigned int location, int padded) {
   // The layout is word aligned, which keeps the packing below readable.
   const int pw = padded / 32;
   const int words = 1 + 3 * pw;
-  stream() = std::make_unique<cvm::pipe::in_stream>(
-      hier, static_cast<std::size_t>(words));
+  // Built up front and handed out on request: only 40 elements, and a
+  // pull-style producer is the only shape the transport has.
+  auto queued = std::make_shared<std::vector<std::uint32_t>>();
 
   const bool sparse = FLAGS_scenario == 3;
 
@@ -99,7 +97,28 @@ extern "C" void tb_engine_stimulus(const char* hier, int padded) {
     e[1] = in;
     e[1 + static_cast<std::size_t>(pw)] = exp;
     e[1 + 2 * static_cast<std::size_t>(pw)] = care;
-    stream()->push(e);
+    queued->insert(queued->end(), e.begin(), e.end());
   }
-  stream()->close();
+
+  auto sent = std::make_shared<std::size_t>(0);
+  cvm::pipe_producer producer;
+  producer.words_per_element = static_cast<std::size_t>(words);
+  producer.fill =
+      [location, queued, sent, words](std::uint32_t* out,
+                                      std::size_t max_elements) -> std::size_t {
+    const std::size_t total = queued->size() / static_cast<std::size_t>(words);
+    std::size_t n = 0;
+    while (n < max_elements && *sent < total) {
+      const std::uint32_t* e =
+          queued->data() + (*sent) * static_cast<std::size_t>(words);
+      for (int w = 0; w < words; ++w)
+        out[n * static_cast<std::size_t>(words) + w] = e[w];
+      ++*sent;
+      ++n;
+    }
+    if (*sent >= total)
+      cvm::registry::messenger.signal<cvm::pipe_close>(location, {});
+    return n;
+  };
+  cvm::registry::messenger.signal<cvm::pipe_producer>(location, producer);
 }

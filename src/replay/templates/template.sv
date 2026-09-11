@@ -20,10 +20,10 @@ module ${spec.name} #(
     parameter string HIER = "${spec.name}",
     // Elements buffered in the transport. Sizes a memory, so a parameter.
     parameter int    PIPE_DEPTH = ${spec.pipe_depth},
-    // Transport sizing, in elements. One element is ${spec.element_words} words at this width,
-    // which is why the epoch cap is computed rather than left at a fixed default.
-    parameter int    RELIEF_DEPTH = ${spec.relief_depth},
-    parameter int    EPOCH_MAX_ELEMENTS = ${spec.epoch_max_elements}
+    parameter int unsigned LOCATION = cvm_topology::nil,
+    // One element is ${spec.element_words} words at this width, which is why this is
+    // computed rather than left at a fixed default.
+    parameter int    PUSH_MAX_ELEMENTS = ${spec.push_max_elements}
 ) (
     // Infrastructure, not spec ports: all of the DUT's IO is on this clock, and
     // the recording's own clock signal, if it has one, is ignored.
@@ -82,7 +82,7 @@ module ${spec.name} #(
             loaded <= 1'b0;
         end else if (!loaded) begin
             loaded <= 1'b1;
-            if (cvm_replay_load(HIER, LAYOUT, PADDED, X_FILL_ONE) < 0)
+            if (cvm_replay_load(LOCATION, HIER, LAYOUT, PADDED, X_FILL_ONE) < 0)
                 $error("${spec.name}(%s): could not load the recording", HIER);
         end
     end
@@ -91,8 +91,8 @@ module ${spec.name} #(
         .HIER               (HIER),
         .PADDED             (PADDED),
         .PIPE_DEPTH         (PIPE_DEPTH),
-        .RELIEF_DEPTH       (RELIEF_DEPTH),
-        .EPOCH_MAX_ELEMENTS (EPOCH_MAX_ELEMENTS)
+        .LOCATION           (LOCATION),
+        .PUSH_MAX_ELEMENTS (PUSH_MAX_ELEMENTS)
     ) u_engine (
         .clk              (clk),
         .reset_n          (reset_n),

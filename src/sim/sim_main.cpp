@@ -14,6 +14,7 @@
 #include "Vtop.h"
 #include "cvm/logger.hpp"
 #include "cvm/plusargs.hpp"
+#include "cvm/registry.hpp"
 #include "verilated.h"
 
 int main(int argc, char** argv) {
@@ -22,15 +23,42 @@ int main(int argc, char** argv) {
   // Makes +plusargs visible to the gflags-backed cvm libraries.
   cvm::plusargs::parse();
 
+  // Constructs the registered components before the design runs.
+  cvm::registry::build();
+
   const std::unique_ptr<Vtop> top{new Vtop{ctx.get()}};
 
-  top->eval();
+  // Drains the framework's callback queue each slot, as a testbench does on
+  // any other simulator. Libraries queue work here; nothing else would run it
+  // -- unless a worker thread already owns the queue, in which case flushing
+  // here would block on a lock that worker never gives up.
+  const auto step = [&] {
+    top->eval();
+    if (!FLAGS_cb_async)
+      cvm::registry::callbacks.flush();
+  };
+
+  step();
   while (!ctx->gotFinish() && top->eventsPending()) {
     ctx->time(top->nextTimeSlot());
-    top->eval();
+    step();
   }
 
-  if (!ctx->gotFinish()) {
+  const bool finished = ctx->gotFinish();
+
+  // Tears the framework down while the design is still alive, as a testbench
+  // does on any other simulator: a component being destroyed may still want an
+  // export. It reports "not ready" while work is in flight, so keep draining.
+  bool down = false;
+  for (int tries = 0; tries < 1000 && !down; ++tries) {
+    down = cvm::registry::shutdown();
+    if (!down)
+      cvm::registry::callbacks.flush();
+  }
+
+  top->final();
+
+  if (!finished) {
     // Out of events without saying it was done, so whatever it waited for
     // never happened. Silence here would read as a pass.
     cvm::log(cvm::ERROR,
@@ -38,7 +66,9 @@ int main(int argc, char** argv) {
              ctx->time());
     return 1;
   }
-
-  top->final();
+  if (!down) {
+    cvm::log(cvm::ERROR, "sim: the framework never finished shutting down\n");
+    return 1;
+  }
   return 0;
 }

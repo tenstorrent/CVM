@@ -20,6 +20,7 @@ cc_library(
     deps = [
         ":replay_core",
         "//src/pipe:pipe_core",
+        "//src/registry:registry",
         "//third_party/dpi:dpi",
         "@com_github_gflags_gflags//:gflags",
     ],
@@ -45,7 +46,10 @@ verilog_library(
         "cvm_replay_engine.sv",
         "cvm_replay_pkg.sv",
     ],
-    deps = ["//src/pipe:pipe_sv"],
+    deps = [
+        "//src/pipe:pipe_sv",
+        "//:topology_sv",
+    ],
     visibility = ["//:__pkg__"],
 )
 

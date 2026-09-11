@@ -1,5 +1,15 @@
 load("@rules_hdl//verilog:providers.bzl", "verilog_library")
 load("@rules_verilator//verilator:defs.bzl", "verilator_cc_library")
+load("//:defs.bzl", "topology_gen")
+
+topology_gen(
+    name = "topology",
+    srcs = ["topology.yml"],
+    cc_attrs = {
+        "alwayslink": True,
+        "linkstatic": True,
+    },
+)
 
 verilog_library(
     name = "tb_engine_sv",
@@ -8,6 +18,7 @@ verilog_library(
         "tb_engine.sv",
     ],
     deps = [
+        ":topology_sv",
         "//:plusargs_sv",
         "//:replay_sv",
         "//:sim_sv",
@@ -34,6 +45,9 @@ cc_binary(
         "//:logger",
         "//:pipe",
         "//:plusargs",
+        "//:registry",
+        "//:topology",
+        ":topology_cc",
         "//:replay",
         "//:sim_dpi",
         "@com_github_gflags_gflags//:gflags",
@@ -47,9 +61,8 @@ cc_binary(
         srcs = ["//src/sim:sim.sh"],
         args = [
             "$(location :sim)",
-            # PIPE_DEPTH is 64, so keep the epoch and headroom under it.
-            "+cvm_pipe_epoch=16",
-            "+cvm_pipe_headroom=8",
+            # PIPE_DEPTH is 64, so keep the push cap under it.
+            "+cvm_pipe_demand_watermark=16",
         ] + scenario["args"],
         data = [":sim"],
     )

@@ -14,14 +14,16 @@
 // platform replays identical bits.
 module cvm_replay_engine #(
     parameter string HIER       = "",
+    // Identity for the transport. Replay still keys its own plusargs off HIER;
+    // that collapses into LOCATION in a later step.
+    parameter int unsigned LOCATION = cvm_topology::nil,
     parameter int    PADDED     = 32,
     // Elements buffered in the transport. Sizes a memory, so a parameter.
     parameter int    PIPE_DEPTH = 4096,
-    // In elements. The generator computes the epoch cap from the payload
-    // width: one element is 1 + 3*(PADDED/32) words against a fixed push
-    // formal, so any constant default fails to elaborate above some width.
-    parameter int    RELIEF_DEPTH = 8,
-    parameter int    EPOCH_MAX_ELEMENTS = 1024
+    // In elements. One element is 1 + 3*(PADDED/32) words against a fixed push
+    // formal, so any constant default fails to elaborate above some width; the
+    // generator computes it.
+    parameter int    PUSH_MAX_ELEMENTS = 1024
 ) (
     input  logic clk,
     input  logic reset_n,
@@ -45,14 +47,13 @@ module cvm_replay_engine #(
 
     logic          pipe_valid, pipe_pop, pipe_eos;
     logic [EW-1:0] pipe_data;
-    logic [31:0]   pipe_min_occupancy, pipe_reliefs;
+    logic [31:0]   pipe_min_occupancy, pipe_demands;
 
     cvm_pipe_in #(
-        .NAME               (HIER),
+        .LOCATION           (LOCATION),
         .WIDTH              (EW),
         .DEPTH              (PIPE_DEPTH),
-        .RELIEF_DEPTH       (RELIEF_DEPTH),
-        .EPOCH_MAX_ELEMENTS (EPOCH_MAX_ELEMENTS)
+        .PUSH_MAX_ELEMENTS (PUSH_MAX_ELEMENTS)
     ) u_pipe (
         .clk             (clk),
         .reset_n         (reset_n),
@@ -60,8 +61,12 @@ module cvm_replay_engine #(
         .data            (pipe_data),
         .pop             (pipe_pop),
         .eos             (pipe_eos),
-        .requests        (),
-        .reliefs         (pipe_reliefs),
+        // On from reset, not from `running`: the queue has to be filled
+        // before enable, or the first cycle's element arrives a cycle late.
+        .demand_en       (!done),
+        .credit_calls    (),
+        .demands         (pipe_demands),
+        .demand_retries  (),
         .min_occupancy_o (pipe_min_occupancy)
     );
 
@@ -210,7 +215,7 @@ module cvm_replay_engine #(
                 cvm_replay_report(HIER, int'(mismatches),
                                   fail_seen ? int'(first_fail_cycle) : -1,
                                   int'(cyc), int'(pipe_min_occupancy),
-                                  int'(pipe_reliefs));
+                                  int'(pipe_demands));
             end
         end
     end

@@ -1,34 +1,56 @@
 // SPDX-FileCopyrightText: © 2026 Tenstorrent USA, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Buffered host-to-HDL stream over plain DPI. The payload is opaque: WIDTH
-// bits per element, one element available per cycle.
+// Buffered host-to-HDL stream over plain DPI. The payload is opaque: WIDTH bits
+// per element, one element available per cycle.
 //
-// Delivery is push (host, clock runs) with an inline relief fetch when a push
-// is late. One always block per DPI caller, because a platform scopes a clock
-// stall to the block causing it; the datapath block calls nothing and holds no
-// $error, so it never stalls.
+// Flow control is credit based. RTL owns `rptr` and reports it; the host owns
+// `q` and `wptr_nxt` and pushes when it has room. Two calls out:
+//
+//   credits  the read pointer moved. void, so the clock keeps running.
+//   demand   the queue is low and `demand_en` says that matters. Returns a
+//            status, so this is the only call that stalls the clock.
+//
+// One always block per DPI caller, because a platform scopes a clock stall to
+// the block causing it; the datapath block calls nothing and reports nothing.
 //
 // Every storage element has one writer, which some platforms enforce by
-// silently dropping the others:
-//   * C owns `q` and `wptr_nxt` (the push and reset exports), so `wptr_nxt` is
-//     reset through cvm_pipe_open calling the reset export, never from RTL
-//   * the relief block owns `relief_q`, `relief_wr`, `relief_base` and
-//     `last_relieved` -- hence two end-of-stream flags, one per path
-//   * the datapath owns `rptr`, `relief_rd` and `wptr <= wptr_nxt`
+// silently dropping the others: the host owns `q`, `wptr_nxt` and the error
+// flags, so even reset goes through the export rather than from RTL.
+
+// One export per formal size, each with its own name, so a tool sees a distinct
+// signature and only the size this instance needs is elaborated. No comments
+// inside the body: a `//` would swallow the line continuation.
+`define CVM_PIPE_PUSH_EXPORT(N) \
+    function void cvm_pipe_in_push_``N( \
+        input int  unsigned count, \
+        input int  unsigned data_words[N], \
+        input byte unsigned is_last); \
+        if (reset_n) begin \
+            if (int'(ptr_t'(wptr_nxt - rptr)) + int'(count) > DEPTH) \
+                overrun = 1'b1; \
+            for (int i = 0; i < int'(count); i++) begin \
+                automatic idx_t w = idx_t'((wptr_nxt + ptr_t'(i)) % ptr_t'(DEPTH)); \
+                for (int b = 0; b < WIDTH; b++) begin \
+                    q[w][b] = data_words[i * WORDS + (b / 32)][b % 32]; \
+                end \
+            end \
+            wptr_nxt    = wptr_nxt + ptr_t'(count); \
+            last_pushed = (is_last != 8'd0); \
+        end \
+    endfunction \
+    export "DPI-C" function cvm_pipe_in_push_``N;
+
 module cvm_pipe_in #(
-    // Identity for per-instance plusarg lookup.
-    parameter string NAME  = "",
+    // Topology location: identity for the host side, the callbacks scope and
+    // plusarg keying.
+    parameter int unsigned LOCATION = cvm_topology::nil,
     // Payload bits per element.
-    parameter int    WIDTH = 32,
+    parameter int          WIDTH = 32,
     // Elements held. Sizes a memory, so a parameter not a plusarg.
-    parameter int    DEPTH = 4096,
-    // Relief buffer size, in elements not words, so widening the payload does
-    // not quietly shrink how many cycles of cover it provides. Costs
-    // RELIEF_DEPTH * WIDTH flops.
-    parameter int    RELIEF_DEPTH = 8,
-    // Most elements one push may carry. The host is told this at open.
-    parameter int    EPOCH_MAX_ELEMENTS = 1024
+    parameter int          DEPTH = 4096,
+    // Most elements one push may carry.
+    parameter int          EPOCH_MAX_ELEMENTS = 1024
 ) (
     input  logic clk,
     input  logic reset_n,
@@ -38,271 +60,185 @@ module cvm_pipe_in #(
     input  logic             pop,
     output logic             eos,
 
-    // Margin a run actually had. Relief fetches mean it ran correctly but
-    // slowly.
-    output logic [31:0] requests,
-    output logic [31:0] reliefs,
+    // An empty queue is only a problem when the consumer says it is; sometimes
+    // there is simply nothing pending.
+    input  logic demand_en,
+
+    // Margin a run actually had. Demands mean it ran correctly but slowly.
+    output logic [31:0] credit_calls,
+    output logic [31:0] demands,
+    // Demands the host answered with "not now". Distinguishes a transport that
+    // is merely being polled from one that is genuinely waiting on a producer.
+    output logic [31:0] demand_retries,
     output logic [31:0] min_occupancy_o
 );
 
     import cvm_pipe_pkg::*;
+    import cvm_topology::*;
 
-    localparam int WORDS = (WIDTH + 31) / 32;
+    `CVM_REGISTRY_SET_SCOPE(LOCATION)
 
-    if (EPOCH_MAX_ELEMENTS * WORDS > CVM_PIPE_MAX_WORDS)
-        $fatal(1, "cvm_pipe_in: EPOCH_MAX_ELEMENTS * WORDS exceeds the push formal; reduce EPOCH_MAX_ELEMENTS");
-    if (RELIEF_DEPTH < 1)
-        $fatal(1, "cvm_pipe_in: RELIEF_DEPTH must be at least one element");
+    localparam int WORDS     = (WIDTH + 31) / 32;
+    localparam int PUSH_SLOT = cvm_pipe_slot(EPOCH_MAX_ELEMENTS * WORDS);
+
+    if (PUSH_SLOT == 0)
+        $fatal(1, "cvm_pipe_in: EPOCH_MAX_ELEMENTS * WORDS exceeds the largest formal");
 
     typedef logic [$clog2(DEPTH + 1) - 1:0] ptr_t;
     typedef logic [$clog2(DEPTH) - 1:0]     idx_t;
 
-    // C-owned.
+    // Host-owned.
     logic [WIDTH-1:0] q [DEPTH];
     ptr_t             wptr_nxt;
     logic             last_pushed;
-    logic [7:0]       last_tag;
-    logic             last_tag_valid;
+    logic             overrun;
 
-    // CFG block.
+    // RTL-owned.
     logic opened;
-    int   handle, epoch_size, headroom, relief_mark;
-    logic bad_headroom;
-
-    // REQ block.
-    logic [7:0]  requested_epoch;
-    logic        requested;
-    int          request_age;
-    logic [31:0] reliefs_seen;
-
-    // RELIEF block. Words, because that is what the import returns.
-    int unsigned relief_q [RELIEF_DEPTH * WORDS];
-    // `relief_base` is what `relief_rd` stood at when the batch was fetched, so
-    // the datapath can index a slot without writing relief-owned state.
-    logic [31:0] relief_wr, relief_base;
-    logic        last_relieved;
-
-    // Datapath block.
-    ptr_t        rptr, wptr;
-    logic [31:0] relief_rd;
-    ptr_t        min_occupancy;
-    logic        starved;
-
-    // End of stream, whichever path carried it.
-    logic last_seen;
-    assign last_seen = last_pushed || last_relieved;
+    ptr_t rptr, wptr;
+    ptr_t min_occupancy;
+    logic starved;
+    // Latched at setup: these come from plusargs, and a returning import per
+    // cycle would stall the clock every cycle.
+    int   credit_every, demand_watermark, demand_every;
+    int   credit_count, demand_count;
+    logic demand_retry;
+    // Reported to the host, so it must be what the host can do arithmetic on:
+    // a monotonic element count, not the narrow pointer that wraps.
+    logic [31:0] rptr_total;
 
     ptr_t occupancy;
     assign occupancy = wptr - rptr;
 
-    ptr_t room;
-    assign room = ptr_t'(DEPTH) - occupancy;
+    assign valid = occupancy != '0;
+    assign data  = q[idx_t'(rptr % ptr_t'(DEPTH))];
 
-    // Relief elements are older than anything in `q`: a fetch is taken only
-    // when `q` is empty with nothing landing, so it reads first.
-    logic relief_valid;
-    assign relief_valid = relief_rd != relief_wr;
-
-    logic [WIDTH-1:0] relief_data;
-    always_comb begin
-        automatic int slot = int'(relief_rd - relief_base);
-        automatic int base = slot * WORDS;
-        relief_data = '0;
-        for (int b = 0; b < WIDTH; b++) begin
-            relief_data[b] = relief_q[base + (b / 32)][b % 32];
-        end
-    end
-
-    assign valid = relief_valid || (occupancy != '0);
-    assign data  = relief_valid ? relief_data : q[idx_t'(rptr % ptr_t'(DEPTH))];
-
-    // `wptr` lags C-owned `wptr_nxt` by a cycle, so a final push into an empty
-    // queue would otherwise assert eos before its own data was visible. Only
-    // reachable where exports are deferred, so no test covers this term; do not
-    // drop it on the strength of that.
-    assign eos = last_seen && !relief_valid && (occupancy == '0) &&
-                 (wptr == wptr_nxt);
+    // `wptr` lags the host-owned `wptr_nxt` by a cycle, so a final push into an
+    // empty queue would otherwise assert eos before its own data was visible.
+    assign eos = last_pushed && (occupancy == '0) && (wptr == wptr_nxt);
 
     assign min_occupancy_o = 32'(min_occupancy);
 
-    function void cvm_pipe_in_push(
-        input int  unsigned count,
-        input int  unsigned data_words[CVM_PIPE_MAX_WORDS],
-        input byte unsigned epoch,
-        input byte unsigned is_last
-    );
-        if (reset_n) begin
-            // Cannot be flopped out the way the datapath's are: an export
-            // body has no clock.
-            `ifndef CVM_PIPE_NO_ASSERTS_IN_DPI
-            assert (int'(ptr_t'(wptr_nxt - rptr)) + int'(count) <= DEPTH)
-                else $error("cvm_pipe_in(%s): queue overrun", NAME);
-            // Checked against C-owned state, so it holds however late a push
-            // lands. The RTL request counter would race: a push can land in
-            // the same evaluation as the request that asked for it.
-            assert (!last_tag_valid || epoch != last_tag)
-                else $error("cvm_pipe_in(%s): epoch %0d delivered twice",
-                            NAME, epoch);
-            `endif
-            for (int i = 0; i < int'(count); i++) begin
-                automatic idx_t w = idx_t'((wptr_nxt + ptr_t'(i)) % ptr_t'(DEPTH));
-                for (int b = 0; b < WIDTH; b++) begin
-                    q[w][b] = data_words[i * WORDS + (b / 32)][b % 32];
-                end
-            end
-            wptr_nxt       = wptr_nxt + ptr_t'(count);
-            last_pushed    = (is_last != 8'd0);
-            last_tag       = epoch;
-            last_tag_valid = 1'b1;
-        end
-    endfunction
-    export "DPI-C" function cvm_pipe_in_push;
+    // Only the size this instance needs is elaborated.
+    generate
+        case (PUSH_SLOT)
+            8:     begin : g_push `CVM_PIPE_PUSH_EXPORT(8)     end
+            32:    begin : g_push `CVM_PIPE_PUSH_EXPORT(32)    end
+            128:   begin : g_push `CVM_PIPE_PUSH_EXPORT(128)   end
+            512:   begin : g_push `CVM_PIPE_PUSH_EXPORT(512)   end
+            2048:  begin : g_push `CVM_PIPE_PUSH_EXPORT(2048)  end
+            8192:  begin : g_push `CVM_PIPE_PUSH_EXPORT(8192)  end
+            32768: begin : g_push `CVM_PIPE_PUSH_EXPORT(32768) end
+        endcase
+    endgenerate
 
-    function void cvm_pipe_in_reset();
-        wptr_nxt       = '0;
-        last_pushed    = '0;
-        last_tag       = '0;
-        last_tag_valid = 1'b0;
+    function void cvm_pipe_in_zero();
+        wptr_nxt    = '0;
+        last_pushed = '0;
+        overrun     = 1'b0;
     endfunction
-    export "DPI-C" function cvm_pipe_in_reset;
+    export "DPI-C" function cvm_pipe_in_zero;
 
-    // --- CFG: startup only, so its stalls happen once ---
-    //
+    // --- Setup: reports geometry and zeroes the host-owned pointer ---
     always_ff @(posedge clk) begin
         if (!reset_n) begin
-            opened       <= 1'b0;
-            bad_headroom <= 1'b0;
-            // Read only once opened, but reset anyway: an X here would do
-            // something silently if a condition were ever ungated.
-            handle       <= -1;
-            epoch_size   <= 0;
-            headroom     <= 0;
-            relief_mark  <= 0;
+            opened           <= 1'b0;
+            credit_every     <= 1;
+            demand_watermark <= 0;
+            demand_every     <= 1;
         end else if (!opened) begin
-            automatic int hr = cvm_pipe_headroom(NAME);
-            // At or above DEPTH it can never be exceeded, so the request would
-            // latch once and never re-arm.
-            if (hr >= DEPTH) begin
-                bad_headroom <= 1'b1;
-                hr = DEPTH / 2;
-            end
-            opened      <= 1'b1;
-            handle      <= cvm_pipe_open(NAME, EPOCH_MAX_ELEMENTS);
-            epoch_size  <= cvm_pipe_epoch_size(NAME);
-            headroom    <= hr;
-            // Well below the request watermark, so a merely slow push is not
-            // treated as a late one.
-            relief_mark <= (hr / 4 > 0) ? hr / 4 : 1;
+            automatic int ce = cvm_pipe_credit_every(LOCATION);
+            automatic int de = cvm_pipe_demand_every(LOCATION);
+            opened           <= 1'b1;
+            credit_every     <= (ce > 0) ? ce : 1;
+            demand_every     <= (de > 0) ? de : 1;
+            demand_watermark <= cvm_pipe_demand_watermark(LOCATION);
+            cvm_pipe_reset(LOCATION, DEPTH, WORDS, PUSH_SLOT);
         end
     end
 
-    // --- REQ: the void request, so this block need not stall ---
+    // --- Credits: void, so this block need not stall ---
     always_ff @(posedge clk) begin
         if (!reset_n) begin
-            requested       <= 1'b0;
-            request_age     <= 0;
-            requested_epoch <= '0;
-            requests        <= '0;
-            reliefs_seen    <= '0;
-        end else begin
-            request_age <= requested ? request_age + 1 : 0;
-
-            if (opened && !last_seen && !requested &&
-                    occupancy <= ptr_t'(headroom)) begin
-                requested       <= 1'b1;
-                request_age     <= 0;
-                requests        <= requests + 32'd1;
-                requested_epoch <= requested_epoch + 8'd1;
-                cvm_pipe_request(handle, int'(requested_epoch), int'(room));
-            end else if (requested && occupancy > ptr_t'(headroom)) begin
-                requested <= 1'b0;
-            end
-
-            // A relief fetch reclaimed the outstanding push, so the request
-            // must be reissued. Observed, not written across blocks.
-            if (reliefs != reliefs_seen) begin
-                reliefs_seen <= reliefs;
-                requested    <= 1'b0;
+            credit_count <= 0;
+            credit_calls <= '0;
+            rptr_total   <= '0;
+        end else if (opened && valid && pop) begin
+            rptr_total <= rptr_total + 32'd1;
+            if (credit_count + 1 >= credit_every) begin
+                credit_count <= 0;
+                credit_calls <= credit_calls + 32'd1;
+                // Pre-pop, because the overrun check below runs against the
+                // pre-edge `rptr`: reporting the post-pop value would let the
+                // host believe in a slot that does not exist yet.
+                cvm_pipe_credits(LOCATION, rptr_total);
+            end else begin
+                credit_count <= credit_count + 1;
             end
         end
     end
 
-    // --- RELIEF: the only steady-state stall, alone in its own block ---
+    // --- Demand: the only steady-state stall, alone in its own block ---
     always_ff @(posedge clk) begin
         if (!reset_n) begin
-            relief_wr     <= '0;
-            relief_base   <= '0;
-            reliefs       <= '0;
-            last_relieved <= 1'b0;
-        end else begin
-            // Outstanding longer than headroom was meant to cover, with
-            // occupancy nearly gone: the push is late, not merely slow.
-            //
-            // The age test separates late from not-yet-started -- at cold start
-            // the queue is empty before any push could have landed. The
-            // `wptr == wptr_nxt` gate matters because a push already landing
-            // holds elements older than anything the host would return now.
-            if (opened && !last_seen && !relief_valid && requested &&
-                    request_age >= headroom &&
-                    occupancy <= ptr_t'(relief_mark) && wptr == wptr_nxt) begin
-                automatic int unsigned is_last;
-                automatic int n = cvm_pipe_relief(handle, RELIEF_DEPTH,
-                                                  relief_q, is_last);
-                if (n > 0 || is_last != 0) begin
-                    // Written from slot zero into an empty buffer, so the
-                    // datapath indexes it as `relief_rd - relief_base`.
-                    relief_base <= relief_rd;
-                    relief_wr   <= relief_rd + 32'(n);
-                    reliefs     <= reliefs + 32'd1;
-                    if (is_last != 0) last_relieved <= 1'b1;
-                end
+            demand_count   <= 0;
+            demands        <= '0;
+            demand_retries <= '0;
+            demand_retry   <= 1'b0;
+        end else if (opened && demand_en && !last_pushed &&
+                     occupancy <= ptr_t'(demand_watermark)) begin
+            if (demand_retry || demand_count + 1 >= demand_every) begin
+                automatic int status = cvm_pipe_demand(LOCATION, rptr_total);
+                demand_count <= 0;
+                demands      <= demands + 32'd1;
+                if (status < 0) demand_retries <= demand_retries + 32'd1;
+                // -1 is "not now, ask again"; anything else waits out the
+                // interval, including 0, which means nothing is pending.
+                demand_retry <= status < 0;
+            end else begin
+                demand_count <= demand_count + 1;
             end
+        end else begin
+            demand_count <= 0;
+            demand_retry <= 1'b0;
         end
     end
 
-    // --- Datapath: no DPI, no $error, so nothing here forces a stall ---
+    // --- Datapath: no DPI, no reporting, so nothing here forces a stall ---
     always_ff @(posedge clk) begin
         if (!reset_n) begin
             rptr          <= '0;
             wptr          <= '0;
-            relief_rd     <= '0;
             min_occupancy <= ptr_t'(DEPTH);
             starved       <= 1'b0;
         end else begin
             wptr <= wptr_nxt;
-
-            if (valid && pop) begin
-                if (relief_valid) relief_rd <= relief_rd + 32'd1;
-                else              rptr      <= rptr + ptr_t'(1);
-            end
+            if (valid && pop) rptr <= rptr + ptr_t'(1);
             if (valid && occupancy < min_occupancy) min_occupancy <= occupancy;
-
-            // With relief in place, this is producer starvation rather than a
-            // transport shortfall. Flopped, not printed: a $display here routes
-            // to the host on some platforms, which is the stall this block
-            // exists to avoid.
-            if (opened && pop && !valid && !last_seen) starved <= 1'b1;
+            // Only a fault if the consumer was expecting something.
+            if (opened && pop && !valid && demand_en && !last_pushed)
+                starved <= 1'b1;
         end
     end
 
-    // --- REPORT: everything that talks to a console, out of the datapath ---
-    logic starved_reported, bad_headroom_reported;
+    // --- Report: everything that talks to a console ---
+    logic reported_starved, reported_overrun;
     always_ff @(posedge clk) begin
         if (!reset_n) begin
-            starved_reported      <= 1'b0;
-            bad_headroom_reported <= 1'b0;
+            reported_starved <= 1'b0;
+            reported_overrun <= 1'b0;
         end else begin
-            if (bad_headroom && !bad_headroom_reported) begin
-                bad_headroom_reported <= 1'b1;
-                $error("cvm_pipe_in(%s): headroom >= DEPTH %0d, using %0d",
-                       NAME, DEPTH, DEPTH / 2);
+            if (starved && !reported_starved) begin
+                reported_starved <= 1'b1;
+                $error("cvm_pipe_in(%0d): starved with demand enabled", LOCATION);
             end
-            if (starved && !starved_reported) begin
-                starved_reported <= 1'b1;
-                $error("cvm_pipe_in(%s): starved, host has no elements queued",
-                       NAME);
+            if (overrun && !reported_overrun) begin
+                reported_overrun <= 1'b1;
+                $error("cvm_pipe_in(%0d): queue overrun", LOCATION);
             end
         end
     end
 
 endmodule
+
+`undef CVM_PIPE_PUSH_EXPORT

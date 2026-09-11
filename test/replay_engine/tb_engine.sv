@@ -11,7 +11,7 @@ module top;
     import cvm_sim_pkg::*;
 
     // Queues this scenario's elements on the host.
-    import "DPI-C" function void tb_engine_stimulus(string hier, int padded);
+    import "DPI-C" function void tb_engine_stimulus(int unsigned location, int padded);
 
     localparam int PADDED         = 32;
     localparam int TIMEOUT_CYCLES = 5000;
@@ -42,8 +42,11 @@ module top;
     // the output slice.
     assign observed = {16'd0, y, tb_a};
 
+    localparam cvm_topology_gen::topology_t topo = cvm_topology_gen::mods;
+
     cvm_replay_engine #(
         .HIER       ("top.u_replay"),
+        .LOCATION   (cvm_topology_gen::get_location(topo.TOP.REPLAY.ID, 0)),
         .PADDED     (PADDED),
         .PIPE_DEPTH (64)
     ) u_replay (
@@ -79,7 +82,7 @@ module top;
         automatic int errors            = 0;
 
         cvm_error_count_start();
-        tb_engine_stimulus("top.u_replay", PADDED);
+        tb_engine_stimulus(cvm_topology_gen::get_location(topo.TOP.REPLAY.ID, 0), PADDED);
 
         // Falling edges, so they never race the rising edge the DUT uses.
         repeat (4) @(negedge clk);

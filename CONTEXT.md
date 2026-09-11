@@ -66,7 +66,7 @@ _Avoid_: passive, off, disabled, passthrough mode
 **Cycle origin**:
 The cycle on which replay starts, when `enable` rises. Every cycle number in a recording is counted
 from it. Renamed from `Time origin`, which described a simulation time that no longer exists.
-_Avoid_: t0, start time, time zero, epoch (epoch means something else here)
+_Avoid_: t0, start time, time zero, epoch
 
 **Conformance**:
 The property that a dump matches a port spec: every declared port present, with the expected width
@@ -88,19 +88,22 @@ An element's content: `WIDTH` bits whose meaning belongs entirely to the consume
 never interprets it.
 _Avoid_: data, message, fields
 
-**Epoch**:
-One batch of elements, pushed as a unit. The host does not send the next until the HDL has confirmed
-the last, which is what makes the protocol safe without the host guessing at free space.
-_Avoid_: burst, chunk, window, frame
+**Push**:
+The host handing elements to the HDL. Goes into the HDL's storage directly, so it never stops the
+clock.
+_Avoid_: send, write, transfer, burst
 
-**Headroom**:
-Elements still held when the next epoch is requested, sized to cover how long a push takes to land.
-Its whole job is that the request goes out early enough.
-_Avoid_: threshold, margin, low water mark
+**Credit**:
+The HDL telling the host how far its read pointer has moved, and so how much room it has freed. The
+pointer is absolute, so a dropped credit slows the stream but cannot corrupt it.
+_Avoid_: ack, confirm, token (a token is a `Drain callback`), epoch, headroom
 
-**Relief fetch**:
-The fallback that returns elements *inline* when a push has not landed in time, making progress
-guaranteed rather than likely. The only steady-state call that stops the clock, which is why it is a
-fallback.
-_Avoid_: flush (means draining the callback queue), bypass (means `Bypass mode`), demand fetch,
-pull
+**Demand**:
+The HDL asking for elements when its queue is low and it has work pending. The only call that
+returns a value, so the only one that stops the clock. Answers: delivered, finished, or ask again.
+_Avoid_: flush (means draining the callback queue), bypass (means `Bypass mode`), relief, pull
+
+**Drain callback**:
+Queued host-side work that pushes whatever is ready. It carries no elements of its own, which is why
+two of them are interchangeable and ordering comes from the buffer rather than from the queue.
+_Avoid_: credit (that is the HDL's message), job, task

@@ -12,7 +12,7 @@ exports_files(["sim.sh"])
 # so it cannot be compiled on its own.
 #
 # Requires the top module to be named `top`, and the binary to depend on
-# //:logger and //:plusargs.
+# //:logger and //:plusargs and //:registry.
 filegroup(
     name = "sim_main",
     srcs = ["sim_main.cpp"],

@@ -25,7 +25,7 @@ DEFINE_string(cvm_replay_mode, "REPLAY",
 // Replay is the producer, so replay registers the transport.
 REGISTRY_register(cvm::pipe_in, PIPE, cvm::registry::all)
 
-    namespace {
+namespace {
 
   struct session {
       std::unique_ptr<std::ifstream> file;

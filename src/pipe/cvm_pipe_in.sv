@@ -25,9 +25,11 @@
                 overrun = 1'b1; \
             for (int i = 0; i < int'(count); i++) begin \
                 automatic idx_t w = idx_t'((wptr_nxt + ptr_t'(i)) % ptr_t'(DEPTH)); \
-                for (int b = 0; b < WIDTH; b++) begin \
-                    q[w][b] = data_words[i * WORDS + (b / 32)][b % 32]; \
+                automatic logic [WORDS*32-1:0] padded; \
+                for (int j = 0; j < WORDS; j++) begin \
+                    padded[j * 32 +: 32] = data_words[i * WORDS + j]; \
                 end \
+                q[w] = T'(padded[WIDTH-1:0]); \
             end \
             wptr_nxt    = wptr_nxt + ptr_t'(count); \
             last_pushed = (is_last != 8'd0); \
@@ -41,7 +43,7 @@ module cvm_pipe_in #(
     // Buffer depth
     parameter int          DEPTH = 4096,
     // Most elements one push may carry.
-    parameter int          EPOCH_MAX_ELEMENTS = 1024
+    parameter int          PUSH_MAX_ELEMENTS = 1024
 ) (
     input  logic clk,
     input  logic reset_n,
@@ -71,10 +73,10 @@ module cvm_pipe_in #(
 
     localparam int WIDTH     = $bits(T);
     localparam int WORDS     = (WIDTH + 31) / 32;
-    localparam int PUSH_SLOT = cvm_pipe_slot(EPOCH_MAX_ELEMENTS * WORDS);
+    localparam int PUSH_SLOT = cvm_pipe_slot(PUSH_MAX_ELEMENTS * WORDS);
 
     if (PUSH_SLOT == 0)
-        $fatal(1, "cvm_pipe_in: EPOCH_MAX_ELEMENTS * WORDS exceeds the largest formal");
+        $fatal(1, "cvm_pipe_in: PUSH_MAX_ELEMENTS * WORDS exceeds the largest formal");
 
     typedef logic [$clog2(DEPTH + 1) - 1:0] ptr_t;
     typedef logic [$clog2(DEPTH) - 1:0]     idx_t;

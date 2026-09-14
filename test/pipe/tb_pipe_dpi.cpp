@@ -27,8 +27,8 @@ DEFINE_int32(expect_max_demands, 0, "fail if more demands than this occurred");
 // The owner registers the pipe, not the pipe library.
 REGISTRY_register(cvm::pipe_in, PIPE, cvm::registry::all)
 
-    extern "C" void tb_pipe_stimulus(unsigned int location, int total,
-                                     int words_per_element) {
+extern "C" void tb_pipe_stimulus(unsigned int location, int total,
+                                 int words_per_element) {
   const std::size_t wpe = static_cast<std::size_t>(words_per_element);
   auto next = std::make_shared<std::uint32_t>(0);
   auto calls = std::make_shared<std::uint32_t>(0);

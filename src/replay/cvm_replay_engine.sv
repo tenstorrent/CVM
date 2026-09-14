@@ -42,16 +42,17 @@ module cvm_replay_engine #(
     import cvm_replay_pkg::*;
     import cvm_pipe_pkg::*;
 
-    localparam int EW     = 32 + 3 * PADDED;
-    localparam int NWORDS = (PADDED + 31) / 32;
+    localparam int  EW     = 32 + 3 * PADDED;
+    localparam int  NWORDS = (PADDED + 31) / 32;
+    localparam type ET     = logic [EW-1:0];
 
-    logic          pipe_valid, pipe_pop, pipe_eos;
-    logic [EW-1:0] pipe_data;
-    logic [31:0]   pipe_min_occupancy, pipe_demands;
+    logic        pipe_valid, pipe_pop, pipe_eos;
+    ET           pipe_data;
+    logic [31:0] pipe_min_occupancy, pipe_demands;
 
     cvm_pipe_in #(
         .LOCATION           (LOCATION),
-        .WIDTH              (EW),
+        .T                  (ET),
         .DEPTH              (PIPE_DEPTH),
         .PUSH_MAX_ELEMENTS (PUSH_MAX_ELEMENTS)
     ) u_pipe (

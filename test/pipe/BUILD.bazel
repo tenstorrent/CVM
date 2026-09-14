@@ -49,8 +49,6 @@ cc_binary(
     name = "sim",
     srcs = [
         "tb_pipe_dpi.cpp",
-        # main() only; the checks are in tb_pipe.sv so they travel to other
-        # simulators.
         "//:sim_main",
     ],
     deps = [

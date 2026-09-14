@@ -4,10 +4,10 @@
 package cvm_pipe_pkg;
 
     // A DPI function has one signature per name, so a family of names is what
-    // lets each instance use an array formal that fits it.
+    // lets each instance use an array size that fits it.
     localparam int CVM_PIPE_MAX_WORDS = 32768;
 
-    // Smallest formal that holds `words`, or 0 if none does.
+    // Smallest size that holds `words`, or 0 if none does.
     function automatic int cvm_pipe_slot(input int words);
         if (words <=     8) return     8;
         if (words <=    32) return    32;
@@ -20,7 +20,7 @@ package cvm_pipe_pkg;
     endfunction
 
     // Reports this instance's geometry and zeroes the C-owned write pointer
-    // through the export. Called once out of reset, as axi_sw_reset_ptrs is.
+    // through the export. Called once out of reset.
     import "DPI-C" function void cvm_pipe_reset(
         int unsigned location,
         int unsigned depth,
@@ -28,8 +28,7 @@ package cvm_pipe_pkg;
         int unsigned push_slot_words
     );
 
-    // Runtime knobs, read once at setup. Returning imports, so they must not
-    // be called per cycle.
+    // Runtime knobs, read once at setup.
     import "DPI-C" function int cvm_pipe_credit_every(int unsigned location);
     import "DPI-C" function int cvm_pipe_demand_watermark(int unsigned location);
     import "DPI-C" function int cvm_pipe_demand_every(int unsigned location);
@@ -42,7 +41,7 @@ package cvm_pipe_pkg;
     );
 
     // Asks for elements now. 1 pushed, 0 nothing pending, -1 retry next cycle.
-    // The only call with a return value, so the only one that stalls.
+    // Has a return value to stall the emulation clock
     import "DPI-C" function int cvm_pipe_demand(
         int unsigned location,
         int unsigned rptr

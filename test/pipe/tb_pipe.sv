@@ -1,10 +1,6 @@
 // SPDX-FileCopyrightText: © 2026 Tenstorrent USA, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Clock, stimulus and checks live here so this runs on any simulator that can
-// elaborate it; the wrapper only advances time. DEPTH is far below the element
-// count, so the run cannot complete without repeatedly refilling.
-//
 // Scenarios run off one build, switched by plusarg: credits every element,
 // credits returned coarsely so demand has to do more, and a producer that runs
 // dry without finishing so the retry status is exercised. Delivery must be
@@ -14,9 +10,10 @@ module top;
     import cvm_sim_pkg::*;
 
     localparam int TOTAL             = 500;
+    localparam type T                = logic[100-1:0];
     // Deliberately not a multiple of 32: every replay width is, so this is the
     // only cover for the push export's partial-top-word path.
-    localparam int WIDTH             = 100;
+    localparam int WIDTH             = $bits(T);
     localparam int WORDS_PER_ELEMENT = (WIDTH + 31) / 32;
     localparam int TIMEOUT           = 200000;
 
@@ -40,9 +37,9 @@ module top;
 
     logic reset_n = 1'b0;
 
-    logic             valid, pop, eos;
-    logic [WIDTH-1:0] data;
-    logic [31:0]      credit_calls, demands, demand_retries, min_occupancy;
+    logic        valid, pop, eos;
+    T            data;
+    logic [31:0] credit_calls, demands, demand_retries, min_occupancy;
 
     logic [31:0] got;
     logic        order_ok, whole_ok, saw_eos;
@@ -54,7 +51,7 @@ module top;
 
     cvm_pipe_in #(
         .LOCATION (LOCATION),
-        .WIDTH    (WIDTH),
+        .T        (T),
         .DEPTH    (64)
     ) u_pipe (
         .clk             (clk),

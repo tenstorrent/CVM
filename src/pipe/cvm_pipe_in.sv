@@ -1,26 +1,20 @@
 // SPDX-FileCopyrightText: © 2026 Tenstorrent USA, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Buffered host-to-HDL stream over plain DPI. The payload is opaque: WIDTH bits
-// per element, one element available per cycle.
+// Buffered host-to-HDL stream using mostly asynchronous DPI for emulation
+// performance.
 //
 // Flow control is credit based. RTL owns `rptr` and reports it; the host owns
-// `q` and `wptr_nxt` and pushes when it has room. Two calls out:
+// `q` and `wptr_nxt` and pushes when it has room. Two main DPI imports:
 //
-//   credits  the read pointer moved. void, so the clock keeps running.
-//   demand   the queue is low and `demand_en` says that matters. Returns a
-//            status, so this is the only call that stalls the clock.
+//   credits: the read pointer moved. void, so the emulator clock keeps
+//            running.
 //
-// One always block per DPI caller, because a platform scopes a clock stall to
-// the block causing it; the datapath block calls nothing and reports nothing.
-//
-// Every storage element has one writer, which some platforms enforce by
-// silently dropping the others: the host owns `q`, `wptr_nxt` and the error
-// flags, so even reset goes through the export rather than from RTL.
+//   demand:  the queue is low and `demand_en` says that matters. Returns a
+//            status, so stalls the clock.
 
 // One export per formal size, each with its own name, so a tool sees a distinct
-// signature and only the size this instance needs is elaborated. No comments
-// inside the body: a `//` would swallow the line continuation.
+// signature and only the size this instance needs is elaborated.
 `define CVM_PIPE_PUSH_EXPORT(N) \
     function void cvm_pipe_in_push_``N( \
         input int  unsigned count, \
@@ -42,12 +36,9 @@
     export "DPI-C" function cvm_pipe_in_push_``N;
 
 module cvm_pipe_in #(
-    // Topology location: identity for the host side, the callbacks scope and
-    // plusarg keying.
     parameter int unsigned LOCATION = cvm_topology::nil,
-    // Payload bits per element.
-    parameter int          WIDTH = 32,
-    // Elements held. Sizes a memory, so a parameter not a plusarg.
+    parameter type         T     = logic[32-1:0],
+    // Buffer depth
     parameter int          DEPTH = 4096,
     // Most elements one push may carry.
     parameter int          EPOCH_MAX_ELEMENTS = 1024
@@ -55,10 +46,10 @@ module cvm_pipe_in #(
     input  logic clk,
     input  logic reset_n,
 
-    output logic             valid,
-    output logic [WIDTH-1:0] data,
-    input  logic             pop,
-    output logic             eos,
+    output logic valid,
+    output T     data,
+    input  logic pop,
+    output logic eos,
 
     // An empty queue is only a problem when the consumer says it is; sometimes
     // there is simply nothing pending.
@@ -78,6 +69,7 @@ module cvm_pipe_in #(
 
     `CVM_REGISTRY_SET_SCOPE(LOCATION)
 
+    localparam int WIDTH     = $bits(T);
     localparam int WORDS     = (WIDTH + 31) / 32;
     localparam int PUSH_SLOT = cvm_pipe_slot(EPOCH_MAX_ELEMENTS * WORDS);
 
@@ -87,11 +79,15 @@ module cvm_pipe_in #(
     typedef logic [$clog2(DEPTH + 1) - 1:0] ptr_t;
     typedef logic [$clog2(DEPTH) - 1:0]     idx_t;
 
+    // Every storage element has one writer, as some platforms silently drop
+    // HDL and/or DPI writers. The host owns `q`, `wptr_nxt` and the error
+    // flags. Even reset goes through the export rather than from RTL.
+
     // Host-owned.
-    logic [WIDTH-1:0] q [DEPTH];
-    ptr_t             wptr_nxt;
-    logic             last_pushed;
-    logic             overrun;
+    T     q [DEPTH];
+    ptr_t wptr_nxt;
+    logic last_pushed;
+    logic overrun;
 
     // RTL-owned.
     logic opened;
@@ -139,6 +135,9 @@ module cvm_pipe_in #(
     endfunction
     export "DPI-C" function cvm_pipe_in_zero;
 
+    // One always block per DPI caller, some platforms scopes a clock stall to
+    // the block causing it; the datapath block calls nothing and reports nothing.
+
     // --- Setup: reports geometry and zeroes the host-owned pointer ---
     always_ff @(posedge clk) begin
         if (!reset_n) begin
@@ -157,7 +156,7 @@ module cvm_pipe_in #(
         end
     end
 
-    // --- Credits: void, so this block need not stall ---
+    // --- Credits: void DPI call, so this block need not stall ---
     always_ff @(posedge clk) begin
         if (!reset_n) begin
             credit_count <= 0;
@@ -178,7 +177,7 @@ module cvm_pipe_in #(
         end
     end
 
-    // --- Demand: the only steady-state stall, alone in its own block ---
+    // --- Demand: the only emulation clock stall, alone in its own block ---
     always_ff @(posedge clk) begin
         if (!reset_n) begin
             demand_count   <= 0;

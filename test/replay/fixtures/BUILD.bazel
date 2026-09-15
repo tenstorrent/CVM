@@ -1,0 +1,5 @@
+filegroup(
+    name = "evcds",
+    srcs = glob(["*.evcd"]),
+    visibility = ["//visibility:public"],
+)

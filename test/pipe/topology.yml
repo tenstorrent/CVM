@@ -1,0 +1,5 @@
+top:
+  pipe:
+    count: 1
+    type:
+      - pipe

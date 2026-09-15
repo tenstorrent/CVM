@@ -1,0 +1,15 @@
+cc_test(
+    name = "evcd_test",
+    size = "small",
+    srcs = ["evcd_test.cpp"],
+    deps = [
+        "//:evcd",
+        "//third_party/vpi:vpi",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+test_suite(
+    name = "smoke",
+    tests = ["evcd_test"],
+)

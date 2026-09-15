@@ -54,6 +54,7 @@ cc_library(
     visibility = ["//visibility:public"],
 )
 
+
 verilog_library(
     name = "registry_sv",
     deps = ["//src/registry:registry_sv"],
@@ -75,5 +76,36 @@ verilog_library(
 cc_library(
     name = "type_traits",
     deps = ["//src/type_traits:type_traits"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "evcd",
+    deps = ["//src/evcd:evcd"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "replay",
+    deps = ["//src/replay:replay"],
+    visibility = ["//visibility:public"],
+)
+
+verilog_library(
+    name = "replay_sv",
+    deps = ["//src/replay:replay_sv"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "pipe",
+    deps = ["//src/pipe:pipe"],
+    visibility = ["//visibility:public"],
+)
+
+
+verilog_library(
+    name = "pipe_sv",
+    deps = ["//src/pipe:pipe_sv"],
     visibility = ["//visibility:public"],
 )

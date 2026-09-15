@@ -28,6 +28,7 @@ path = [
     "**/*.bzl",
     "**/*.sh",
     "**/*.yml",
+    "**/*.evcd",
     "deps/requirements.in",
     "deps/requirements_lock.txt",
 ]
@@ -41,6 +42,7 @@ SPDX-License-Identifier = "Apache-2.0"
 # verbatim into generated output; their licensing is recorded here instead.
 [[annotations]]
 path = [
+    "src/replay/templates/**",
     "src/packet_gen/templates/**",
     "src/topology/templates/**",
 ]

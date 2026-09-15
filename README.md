@@ -187,6 +187,68 @@ For now, fields using the same qualify should be contiguous. This requirement ma
             width: [[2, 2, 4]] # multi-dimensional field of 2x2, each with width of 4. This can be mixed with variants. 
 ```
 
+## replay (experimental)
+
+Replays a recorded vector stream against an arbitrary Verilog module:
+drives the module's inputs from the recorded timeline and checks its outputs
+against the recorded values. Useful for turning a full-chip capture into a
+block-level regression, or for reproducing a failure without the surrounding
+environment.
+
+A yaml port spec format is introduced to generate SV glue.
+
+```yaml
+# alu_ports.yml
+alu_replay:
+  dut: alu
+  ports:
+    clk:    { width: 1, dir: in }
+    opa:    { width: 4, dir: in }
+    result: { width: 5, dir: out }
+    valid:  { width: 1, dir: out, check: false }   # passed through, not compared
+    dbg:    { width: 4, dir: in, dump_name: dbg_bus }  # dump uses another name
+    tclk:   { width: 1, dir: in, source: external }    # always TB-driven
+```
+
+```python
+load("@cvm//:defs.bzl", "replay")
+
+replay(name = "alu_replay", srcs = ["alu_ports.yml"])
+```
+
+Replay is a registry component, so it needs a [topology](#topology): declare a
+node of type `replay` and pass its location to the generated module. The rule's
+optional `topology` attribute is a separate thing -- it only resolves
+`${A.B.C}` interpolation of widths and depths inside the yml, so a spec with
+literal widths does not need it.
+
+`dir` is **always** from the DUT's perspective: `in` means driven *into* the DUT.
+
+The generated module is an interposer: the DUT's IO flows through it, so every
+port appears on both sides (`*_tb` towards the testbench, `*_dut` towards the
+DUT). It never instantiates the DUT and never calls `$finish`, so it drops into a
+larger testbench. `enable`'s rising edge is the time origin, and every recorded
+timestamp is applied relative to it, which lets a testbench initialise first and
+then hand over. When `enable` falls, or the dump runs out, the DUT's inputs revert
+to the testbench side.
+
+```systemverilog
+alu_replay #(.LOCATION(cvm_topology_gen::get_location(topo.TOP.REPLAY.ID, 0))) u_replay (
+    .enable(enable), .done(done),
+    .clk_tb(clk_tb), .clk_dut(clk_dut), /* ... */ );
+alu u_dut (.clk(clk_dut), /* ... */ );
+```
+
+`enable` is the only control over who drives the DUT: until it rises, and after
+replay finishes, the interposer is a transparent wire. An instance with no
+recording configured reports `done` without ever driving, so leaving one out is
+how you bypass it.
+
+Runtime plusargs, so the vector file needs no recompile:
+
++ `+cvm_replay_file=<path>`, or `+cvm_replay_file=<path>=<file>,...` keyed by topology
+  path, e.g. `TOP.REPLAY=dump.evcd`
+
 ## FAQ
 
 + Why can't I call coroutines (`task<T>`) from normal functions?

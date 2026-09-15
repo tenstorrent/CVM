@@ -18,6 +18,11 @@ cc_library(
 
 verilog_library(
     name = "registry_sv",
-    srcs = ["registry.sv"],
+    srcs = [
+        # Runs the queue from the design's clock; its DPI is in registry_dpi.
+        "cvm_registry_callbacks.sv",
+        "registry.sv",
+    ],
+    deps = ["@cvm//:plusargs_sv"],
     visibility = ["//:__pkg__"],
 )

@@ -1,0 +1,5 @@
+top:
+  replay:
+    count: 1
+    type:
+      - replay

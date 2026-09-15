@@ -1,0 +1,102 @@
+load("@rules_hdl//verilog:providers.bzl", "verilog_library")
+load("@cvm_pypi//:requirements.bzl", "requirement")
+
+# One class per header, so a consumer takes only the layer it needs and the
+# unit tests link neither the registry nor the transport.
+cc_library(
+    name = "cycle_element",
+    hdrs = ["replay_cycle_element.hpp"],
+    strip_include_prefix = ".",
+    include_prefix = "cvm",
+    visibility = ["//:__subpackages__"],
+)
+
+cc_library(
+    name = "source",
+    hdrs = ["replay_source.hpp"],
+    srcs = ["replay_source.cpp"],
+    deps = [
+        ":cycle_element",
+        "//:evcd",
+        "//:logger",
+    ],
+    strip_include_prefix = ".",
+    include_prefix = "cvm",
+    visibility = ["//:__subpackages__"],
+)
+
+cc_library(
+    name = "encoder",
+    hdrs = ["replay_encoder.hpp"],
+    srcs = ["replay_encoder.cpp"],
+    deps = [":source"],
+    strip_include_prefix = ".",
+    include_prefix = "cvm",
+    visibility = ["//:__subpackages__"],
+)
+
+# The registry component: owns a source, an encoder and the transport.
+cc_library(
+    name = "engine",
+    hdrs = ["replay_engine.hpp"],
+    srcs = ["replay_engine.cpp"],
+    deps = [
+        ":encoder",
+        ":source",
+        "//:logger",
+        "//src/pipe:pipe_core",
+        "//:registry",
+        "//:topology",
+        "@com_github_gflags_gflags//:gflags",
+    ],
+    strip_include_prefix = ".",
+    include_prefix = "cvm",
+    visibility = ["//:__subpackages__"],
+)
+
+cc_library(
+    name = "replay_dpi",
+    srcs = ["replay_dpi.cpp"],
+    deps = [
+        ":engine",
+        "//:registry",
+    ],
+    alwayslink = True,
+    linkstatic = True,
+)
+
+# What a testbench depends on: the replay layer plus the DPI entry points.
+cc_library(
+    name = "replay",
+    deps = [
+        ":engine",
+        ":replay_dpi",
+        # Replay's transport, so a testbench needs only //:replay.
+        "//src/pipe:pipe",
+    ],
+    visibility = ["//:__pkg__"],
+)
+
+verilog_library(
+    name = "replay_sv",
+    srcs = [
+        "cvm_replay_engine.sv",
+        "cvm_replay_pkg.sv",
+    ],
+    deps = [
+        "//src/pipe:pipe_sv",
+        "//:topology_sv",
+    ],
+    visibility = ["//:__pkg__"],
+)
+
+py_binary(
+    name = "replay_gen",
+    srcs = ["replay_gen.py"],
+    deps = [
+        requirement("Mako"),
+        requirement("PyYAML"),
+    ],
+    data = glob(["templates/template.*"]),
+    visibility = ["//visibility:public"],
+)

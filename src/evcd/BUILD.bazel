@@ -1,0 +1,12 @@
+cc_library(
+    name = "evcd",
+    hdrs = ["evcd.hpp"],
+    srcs = [
+        "evcd.cpp",
+        "evcd_state.cpp",
+    ],
+    deps = ["//:logger"],
+    strip_include_prefix = ".",
+    include_prefix = "cvm",
+    visibility = ["//:__pkg__"],
+)

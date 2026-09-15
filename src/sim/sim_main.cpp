@@ -11,11 +11,18 @@
 
 #include <memory>
 
+#include <gflags/gflags_declare.h>
+
 #include "Vtop.h"
 #include "cvm/logger.hpp"
 #include "cvm/plusargs.hpp"
 #include "cvm/registry.hpp"
 #include "verilated.h"
+
+// Defined by //:callbacks. A worker thread owns the queue when this is set and
+// holds the flush lock for the whole run, so a caller must not flush as well --
+// the same guard rv_tester applies in SystemVerilog via `cb_poll`.
+DECLARE_bool(cb_async);
 
 // From //:sim_dpi, which every simulation links: the testbench arms this at the
 // start of the run, so it is also how an end-of-run check gets noticed.
@@ -33,9 +40,7 @@ int main(int argc, char** argv) {
   const std::unique_ptr<Vtop> top{new Vtop{ctx.get()}};
 
   // Drains the framework's callback queue each slot, as a testbench does on
-  // any other simulator. Libraries queue work here; nothing else would run it
-  // -- unless a worker thread already owns the queue, in which case flushing
-  // here would block on a lock that worker never gives up.
+  // any other simulator. Libraries queue work here; nothing else would run it.
   const auto step = [&] {
     top->eval();
     if (!FLAGS_cb_async)
@@ -58,11 +63,12 @@ int main(int argc, char** argv) {
 
   // Tears the framework down while the design is still alive, as a testbench
   // does on any other simulator: a component being destroyed may still want an
-  // export. It reports "not ready" while work is in flight, so keep draining.
+  // export. It reports "not ready" while work is in flight, so keep draining --
+  // unless the worker is still the one draining, as above.
   bool down = false;
   for (int tries = 0; tries < 1000 && !down; ++tries) {
     down = cvm::registry::shutdown();
-    if (!down)
+    if (!down && !FLAGS_cb_async)
       cvm::registry::callbacks.flush();
   }
 

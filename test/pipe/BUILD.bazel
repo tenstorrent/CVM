@@ -33,7 +33,8 @@ verilog_library(
     deps = [
         ":topology_sv",
         "//:pipe_sv",
-        "//:sim_sv",
+        "//:registry_sv",
+        "//test/lib/sim:sim_sv",
     ],
     top_module = "top",
 )
@@ -49,7 +50,7 @@ cc_binary(
     name = "sim",
     srcs = [
         "tb_pipe_dpi.cpp",
-        "//:sim_main",
+        "//test/lib/sim:sim_main",
     ],
     deps = [
         ":tb_pipe_veri_lib",
@@ -57,7 +58,7 @@ cc_binary(
         "//:pipe",
         "//:plusargs",
         "//:registry",
-        "//:sim_dpi",
+        "//test/lib/sim:sim_dpi",
         "//:topology",
         ":topology_cc",
         "@com_github_gflags_gflags//:gflags",
@@ -69,7 +70,7 @@ cc_binary(
 [
     sh_test(
         name = "sh_" + scenario["name"],
-        srcs = ["//src/sim:sim.sh"],
+        srcs = ["//test/lib/sim:sim.sh"],
         args = ["$(location :sim)"] + scenario["args"],
         data = [":sim"],
     )

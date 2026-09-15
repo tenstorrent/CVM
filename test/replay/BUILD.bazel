@@ -42,7 +42,8 @@ verilog_library(
         ":topology_sv",
         ":alu_replay_sv",
         "//:plusargs_sv",
-        "//:sim_sv",
+        "//:registry_sv",
+        "//test/lib/sim:sim_sv",
     ],
     top_module = "top",
 )
@@ -67,7 +68,7 @@ cc_binary(
     name = "sim",
     # main() only; the checks are in tb_top.sv so they travel to other
     # simulators.
-    srcs = ["//:sim_main"],
+    srcs = ["//test/lib/sim:sim_main"],
     deps = [
         ":tb_flags",
         ":tb_top_veri_lib",
@@ -77,7 +78,7 @@ cc_binary(
         "//:topology",
         ":topology_cc",
         "//:replay",
-        "//:sim_dpi",
+        "//test/lib/sim:sim_dpi",
     ],
 )
 
@@ -86,7 +87,7 @@ cc_binary(
 [
     sh_test(
         name = "sh_" + scenario["name"],
-        srcs = ["//src/sim:sim.sh"],
+        srcs = ["//test/lib/sim:sim.sh"],
         args = ["$(location :sim)"] + scenario["args"],
         data = [
             ":sim",

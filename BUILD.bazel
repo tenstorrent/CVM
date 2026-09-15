@@ -54,6 +54,7 @@ cc_library(
     visibility = ["//visibility:public"],
 )
 
+
 verilog_library(
     name = "registry_sv",
     deps = ["//src/registry:registry_sv"],
@@ -102,23 +103,6 @@ cc_library(
     visibility = ["//visibility:public"],
 )
 
-filegroup(
-    name = "sim_main",
-    srcs = ["//src/sim:sim_main"],
-    visibility = ["//visibility:public"],
-)
-
-cc_library(
-    name = "sim_dpi",
-    deps = ["//src/sim:sim_dpi"],
-    visibility = ["//visibility:public"],
-)
-
-verilog_library(
-    name = "sim_sv",
-    deps = ["//src/sim:sim_sv"],
-    visibility = ["//visibility:public"],
-)
 
 verilog_library(
     name = "pipe_sv",

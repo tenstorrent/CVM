@@ -40,6 +40,8 @@ module top;
 
     localparam cvm_topology_gen::topology_t topo = cvm_topology_gen::mods;
 
+    cvm_callbacks u_cb (.clk(clk), .reset_n(reset_n));
+
     cvm_replay_engine #(
         .LOCATION   (cvm_topology_gen::get_location(topo.TOP.REPLAY.ID, 0)),
         .PORT_BITS     (PORT_BITS),

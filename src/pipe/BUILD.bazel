@@ -5,8 +5,8 @@ cc_library(
     hdrs = ["pipe.hpp"],
     srcs = ["pipe.cpp"],
     deps = [
-        "//src/registry:registry",
-        "//src/topology:topology",
+        "//:registry",
+        "//:topology",
         "//:logger",
     ],
     strip_include_prefix = ".",
@@ -19,8 +19,8 @@ cc_library(
     srcs = ["pipe_dpi.cpp"],
     deps = [
         ":pipe_core",
-        "//src/registry:registry",
-        "//src/topology:topology",
+        "//:registry",
+        "//:topology",
         "//:logger",
         "//third_party/dpi:dpi",
         "@com_github_gflags_gflags//:gflags",

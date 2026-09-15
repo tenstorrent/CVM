@@ -21,7 +21,8 @@ verilog_library(
         ":topology_sv",
         "//:plusargs_sv",
         "//:replay_sv",
-        "//:sim_sv",
+        "//:registry_sv",
+        "//test/lib/sim:sim_sv",
     ],
     top_module = "top",
 )
@@ -38,7 +39,7 @@ cc_binary(
     srcs = [
         "tb_engine_dpi.cpp",
         # main() only; the checks are in tb_engine.sv.
-        "//:sim_main",
+        "//test/lib/sim:sim_main",
     ],
     deps = [
         ":tb_engine_veri_lib",
@@ -48,7 +49,7 @@ cc_binary(
         "//:registry",
         "//:topology",
         ":topology_cc",
-        "//:sim_dpi",
+        "//test/lib/sim:sim_dpi",
         "@com_github_gflags_gflags//:gflags",
     ],
 )
@@ -57,7 +58,7 @@ cc_binary(
 [
     sh_test(
         name = "sh_" + scenario["name"],
-        srcs = ["//src/sim:sim.sh"],
+        srcs = ["//test/lib/sim:sim.sh"],
         args = [
             "$(location :sim)",
             # PIPE_DEPTH is 64, so keep the push cap under it.

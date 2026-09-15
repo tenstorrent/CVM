@@ -14,7 +14,7 @@ exports_files(["sim.sh"])
 #
 # Requires the top module to be named `top`, and the binary to depend on
 # //:logger and //:plusargs and //:registry. The testbench drives queued
-# callbacks itself, by instantiating cvm_callbacks; this only advances time.
+# callbacks itself, by instantiating cvm_registry_callbacks; this only advances time.
 filegroup(
     name = "sim_main",
     srcs = ["sim_main.cpp"],

@@ -49,7 +49,7 @@ module top;
     logic demand_en;
     assign demand_en = !saw_eos;
 
-    cvm_callbacks u_cb (.clk(clk), .reset_n(reset_n));
+    cvm_registry_callbacks u_cb (.clk(clk), .reset_n(reset_n));
 
     cvm_pipe_in #(
         .LOCATION (LOCATION),

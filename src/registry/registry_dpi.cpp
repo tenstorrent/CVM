@@ -23,9 +23,10 @@ extern "C" {
     return 0;
   }
 
-  // Driven from the design's clock by cvm_callbacks, so nothing host-side has
-  // to own a loop. Returns a value only to keep a simulator from reordering it.
-  unsigned char cvm_flush_callbacks() {
+  // Driven from the design's clock by cvm_registry_callbacks, so nothing
+  // host-side has to own a loop. Returns a value only to keep a simulator from
+  // reordering it.
+  unsigned char cvm_registry_flush_callbacks() {
     cvm::registry::callbacks.flush();
     return 1;
   }

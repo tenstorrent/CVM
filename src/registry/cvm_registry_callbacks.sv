@@ -7,7 +7,7 @@
 // simulator.
 //
 // Instantiate once per testbench, on the clock the design runs on.
-module cvm_callbacks #(
+module cvm_registry_callbacks #(
     // Which edge runs the queue. The negedge settles a callback's writes before
     // the posedge a design samples on; a platform that cannot schedule on the
     // negedge sets this instead.
@@ -19,7 +19,7 @@ module cvm_callbacks #(
 
     // Returns a value so a simulator cannot reorder it around the design's own
     // writes.
-    import "DPI-C" function byte unsigned cvm_flush_callbacks();
+    import "DPI-C" function byte unsigned cvm_registry_flush_callbacks();
 
     logic opened, poll;
 
@@ -39,11 +39,11 @@ module cvm_callbacks #(
     generate
         if (ON_POSEDGE) begin : g_posedge
             always @(posedge clk) begin
-                if (poll) void'(cvm_flush_callbacks());
+                if (poll) void'(cvm_registry_flush_callbacks());
             end
         end else begin : g_negedge
             always @(negedge clk) begin
-                if (poll) void'(cvm_flush_callbacks());
+                if (poll) void'(cvm_registry_flush_callbacks());
             end
         end
     endgenerate

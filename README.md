@@ -187,7 +187,7 @@ For now, fields using the same qualify should be contiguous. This requirement ma
             width: [[2, 2, 4]] # multi-dimensional field of 2x2, each with width of 4. This can be mixed with variants. 
 ```
 
-## replay
+## replay (experimental)
 
 Replays a recorded vector stream against an arbitrary Verilog module:
 drives the module's inputs from the recorded timeline and checks its outputs

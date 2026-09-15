@@ -32,10 +32,6 @@ fi
 if [[ $status -ne 0 ]]; then
     exit $status
 fi
-# `ERROR` in capitals is reserved for host-side misuse that must always fail a
-# run, such as a plusarg that was never set. Ordinary cvm::log(cvm::ERROR)
-# messages read `Error: ` and are not matched, because scenarios legitimately
-# expect them and check the count through cvm_error_count().
 if grep -qE '%Error|^FAIL:|ERROR' <<< "$out"; then
     echo "sim.sh: simulation reported an error"
     exit 1

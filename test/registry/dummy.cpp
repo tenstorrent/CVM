@@ -5,6 +5,7 @@
 #include <unordered_set>
 #include "cvm/topology.hpp"
 #include "cvm/registry.hpp"
+#include "cvm/topology_defs.hpp"
 
 unsigned dummy_loc = 0;
 

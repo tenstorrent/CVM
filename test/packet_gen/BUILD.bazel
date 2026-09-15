@@ -65,7 +65,7 @@ cc_library(
         "@com_google_googletest//:gtest",
         "@cvm//:topology",
         "@cvm//:registry",
-        "topology_cc",
+        ":topology",
     ],
     alwayslink = True,
     linkstatic = True,

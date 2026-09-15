@@ -3,7 +3,7 @@
 
 // The interposer never sees these: a packed aggregate is assignment-compatible
 // with a same-width vector, so the spec gives each port as a width.
-package agg_pkg;
+package alu_pkg;
 
     typedef struct packed {
         logic [7:0] data;

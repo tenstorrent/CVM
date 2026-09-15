@@ -1,13 +1,17 @@
 alu_replay:
   dut: alu
-  # Unknown recorded input bits resolve to 0. An emulator has no X, so this is
-  # resolved on the host and every platform replays identical bits.
-  x_fill: zero
   # clk is not listed: all of the DUT's IO is on one clock, which the
   # interposer takes as infrastructure rather than as a replayed port.
+  #
+  # An aggregate is given by its total width and nothing else, which is also how
+  # $dumpports records it: one signal of that width, named after the port.
   ports:
-    rst_n:  { width: 1, dir: in }
-    opa:    { width: 4, dir: in }
-    opb:    { width: 4, dir: in }
-    result: { width: 5, dir: out }
-    valid:  { width: 1, dir: out }
+    rst_n:  { width: 1,  dir: in }
+    opa:    { width: 4,  dir: in }
+    opb:    { width: 4,  dir: in }
+    cmd:    { width: 22, dir: in }   # bundle_t
+    mat:    { width: 8,  dir: in }   # logic [1:0][3:0]
+    result: { width: 5,  dir: out }
+    valid:  { width: 1,  dir: out }
+    resp:   { width: 9,  dir: out }  # lane_t
+    sum:    { width: 8,  dir: out }

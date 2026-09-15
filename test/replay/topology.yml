@@ -2,4 +2,4 @@ top:
   replay:
     count: 1
     type:
-      - pipe
+      - replay

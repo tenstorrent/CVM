@@ -59,28 +59,13 @@ namespace cvm {
   pipe_in::pipe_in(cvm::topology::loc_t loc, unsigned) : loc_(loc) {
     auto& m = cvm::registry::messenger;
 
-    m.connect<pipe_producer>(loc, [this](const pipe_producer& p) {
-      // Disagreeing means the two sides have different ideas of an element.
-      if (wpe_ != 0 && wpe_ != p.words_per_element) {
-        cvm::log(cvm::ERROR,
-                 "cvm::pipe_in({}): producer says {} words per element, the "
-                 "design says {}\n",
-                 loc_, p.words_per_element, wpe_);
-        return;
-      }
-      producer_ = p.fill;
-      wpe_ = p.words_per_element;
-    });
-
-    m.connect<pipe_close>(loc, [this](const pipe_close&) { buffer_.close(); });
-
     m.connect<pipe_reset>(loc, [this](const pipe_reset& r) {
       const std::lock_guard<std::mutex> g(dpi_mutex_);
       depth_ = r.depth;
       slot_words_ = r.slot_words;
       if (wpe_ != 0 && wpe_ != r.words_per_element) {
         cvm::log(cvm::ERROR,
-                 "cvm::pipe_in({}): design says {} words per element, the "
+                 "Error: cvm::pipe_in({}): design says {} words per element, the "
                  "producer says {}\n",
                  loc_, r.words_per_element, wpe_);
       }
@@ -112,6 +97,21 @@ namespace cvm {
         *q.elements = wpe_ == 0 ? 0 : buffer_.size() / wpe_;
     });
   }
+
+  void pipe_in::producer(fill_fn fill, std::size_t words_per_element) {
+    // Disagreeing means the two sides have different ideas of an element.
+    if (wpe_ != 0 && wpe_ != words_per_element) {
+      cvm::log(cvm::ERROR,
+               "Error: cvm::pipe_in({}): producer says {} words per element, the "
+               "design says {}\n",
+               loc_, words_per_element, wpe_);
+      return;
+    }
+    producer_ = std::move(fill);
+    wpe_ = words_per_element;
+  }
+
+  void pipe_in::close() { buffer_.close(); }
 
   bool pipe_in::configured() const {
     return push_ != nullptr && wpe_ != 0 && depth_ != 0 &&
@@ -200,46 +200,5 @@ namespace cvm {
       return 1;
     return sent_last_ ? 0 : -1;
   }
-
-  namespace pipe {
-
-    namespace {
-
-      // Covers every instance at the path: these are rates, not per-instance
-      // behaviour.
-      bool key_matches(const std::string& key, cvm::topology::loc_t loc) {
-        for (const cvm::topology::loc_t l :
-             cvm::topology::get_from_hierarchy(key)) {
-          if (l == loc)
-            return true;
-        }
-        return false;
-      }
-
-    } // namespace
-
-    std::optional<std::string> resolve_keyed(const std::string& flag_value,
-                                             cvm::topology::loc_t loc) {
-      if (flag_value.empty())
-        return std::nullopt;
-      if (flag_value.find('=') == std::string::npos)
-        return flag_value;
-
-      std::size_t pos = 0;
-      while (pos <= flag_value.size()) {
-        const std::size_t comma = flag_value.find(',', pos);
-        const std::string entry = flag_value.substr(
-            pos, comma == std::string::npos ? std::string::npos : comma - pos);
-        const std::size_t eq = entry.find('=');
-        if (eq != std::string::npos && key_matches(entry.substr(0, eq), loc))
-          return entry.substr(eq + 1);
-        if (comma == std::string::npos)
-          break;
-        pos = comma + 1;
-      }
-      return std::nullopt;
-    }
-
-  } // namespace pipe
 
 } // namespace cvm

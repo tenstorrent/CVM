@@ -237,22 +237,23 @@ then hand over. When `enable` falls, or the dump runs out, the DUT's inputs reve
 to the testbench side.
 
 ```systemverilog
-alu_replay #(.HIER("top.u_replay")) u_replay (
+alu_replay #(.LOCATION(cvm_topology_gen::get_location(topo.TOP.REPLAY.ID, 0))) u_replay (
     .enable(enable), .done(done),
     .clk_tb(clk_tb), .clk_dut(clk_dut), /* ... */ );
 alu u_dut (.clk(clk_dut), /* ... */ );
 ```
 
-Runtime plusargs, so mode and vector file need no recompile:
+`enable` is the only control over who drives the DUT: until it rises, and after
+replay finishes, the interposer is a transparent wire. An instance with no
+recording configured reports `done` without ever driving, so leaving one out is
+how you bypass it.
 
-+ `+cvm_replay_file=<path>`, or `+cvm_replay_file=<key>=<path>,<key>=<path>` keyed by
-  each instance's `HIER` parameter
+Runtime plusargs, so the vector file needs no recompile:
+
++ `+cvm_replay_file=<path>`, or `+cvm_replay_file=<path>=<file>,...` keyed by topology
+  path, e.g. `TOP.REPLAY=dump.evcd`
 + `+cvm_replay_strict_x` -- compare recorded X/Z exactly instead of skipping
   those bits. Only meaningful on a 4-state simulator.
-+ `+cvm_replay_mode=REPLAY|BYPASS` -- `REPLAY` drives the DUT from the dump,
-  `BYPASS` lets the testbench drive and makes the interposer a transparent wire.
-  Mode affects *only* who drives the DUT's inputs, so external monitors work
-  unchanged either way.
 
 Two things to be aware of:
 

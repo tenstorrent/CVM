@@ -1,14 +1,9 @@
 // SPDX-FileCopyrightText: © 2026 Tenstorrent USA, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Integrated testbench: DUT plus interposer, driving the testbench side with a
-// passive monitor on the DUT side. The interposer never calls $finish; this
-// module decides when the test ends.
-//
-// Every scenario runs off this module, switched by plusarg, with the checks
-// here rather than in the wrapper so they travel to another simulator. One
-// clock for everything -- the interposer takes it as infrastructure, not as a
-// replayed port.
+// DUT plus interposer, with a passive monitor on the DUT side. Every scenario
+// runs off this module, switched by plusarg, with the checks here rather than
+// in the wrapper so they travel to another simulator.
 module top;
 
     import cvm_sim_pkg::*;
@@ -16,8 +11,8 @@ module top;
     // Kept running after replay so the monitor sees the testbench drive again.
     localparam int TAIL_CYCLES = 10;
 
-    // Without this a replay that never finishes hangs against a clock that
-    // never stops, which reads as neither pass nor fail.
+    // A replay that never finishes would otherwise hang against a clock that
+    // never stops, reading as neither pass nor fail.
     localparam int TIMEOUT_CYCLES = 1000;
 
     // The one delay: a clock has to come from somewhere.
@@ -26,27 +21,36 @@ module top;
 
     logic reset_n, enable, done;
 
-    logic       rst_n_tb, valid_tb;
-    logic [3:0] opa_tb, opb_tb;
-    logic [4:0] result_tb;
+    logic             rst_n_tb, valid_tb;
+    logic [3:0]       opa_tb, opb_tb;
+    logic [4:0]       result_tb;
+    alu_pkg::bundle_t cmd_tb;
+    logic [1:0][3:0]  mat_tb;
+    alu_pkg::lane_t   resp_tb;
+    logic [7:0]       sum_tb;
 
-    logic       rst_n_dut, valid_dut;
-    logic [3:0] opa_dut, opb_dut;
-    logic [4:0] result_dut;
+    logic             rst_n_dut, valid_dut;
+    logic [3:0]       opa_dut, opb_dut;
+    logic [4:0]       result_dut;
+    alu_pkg::bundle_t cmd_dut;
+    logic [1:0][3:0]  mat_dut;
+    alu_pkg::lane_t   resp_dut;
+    logic [7:0]       sum_dut;
 
     logic [7:0] mon_edges;
     logic [4:0] mon_last_result;
     logic [4:0] mon_replay_result;
+    // Read back through the struct, which shows the flattening put fields
+    // where the DUT expects them.
+    alu_pkg::lane_t mon_resp;
+    logic [7:0]     mon_sum;
     // Cycles from enable rising to done, and the count at which done arrived.
     int         mon_done_cycles;
     int         cycles;
 
-    // HIER keys the recording, so several interposers can replay different
-    // ones.
     localparam cvm_topology_gen::topology_t topo = cvm_topology_gen::mods;
 
     alu_replay #(
-        .HIER     ("top.u_replay"),
         .LOCATION (cvm_topology_gen::get_location(topo.TOP.REPLAY.ID, 0))
     ) u_replay (
         .clk      (clk),
@@ -56,8 +60,12 @@ module top;
         .rst_n_tb (rst_n_tb),  .rst_n_dut (rst_n_dut),
         .opa_tb   (opa_tb),    .opa_dut   (opa_dut),
         .opb_tb   (opb_tb),    .opb_dut   (opb_dut),
+        .cmd_tb   (cmd_tb),    .cmd_dut   (cmd_dut),
+        .mat_tb   (mat_tb),    .mat_dut   (mat_dut),
         .result_dut (result_dut), .result_tb (result_tb),
-        .valid_dut  (valid_dut),  .valid_tb  (valid_tb)
+        .valid_dut  (valid_dut),  .valid_tb  (valid_tb),
+        .resp_dut   (resp_dut),   .resp_tb   (resp_tb),
+        .sum_dut    (sum_dut),    .sum_tb    (sum_tb)
     );
 
     alu u_dut (
@@ -65,12 +73,15 @@ module top;
         .rst_n  (rst_n_dut),
         .opa    (opa_dut),
         .opb    (opb_dut),
+        .cmd    (cmd_dut),
+        .mat    (mat_dut),
         .result (result_dut),
-        .valid  (valid_dut)
+        .valid  (valid_dut),
+        .resp   (resp_dut),
+        .sum    (sum_dut)
     );
 
-    // Ignored in REPLAY until it finishes; drives in BYPASS. Released on
-    // falling edges so they never race the rising edge the DUT uses.
+    // Ignored in REPLAY until it finishes; drives in BYPASS.
     initial begin
         reset_n  = 1'b0;
         enable   = 1'b0;
@@ -79,6 +90,8 @@ module top;
         // first recorded cycle are the ones the recording assumes.
         opa_tb   = 4'd1;
         opb_tb   = 4'd2;
+        cmd_tb   = '0;
+        mat_tb   = '0;
     end
 
     // Knows nothing of the mode, and must see traffic either way.
@@ -88,6 +101,12 @@ module top;
             mon_last_result <= result_dut;
             // Only while replay runs, so it is what the recording produced.
             if (done !== 1'b1) mon_replay_result <= result_dut;
+        end
+        // After done the testbench drives zeros, so these stop being what the
+        // recording produced.
+        if (done !== 1'b1) begin
+            mon_resp <= resp_dut;
+            mon_sum  <= sum_dut;
         end
     end
 
@@ -108,34 +127,36 @@ module top;
 
     initial begin
         // cvm_plusargs, not $value$plusargs, so tb_flags.cpp is the single
-        // source of truth: an absent plusarg yields the declared default, an
-        // unknown name fails, and the type is checked. -1 means "do not check".
+        // source of truth and an unknown name fails. -1 means "do not check".
         automatic int expect_errors        = cvm_plusargs::get_int("expect_errors");
         automatic int expect_replay_result = cvm_plusargs::get_int("expect_replay_result");
         automatic int expect_last_result   = cvm_plusargs::get_int("expect_last_result");
         automatic int expect_done_cycles   = cvm_plusargs::get_int("expect_done_cycles");
         automatic int min_monitor_edges    = cvm_plusargs::get_int("min_monitor_edges");
+        automatic int skip_enable          = cvm_plusargs::get_int("skip_enable");
         automatic int errors               = 0;
 
-        // Before anything under test can log.
         cvm_error_count_start();
 
         mon_edges         = 8'd0;
         mon_last_result   = 5'd0;
         mon_replay_result = 5'd0;
+        mon_resp          = '0;
+        mon_sum           = 8'd0;
 
         // The interposer loads out of reset, so reset precedes enable.
         repeat (4) @(negedge clk);
         reset_n  = 1'b1;
         rst_n_tb = 1'b1;
         repeat (2) @(negedge clk);
-        enable = 1'b1;
-
-        @(posedge done);
+        if (skip_enable == 0) begin
+            enable = 1'b1;
+            @(posedge done);
+        end
         // Keep running so the monitor sees the testbench drive the DUT again.
         repeat (TAIL_CYCLES) @(posedge clk);
 
-        if (done !== 1'b1) begin
+        if (skip_enable == 0 && done !== 1'b1) begin
             $display("FAIL: the interposer should have reported done");
             errors++;
         end
@@ -156,6 +177,14 @@ module top;
                      mon_last_result, expect_last_result);
             errors++;
         end
+        // 5 + 4 = 9 with hdr == 0, so valid is low.
+        if (expect_replay_result >= 0 &&
+                (mon_resp.data !== 8'd9 || mon_resp.valid !== 1'b0 ||
+                 mon_sum !== 8'd7)) begin
+            $display("FAIL: resp.data=%0d resp.valid=%0b sum=%0d, wanted 9, 0 and 7",
+                     mon_resp.data, mon_resp.valid, mon_sum);
+            errors++;
+        end
         if (expect_done_cycles >= 0 && mon_done_cycles != expect_done_cycles) begin
             $display("FAIL: replay finished after %0d cycles, wanted %0d",
                      mon_done_cycles, expect_done_cycles);
@@ -169,8 +198,9 @@ module top;
             errors++;
         end
 
-        $display("done_cycles=%0d dut_edges=%0d replay_result=%0d last_result=%0d",
-                 mon_done_cycles, mon_edges, mon_replay_result, mon_last_result);
+        $display("done_cycles=%0d dut_edges=%0d replay_result=%0d last_result=%0d resp.data=%0d sum=%0d",
+                 mon_done_cycles, mon_edges, mon_replay_result, mon_last_result,
+                 mon_resp.data, mon_sum);
         if (errors != 0) $fatal(1, "%0d checks failed", errors);
         $display("PASS");
         $finish;

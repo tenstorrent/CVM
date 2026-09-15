@@ -12,18 +12,23 @@
 // Spec: ${spec.name}   DUT: ${spec.dut}
 
 // Interposer: the DUT's IO flows through it, so every port appears on both
-// sides. The testbench connects `*${tb}`, the DUT connects `*${du}`. All of the
-// behaviour lives in cvm_replay_engine; this file only packs the boundary into
-// the flat vectors that module works in.
+// sides -- the testbench connects `*${tb}`, the DUT connects `*${du}`. This
+// file only packs the boundary into the flat vectors cvm_replay_engine works
+// in; the behaviour is all there.
 module ${spec.name} #(
-    // Key this instance's recording is looked up under in +cvm_replay_file.
-    parameter string HIER = "${spec.name}",
+    localparam int   PORT_BITS  = ${spec.total_bits},
+    localparam int   ELEM_WORDS = 2 + 3 * ((PORT_BITS + 31) / 32),
     // Elements buffered in the transport. Sizes a memory, so a parameter.
     parameter int    PIPE_DEPTH = ${spec.pipe_depth},
     parameter int unsigned LOCATION = cvm_topology::nil,
-    // One element is ${spec.element_words} words at this width, which is why this is
-    // computed rather than left at a fixed default.
-    parameter int    PUSH_MAX_ELEMENTS = ${spec.push_max_elements}
+    // Most elements one push may carry: what the push export's array formal
+    // holds.
+    parameter int    PUSH_MAX_ELEMENTS =
+% if spec.push_max:
+                         ${spec.push_max}
+% else:
+                         cvm_pipe_pkg::CVM_PIPE_MAX_WORDS / ELEM_WORDS
+% endif
 ) (
     // Infrastructure, not spec ports: all of the DUT's IO is on this clock, and
     // the recording's own clock signal, if it has one, is ignored.
@@ -44,14 +49,10 @@ module ${spec.name} #(
 
     import cvm_replay_pkg::*;
 
-    localparam int PADDED = ${spec.padded_bits};
-    // Unknown recorded *input* bits resolve to this. An emulator has no X, so
-    // resolving on the host is what makes every platform replay the same bits.
-    localparam int X_FILL_ONE = ${1 if spec.x_fill == 'one' else 0};
     localparam string LAYOUT = "${layout}";
 
-    logic [PADDED-1:0] observed;
-    logic [PADDED-1:0] driven;
+    logic [PORT_BITS-1:0] observed;
+    logic [PORT_BITS-1:0] driven;
 
     // The DUT boundary as it stands: the testbench's value on each input slice,
     // the DUT's value on each output slice.
@@ -82,14 +83,13 @@ module ${spec.name} #(
             loaded <= 1'b0;
         end else if (!loaded) begin
             loaded <= 1'b1;
-            if (cvm_replay_load(LOCATION, HIER, LAYOUT, PADDED, X_FILL_ONE) < 0)
-                $error("${spec.name}(%s): could not load the recording", HIER);
+            if (cvm_replay_load(LOCATION, LAYOUT, PORT_BITS) < 0)
+                $error("%m: could not load the recording");
         end
     end
 
     cvm_replay_engine #(
-        .HIER               (HIER),
-        .PADDED             (PADDED),
+        .PORT_BITS          (PORT_BITS),
         .PIPE_DEPTH         (PIPE_DEPTH),
         .LOCATION           (LOCATION),
         .PUSH_MAX_ELEMENTS (PUSH_MAX_ELEMENTS)

@@ -7,10 +7,28 @@
 # library's own assertions would otherwise print and be ignored.
 set -o pipefail
 
-out=$("$@" 2>&1)
+# A scenario whose failure is the point: the simulation must exit non-zero.
+expect_failure=0
+args=()
+for a in "$@"; do
+    if [[ $a == --expect-failure ]]; then
+        expect_failure=1
+    else
+        args+=("$a")
+    fi
+done
+
+out=$("${args[@]}" 2>&1)
 status=$?
 printf '%s\n' "$out"
 
+if [[ $expect_failure -eq 1 ]]; then
+    if [[ $status -eq 0 ]]; then
+        echo "sim.sh: expected a non-zero exit, got 0"
+        exit 1
+    fi
+    exit 0
+fi
 if [[ $status -ne 0 ]]; then
     exit $status
 fi

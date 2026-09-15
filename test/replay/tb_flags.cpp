@@ -25,3 +25,6 @@ DEFINE_int32(expect_done_cycles, -1,
 DEFINE_int32(
     min_monitor_edges, 1,
     "the external monitor must observe at least this many clock edges");
+// Leaves a loaded recording unreplayed, which the host must notice at end of
+// run. The testbench itself passes, so only the exit status carries it.
+DEFINE_int32(skip_enable, 0, "never assert enable");

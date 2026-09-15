@@ -9,8 +9,6 @@
 #include <deque>
 #include <functional>
 #include <mutex>
-#include <optional>
-#include <string>
 #include <vector>
 
 #include "cvm/topology.hpp"
@@ -18,16 +16,8 @@
 namespace cvm {
 
   // Delivery may happen on another thread, so a message with a result pointer
-  // also carries the flag its caller waits on.
-  struct pipe_producer {
-      // Returns how many elements it wrote. 0 means none available right now;
-      // send pipe_close to say there will never be more.
-      std::function<std::size_t(std::uint32_t* out, std::size_t max_elements)> fill;
-      std::size_t words_per_element = 0;
-  };
-
-  struct pipe_close {};
-
+  // also carries the flag its caller waits on. Only the design's calls arrive
+  // as messages; the owner reaches its own pipe directly.
   struct pipe_reset {
       std::uint32_t depth = 0;
       std::uint32_t words_per_element = 0;
@@ -72,11 +62,24 @@ namespace cvm {
       bool closed_ = false;
   };
 
-  // Host side of cvm_pipe_in. Registered by whoever owns it -- usually the
-  // producer -- not by this library.
+  // Host side of cvm_pipe_in. Held by whoever produces for it, and registered
+  // through that owner rather than by this library.
   class pipe_in {
     public:
+      // Returns how many elements it wrote, writing *every* word of each: the
+      // buffer is reused and not cleared. 0 means none available right now.
+      using fill_fn =
+          std::function<std::size_t(std::uint32_t* out, std::size_t max_elements)>;
+
       pipe_in(cvm::topology::loc_t loc, unsigned id);
+
+      // Where elements come from. `words_per_element` is cross-checked against
+      // what the design reports at reset, since the two must agree about what
+      // an element is.
+      void producer(fill_fn fill, std::size_t words_per_element);
+
+      // No more elements will ever come. Safe to call from inside `fill`.
+      void close();
 
     private:
       // Only ever touched on the messenger's thread, which services one handler
@@ -86,7 +89,7 @@ namespace cvm {
       bool configured() const;
 
       cvm::topology::loc_t loc_;
-      decltype(pipe_producer::fill) producer_;
+      fill_fn producer_;
       std::vector<std::uint32_t> pull_batch_;
 
       std::size_t wpe_ = 0;
@@ -114,10 +117,4 @@ namespace cvm {
       std::atomic<bool> sent_last_ = false;
   };
 
-  namespace pipe {
-    // A bare value, or `KEY=value` pairs keyed by topology path. Bare applies
-    // everywhere; a path covers every instance at it.
-    std::optional<std::string> resolve_keyed(const std::string& flag_value,
-                                             cvm::topology::loc_t loc);
-  } // namespace pipe
 } // namespace cvm

@@ -54,7 +54,7 @@ namespace cvm {
                std::to_string(line_no_) + ": " + msg;
       // The offending line, because a state character or identifier code means
       // little without the text it came from.
-      cvm::log(cvm::ERROR, "cvm::evcd: {}\n  {}\n", error_, line_);
+      cvm::log(cvm::ERROR, "Error: cvm::evcd: {}\n  {}\n", error_, line_);
       return false;
     }
 

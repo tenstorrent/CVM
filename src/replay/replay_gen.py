@@ -3,9 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """Generate an EVCD replay interposer and its port table from a YAML spec.
-
-Nothing here reads an EVCD: the dump is validated against the generated port
-table at runtime, which is what lets one build replay any number of dumps.
 """
 
 import argparse
@@ -70,10 +67,6 @@ class Spec:
     name: str
     dut: str
     ports: List[Port]
-    # Unknown recorded input bits resolve to this. Not "whatever the simulator
-    # collapses X to": that is neither reproducible nor available on an
-    # emulator.
-    x_fill: str = "zero"
     pipe_depth: int = 4096
     # 0 means "compute it from the payload width"; see push_max_elements.
     push_max: int = 0
@@ -87,28 +80,16 @@ class Spec:
         return (self.total_bits + 31) // 32
 
     @property
-    def padded_bits(self) -> int:
-        return self.words * 32
-
-    @property
     def element_words(self) -> int:
-        """Words the transport carries per cycle: a cycle number plus the
-        stimulus, the expectation and the care mask."""
-        return 1 + 3 * self.words
+        """Words the transport carries per cycle: a 64-bit cycle number plus
+        the stimulus, the expectation and the care mask."""
+        return 2 + 3 * self.words
 
     @property
     def push_max_elements(self) -> int:
-        """Most elements one push may carry.
-
-        Narrowed from the width where needed: one element is several words, so
-        a fixed default in elements can exceed the largest array formal for a
-        wide DUT. Emitted into the generated source so it is visible.
-        """
-        if self.push_max:
-            return self.push_max
-        # Enough to amortise the host round trip without sizing the formal for
-        # the sake of it; narrowed only when the ladder cannot hold it.
-        return max(1, min(1024, PIPE_MAX_WORDS // self.element_words))
+        """Most elements one push may carry, when `push_max` overrides the
+        expression the generated module computes."""
+        return self.push_max or PIPE_MAX_WORDS // self.element_words
 
     def inputs(self) -> List[Port]:
         return [p for p in self.ports if p.dir == "in"]
@@ -153,7 +134,6 @@ class Spec:
             name=name,
             dut=dut,
             ports=[],
-            x_fill=str(interpolate(body.get("x_fill", "zero"), topology, name)),
             pipe_depth=int(interpolate(body.get("pipe_depth", 4096), topology, name)),
             push_max=int(interpolate(body.get("push_max", 0), topology, name)),
             tb_suffix=suffixes.get("tb", "_tb"),
@@ -205,10 +185,8 @@ class Spec:
 
         spec.total_bits = offset
 
-        # The limit that actually exists, replacing a per-port width cap that
-        # mirrored a constant no longer in cvm_replay_pkg.sv. Nothing carries a
-        # single port any more: ports are slices of one flat vector, and what is
-        # bounded is how much of it fits in one push.
+        # Only reachable through `push_max`: the generated default cannot
+        # exceed the formal, because it is derived from it.
         if spec.push_max_elements * spec.element_words > PIPE_MAX_WORDS:
             sys.exit(
                 f"{name}: {spec.total_bits} bits of ports need "

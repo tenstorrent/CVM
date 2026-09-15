@@ -1,19 +1,17 @@
 // SPDX-FileCopyrightText: © 2026 Tenstorrent USA, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// The engine on its own, with synthetic elements rather than a recording, so
-// the transport and the alignment can be tested without the EVCD layer. The
-// only delay is the clock.
-//
-// Scenarios run off one build, selected by +scenario. See tb_engine_dpi.cpp.
+// The engine on synthetic elements, so the transport and the alignment can be
+// tested without the EVCD layer. Scenarios run off one build, selected by
+// +scenario; see tb_engine_dpi.cpp.
 module top;
 
     import cvm_sim_pkg::*;
 
     // Queues this scenario's elements on the host.
-    import "DPI-C" function void tb_engine_stimulus(int unsigned location, int padded);
+    import "DPI-C" function void tb_engine_stimulus(int unsigned location, int boundary_bits);
 
-    localparam int PADDED         = 32;
+    localparam int PORT_BITS         = 32;
     localparam int TIMEOUT_CYCLES = 5000;
 
     // The one delay: a clock has to come from somewhere.
@@ -23,14 +21,13 @@ module top;
     logic reset_n, enable;
     logic [7:0] tb_a;
 
-    logic [PADDED-1:0] observed, driven;
+    logic [PORT_BITS-1:0] observed, driven;
     logic              done;
-    logic [31:0]       mismatches, first_fail_cycle;
-    logic [PADDED-1:0] fail_bits;
+    logic [63:0]       mismatches, first_fail_cycle;
+    logic [PORT_BITS-1:0] fail_bits;
 
     logic [7:0] y;
 
-    // The testbench's, not replayed: the recording starts out of reset.
     regadd u_dut (
         .clk     (clk),
         .reset_n (reset_n),
@@ -38,16 +35,14 @@ module top;
         .y       (y)
     );
 
-    // The DUT boundary: the testbench's value on the input slice, the DUT's on
-    // the output slice.
+    // The testbench's value on the input slice, the DUT's on the output slice.
     assign observed = {16'd0, y, tb_a};
 
     localparam cvm_topology_gen::topology_t topo = cvm_topology_gen::mods;
 
     cvm_replay_engine #(
-        .HIER       ("top.u_replay"),
         .LOCATION   (cvm_topology_gen::get_location(topo.TOP.REPLAY.ID, 0)),
-        .PADDED     (PADDED),
+        .PORT_BITS     (PORT_BITS),
         .PIPE_DEPTH (64)
     ) u_replay (
         .clk              (clk),
@@ -82,7 +77,7 @@ module top;
         automatic int errors            = 0;
 
         cvm_error_count_start();
-        tb_engine_stimulus(cvm_topology_gen::get_location(topo.TOP.REPLAY.ID, 0), PADDED);
+        tb_engine_stimulus(cvm_topology_gen::get_location(topo.TOP.REPLAY.ID, 0), PORT_BITS);
 
         // Falling edges, so they never race the rising edge the DUT uses.
         repeat (4) @(negedge clk);
@@ -98,16 +93,16 @@ module top;
             $display("FAIL: engine never reported done");
             errors++;
         end
-        if (expect_mismatches >= 0 && int'(mismatches) != expect_mismatches) begin
+        if (expect_mismatches >= 0 && longint'(mismatches) != longint'(expect_mismatches)) begin
             $display("FAIL: %0d mismatching bit-cycles, wanted %0d",
                      mismatches, expect_mismatches);
             errors++;
         end
-        if (expect_mismatches < 0 && mismatches == 32'd0) begin
+        if (expect_mismatches < 0 && mismatches == 64'd0) begin
             $display("FAIL: expected mismatches and saw none");
             errors++;
         end
-        if (expect_first_fail >= 0 && int'(first_fail_cycle) != expect_first_fail) begin
+        if (expect_first_fail >= 0 && longint'(first_fail_cycle) != longint'(expect_first_fail)) begin
             $display("FAIL: first failure at cycle %0d, wanted %0d; the alignment depth is wrong",
                      first_fail_cycle, expect_first_fail);
             errors++;

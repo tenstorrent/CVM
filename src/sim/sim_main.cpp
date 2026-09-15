@@ -17,6 +17,10 @@
 #include "cvm/registry.hpp"
 #include "verilated.h"
 
+// From //:sim_dpi, which every simulation links: the testbench arms this at the
+// start of the run, so it is also how an end-of-run check gets noticed.
+extern "C" int cvm_error_count();
+
 int main(int argc, char** argv) {
   const std::unique_ptr<VerilatedContext> ctx{new VerilatedContext};
   ctx->commandArgs(argc, argv);
@@ -46,6 +50,12 @@ int main(int argc, char** argv) {
 
   const bool finished = ctx->gotFinish();
 
+  // End-of-run component checks. They run after $finish, so the testbench's own
+  // error count has already been read -- the exit status is what carries them.
+  const int errors_before = cvm_error_count();
+  cvm::registry::check();
+  const bool checks_failed = cvm_error_count() != errors_before;
+
   // Tears the framework down while the design is still alive, as a testbench
   // does on any other simulator: a component being destroyed may still want an
   // export. It reports "not ready" while work is in flight, so keep draining.
@@ -62,13 +72,15 @@ int main(int argc, char** argv) {
     // Out of events without saying it was done, so whatever it waited for
     // never happened. Silence here would read as a pass.
     cvm::log(cvm::ERROR,
-             "sim: no events left at time {} and $finish was never reached\n",
+             "Error: sim: no events left at time {} and $finish was never reached\n",
              ctx->time());
     return 1;
   }
   if (!down) {
-    cvm::log(cvm::ERROR, "sim: the framework never finished shutting down\n");
+    cvm::log(cvm::ERROR, "Error: sim: the framework never finished shutting down\n");
     return 1;
   }
+  if (checks_failed)
+    return 1;
   return 0;
 }

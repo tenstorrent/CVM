@@ -1,8 +1,6 @@
 // SPDX-FileCopyrightText: © 2026 Tenstorrent USA, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#include "cvm/pipe.hpp"
-
 #include <gtest/gtest.h>
 
 #include "cvm/topology.hpp"
@@ -21,7 +19,7 @@ vpi_get_vlog_info(p_vpi_vlog_info vlog_info_p) {
 extern "C" svScope svGetScope() { return nullptr; }
 extern "C" svScope svSetScope(const svScope) { return nullptr; }
 
-using cvm::pipe::resolve_keyed;
+using cvm::topology::resolve_keyed;
 
 namespace {
 

@@ -54,13 +54,13 @@ namespace {
 
   int int_from_keyed(const std::string& flag, cvm::topology::loc_t loc,
                      int fallback) {
-    const auto v = cvm::pipe::resolve_keyed(flag, loc);
+    const auto v = cvm::topology::resolve_keyed(flag, loc);
     if (!v.has_value())
       return fallback;
     try {
       return std::stoi(*v);
     } catch (...) {
-      cvm::log(cvm::ERROR, "cvm::pipe({}): cannot parse `{}` as a number\n", loc,
+      cvm::log(cvm::ERROR, "Error: cvm::pipe({}): cannot parse `{}` as a number\n", loc,
                *v);
       return fallback;
     }
@@ -89,7 +89,7 @@ extern "C" {
                       unsigned int push_slot_words) {
     const auto push = push_for(push_slot_words);
     if (push == nullptr) {
-      cvm::log(cvm::ERROR, "cvm::pipe({}): no push export for {} words\n", loc,
+      cvm::log(cvm::ERROR, "Error: cvm::pipe({}): no push export for {} words\n", loc,
                push_slot_words);
       return;
     }

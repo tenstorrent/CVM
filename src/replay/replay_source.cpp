@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: © 2026 Tenstorrent USA, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#include "cvm/replay.hpp"
+#include "cvm/replay_source.hpp"
 
 #include <algorithm>
 
@@ -48,7 +48,7 @@ namespace cvm {
 
     bool source::fail(const std::string& msg) {
       error_ = msg;
-      cvm::log(cvm::ERROR, "cvm::replay: {}\n", msg);
+      cvm::log(cvm::ERROR, "Error: cvm::replay: {}\n", msg);
       return false;
     }
 
@@ -215,7 +215,7 @@ namespace cvm {
       return true;
     }
 
-    bool source::next_cycle(cycle_element& out, bool x_fill_one) {
+    bool source::next_cycle(cycle_element& out) {
       replay_vector v;
       if (!next(v))
         return false;
@@ -237,7 +237,7 @@ namespace cvm {
           const bool x = (v.value[w].bval & m) != 0;
 
           if (!bp.is_output) {
-            if (x ? x_fill_one : a)
+            if (!x && a)
               out.in[w] |= m;
           } else {
             if (a)
@@ -265,30 +265,5 @@ namespace cvm {
       }
       return out;
     }
-
-    std::optional<std::string>
-    resolve_path(const std::string& flag_value, const std::string& key) {
-      if (flag_value.empty())
-        return std::nullopt;
-      // A bare path applies to every instance.
-      if (flag_value.find('=') == std::string::npos)
-        return flag_value;
-
-      std::size_t pos = 0;
-      while (pos <= flag_value.size()) {
-        const std::size_t comma = flag_value.find(',', pos);
-        const std::string entry = flag_value.substr(
-            pos, comma == std::string::npos ? std::string::npos : comma - pos);
-        const std::size_t eq = entry.find('=');
-        if (eq != std::string::npos && entry.substr(0, eq) == key) {
-          return entry.substr(eq + 1);
-        }
-        if (comma == std::string::npos)
-          break;
-        pos = comma + 1;
-      }
-      return std::nullopt;
-    }
-
   } // namespace replay
 } // namespace cvm

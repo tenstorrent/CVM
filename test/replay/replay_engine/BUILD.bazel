@@ -48,7 +48,6 @@ cc_binary(
         "//:registry",
         "//:topology",
         ":topology_cc",
-        "//:replay",
         "//:sim_dpi",
         "@com_github_gflags_gflags//:gflags",
     ],

@@ -80,7 +80,7 @@ extern "C" {
         const char* v = cvm_plusargs_get_string(p);
         if (!v) {
             // Error out if the plusarg is not set
-            cvm::log(cvm::ERROR, "Error: +{}={} is not set\n", p, v);
+            cvm::log(cvm::ERROR, "ERROR: +{}={} is not set\n", p, v);
         }
         return levels.at(std::string(v));
     }

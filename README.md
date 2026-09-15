@@ -201,7 +201,6 @@ A yaml port spec format is introduced to generate SV glue.
 # alu_ports.yml
 alu_replay:
   dut: alu
-  strobe: 1          # settle delay before sampling a checked output
   ports:
     clk:    { width: 1, dir: in }
     opa:    { width: 4, dir: in }
@@ -216,6 +215,12 @@ load("@cvm//:defs.bzl", "replay")
 
 replay(name = "alu_replay", srcs = ["alu_ports.yml"])
 ```
+
+Replay is a registry component, so it needs a [topology](#topology): declare a
+node of type `replay` and pass its location to the generated module. The rule's
+optional `topology` attribute is a separate thing -- it only resolves
+`${A.B.C}` interpolation of widths and depths inside the yml, so a spec with
+literal widths does not need it.
 
 `dir` is **always** from the DUT's perspective: `in` means driven *into* the DUT.
 

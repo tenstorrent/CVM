@@ -12,9 +12,10 @@ def _replay_impl(ctx):
 
     inputs = list(ctx.files.srcs)
 
-    # Unlike packet_gen, topology is OPTIONAL: replaying an arbitrary module
-    # should not force the user to define a topology first. Only pass the flag
-    # when one was actually given.
+    # Optional because it serves only ${...} interpolation of widths and depths
+    # in the spec, which a spec using literal widths never needs. It is not the
+    # topology replay needs at runtime: the interposer's LOCATION must name a
+    # node of type `replay`, which topology_gen provides separately.
     if ctx.file.topology:
         args.add("--topology", ctx.file.topology)
         inputs.append(ctx.file.topology)

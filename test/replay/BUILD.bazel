@@ -56,11 +56,26 @@ verilog_library(
     top_module = "top",
 )
 
+# Two builds of one testbench and one generated interposer, differing only in
+# the define. FEAT_GATE adds a port pair to the DUT, so this is what holds the
+# interposer to adapting the way the DUT does rather than being correct for the
+# setting it happened to be generated under. Defines reach both from here:
+# verilation is a single flat invocation over the whole closure.
 verilator_cc_library(
     name = "tb_top_veri_lib",
     module = ":tb_top_sv",
     timing = True,
     vopts = ["--assert"],
+)
+
+verilator_cc_library(
+    name = "tb_top_gate_veri_lib",
+    module = ":tb_top_sv",
+    timing = True,
+    vopts = [
+        "--assert",
+        "+define+FEAT_GATE",
+    ],
 )
 
 # Declares the scenario expectations so gflags validates them.
@@ -72,22 +87,29 @@ cc_library(
     deps = ["@com_github_gflags_gflags//:gflags"],
 )
 
+SIM_DEPS = [
+    ":tb_flags",
+    "//:logger",
+    "//:plusargs",
+    "//:registry",
+    "//:topology",
+    ":topology_cc",
+    "//:replay",
+    "//test/lib/sim:sim_dpi",
+]
+
 cc_binary(
     name = "sim",
     # main() only; the checks are in tb_top.sv so they travel to other
     # simulators.
     srcs = ["//test/lib/sim:sim_main"],
-    deps = [
-        ":tb_flags",
-        ":tb_top_veri_lib",
-        "//:logger",
-        "//:plusargs",
-        "//:registry",
-        "//:topology",
-        ":topology_cc",
-        "//:replay",
-        "//test/lib/sim:sim_dpi",
-    ],
+    deps = SIM_DEPS + [":tb_top_veri_lib"],
+)
+
+cc_binary(
+    name = "sim_gate",
+    srcs = ["//test/lib/sim:sim_main"],
+    deps = SIM_DEPS + [":tb_top_gate_veri_lib"],
 )
 
 # One build, driven entirely by plusargs: replay, a second dump, bypass, and a
@@ -96,9 +118,9 @@ cc_binary(
     sh_test(
         name = "sh_" + scenario["name"],
         srcs = ["//test/lib/sim:sim.sh"],
-        args = ["$(location :sim)"] + scenario["args"],
+        args = ["$(location :%s)" % scenario.get("sim", "sim")] + scenario["args"],
         data = [
-            ":sim",
+            ":" + scenario.get("sim", "sim"),
             "//test/replay/fixtures:evcds",
         ],
     )
@@ -185,6 +207,21 @@ cc_binary(
                 "+expect_done_cycles=7",
             ],
         },
+        # The other side of the conditional: two more ports in the DUT, the
+        # interposer and the recording. Every scenario above is the same
+        # interposer with the define off, which is what makes this pair
+        # evidence and not just one more configuration that happens to work.
+        {
+            "name": "replay_gate",
+            "sim": "sim_gate",
+            "args": [
+                "+cvm_replay_file=test/replay/fixtures/alu_gate.evcd",
+                "+expect_errors=0",
+                "+expect_replay_result=7",
+                "+expect_last_result=3",
+                "+expect_done_cycles=7",
+            ],
+        },
     ]
 ]
 
@@ -198,6 +235,7 @@ test_suite(
         ":sh_replay_async_report",
         ":sh_replay_keyed_dump",
         ":sh_replay_mismatch_detected",
+        ":sh_replay_gate",
         ":sh_replay_second_dump",
     ],
 )

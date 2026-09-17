@@ -29,6 +29,9 @@ module top;
     logic [$clog2(alu_pkg::LANES*4)-1:0] sel_tb, sel_echo_tb;
     alu_pkg::lane_t   resp_tb;
     logic [7:0]       sum_tb;
+`ifdef FEAT_GATE
+    logic             gate_tb, gate_echo_tb;
+`endif
 
     logic             rst_n_dut, valid_dut;
     logic [3:0]       opa_dut, opb_dut;
@@ -38,6 +41,9 @@ module top;
     logic [$clog2(alu_pkg::LANES*4)-1:0] sel_dut, sel_echo_dut;
     alu_pkg::lane_t   resp_dut;
     logic [7:0]       sum_dut;
+`ifdef FEAT_GATE
+    logic             gate_dut, gate_echo_dut;
+`endif
 
     logic [7:0] mon_edges;
     logic [4:0] mon_last_result;
@@ -46,6 +52,9 @@ module top;
     // where the DUT expects them.
     alu_pkg::lane_t mon_resp;
     logic [7:0]     mon_sum;
+`ifdef FEAT_GATE
+    logic           mon_gate_echo;
+`endif
     // Cycles from enable rising to done, and the count at which done arrived.
     int         mon_done_cycles;
     int         cycles;
@@ -67,6 +76,10 @@ module top;
         .cmd_tb   (cmd_tb),    .cmd_dut   (cmd_dut),
         .mat_tb   (mat_tb),    .mat_dut   (mat_dut),
         .sel_tb   (sel_tb),    .sel_dut   (sel_dut),
+`ifdef FEAT_GATE
+        .gate_tb  (gate_tb),   .gate_dut  (gate_dut),
+        .gate_echo_dut (gate_echo_dut), .gate_echo_tb (gate_echo_tb),
+`endif
         .result_dut (result_dut), .result_tb (result_tb),
         .valid_dut  (valid_dut),  .valid_tb  (valid_tb),
         .resp_dut   (resp_dut),   .resp_tb   (resp_tb),
@@ -82,6 +95,10 @@ module top;
         .cmd    (cmd_dut),
         .mat    (mat_dut),
         .sel    (sel_dut),
+`ifdef FEAT_GATE
+        .gate      (gate_dut),
+        .gate_echo (gate_echo_dut),
+`endif
         .result (result_dut),
         .valid  (valid_dut),
         .resp   (resp_dut),
@@ -101,6 +118,11 @@ module top;
         cmd_tb   = '0;
         mat_tb   = '0;
         sel_tb   = '0;
+`ifdef FEAT_GATE
+        // Low, so a gate_echo still high after replay would mean the recording
+        // never handed the port back.
+        gate_tb  = 1'b0;
+`endif
     end
 
     // Knows nothing of the mode, and must see traffic either way.
@@ -116,6 +138,9 @@ module top;
         if (done !== 1'b1) begin
             mon_resp <= resp_dut;
             mon_sum  <= sum_dut;
+`ifdef FEAT_GATE
+            mon_gate_echo <= gate_echo_dut;
+`endif
         end
     end
 
@@ -152,6 +177,9 @@ module top;
         mon_replay_result = 5'd0;
         mon_resp          = '0;
         mon_sum           = 8'd0;
+`ifdef FEAT_GATE
+        mon_gate_echo     = 1'b0;
+`endif
 
         // The interposer loads out of reset, so reset precedes enable.
         repeat (4) @(negedge clk);
@@ -194,6 +222,20 @@ module top;
                      mon_resp.data, mon_resp.valid, mon_sum);
             errors++;
         end
+`ifdef FEAT_GATE
+        // The conditional port pair, end to end: the recording drove gate and
+        // the DUT echoed it. Under the same build without the define neither
+        // port exists, in the DUT or in the interposer.
+        if (expect_replay_result >= 0 && mon_gate_echo !== 1'b1) begin
+            $display("FAIL: gate_echo=%0b under replay, wanted 1", mon_gate_echo);
+            errors++;
+        end
+        if (gate_echo_dut !== 1'b0) begin
+            $display("FAIL: gate_echo=%0b after replay, wanted 0; the testbench should drive gate again",
+                     gate_echo_dut);
+            errors++;
+        end
+`endif
         if (expect_done_cycles >= 0 && mon_done_cycles != expect_done_cycles) begin
             $display("FAIL: replay finished after %0d cycles, wanted %0d",
                      mon_done_cycles, expect_done_cycles);

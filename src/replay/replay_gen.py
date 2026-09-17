@@ -11,7 +11,7 @@ import pathlib
 import re
 import sys
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import yaml
 from mako.template import Template
@@ -52,6 +52,10 @@ class Port:
     # The literal alternative, for a hand-written spec that knows its widths.
     width: Optional[int] = None
     dump_name: str = ""
+    # The chain of conditions the DUT declares this port under, outermost
+    # first, re-emitted as nested `ifdef`s. The interposer then appears and
+    # disappears with the port, so it needs no defines of its own.
+    when: List[str] = field(default_factory=list)
 
     def sv_type(self) -> str:
         return self.type_text if self.type_text else f"logic [{self.width - 1}:0]"
@@ -85,6 +89,21 @@ class Spec:
 
     def outputs(self) -> List[Port]:
         return [p for p in self.ports if p.dir == "out"]
+
+    def groups(self) -> List[Tuple[List[str], List[Port]]]:
+        """Ports in order, with consecutive same-condition runs coalesced.
+
+        One `ifdef` around a run of ports rather than around each of them,
+        which for a DUT whose conditionals gate whole port blocks is the
+        difference between a readable module and one guard per line.
+        """
+        out: List[Tuple[List[str], List[Port]]] = []
+        for port in self.ports:
+            if out and out[-1][0] == port.when:
+                out[-1][1].append(port)
+            else:
+                out.append((port.when, [port]))
+        return out
 
     @classmethod
     def load(cls, definitions: List[str], topology: Optional[Dict]) -> "Spec":
@@ -165,6 +184,7 @@ class Spec:
                     type_text=str(type_text) if type_text is not None else "",
                     width=width,
                     dump_name=attrs.get("dump_name", "") or port_name,
+                    when=[str(c) for c in (attrs.get("when") or [])],
                 )
             )
 
@@ -226,6 +246,7 @@ def main() -> None:
                             "dir": p.dir,
                             "type": p.sv_type(),
                             "dump_name": p.dump_name,
+                            **({"when": p.when} if p.when else {}),
                         }
                         for p in spec.ports
                     },

@@ -18,7 +18,7 @@ replay_bind(
     name = "alu_interposer",
     clock = "clk",
     dut = "alu",
-    dut_lib = "//test/replay:alu_sv",
+    dut_lib = "//test/replay/alu:alu_sv",
 )
 
 # The design: core.sv holds the committed edit, and the interposer is part of
@@ -28,7 +28,7 @@ verilog_library(
     srcs = ["core.sv"],
     deps = [
         ":alu_interposer_sv",
-        "//test/replay:alu_sv",
+        "//test/replay/alu:alu_sv",
     ],
 )
 
@@ -45,15 +45,15 @@ TB_DEPS = [
 # elaborates and runs anyway is the proof that the interposer, which is
 # synthesized with the design, depends on nothing from cvm.
 verilog_library(
-    name = "tb_buried_off_sv",
-    srcs = ["tb_buried.sv"],
+    name = "tb_off_sv",
+    srcs = ["tb.sv"],
     deps = TB_DEPS,
     top_module = "top",
 )
 
 verilog_library(
-    name = "tb_buried_on_sv",
-    srcs = ["tb_buried.sv"],
+    name = "tb_on_sv",
+    srcs = ["tb.sv"],
     deps = TB_DEPS + [":alu_interposer_bound_sv"],
     top_module = "top",
 )
@@ -73,15 +73,15 @@ SIM_DEPS = [
 [
     [
         verilator_cc_library(
-            name = "tb_buried_" + flavour + "_veri_lib",
-            module = ":tb_buried_" + flavour + "_sv",
+            name = "tb_" + flavour + "_veri_lib",
+            module = ":tb_" + flavour + "_sv",
             timing = True,
             vopts = ["--assert"] + extra,
         ),
         cc_binary(
             name = "sim_" + flavour,
             srcs = ["//test/lib/sim:sim_main"],
-            deps = SIM_DEPS + host + [":tb_buried_" + flavour + "_veri_lib"],
+            deps = SIM_DEPS + host + [":tb_" + flavour + "_veri_lib"],
         ),
     ]
     for flavour, extra, host in [

@@ -221,7 +221,7 @@ replay(
 | `dut` | the module to replay. |
 | `clock` | the DUT's clock port. Human input by necessity: a cycle-indexed recording samples once per cycle, so a clock reads as a constant in it and the dump cannot say which port is special. Never replayed. |
 | `exclude` | ports to leave unreplayed -- one on a second clock domain, which no cycle-indexed recording describes. Also how a whole-hierarchy `$dumpports` is made usable, since a dump port nothing binds is fatal. |
-| `slang_defines` | read only so slang can pick a branch to elaborate. The spec must come out identical whichever way these are set; `//test/replay:sh_spec_is_define_independent` is that check. |
+| `slang_defines` | read only so slang can pick a branch to elaborate. The spec must come out identical whichever way these are set; `//test/replay/spec:sh_define_independent` is that check. |
 | `srcs` | a hand-written spec instead of `dut_lib`, for a DUT slang cannot see. Exactly one of the two. |
 | `topology` | resolves `${A.B.C}` interpolation of widths and depths inside a hand-written spec. Unrelated to the topology replay needs at runtime. |
 

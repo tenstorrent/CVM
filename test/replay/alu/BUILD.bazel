@@ -1,0 +1,26 @@
+load("@rules_hdl//verilog:providers.bzl", "verilog_library")
+
+# The module every replay scenario replays: standalone in a testbench, buried in
+# a design, and read by slang to derive the port spec. Its own package, so the
+# sharing is visible rather than implied by three directories reaching sideways.
+package(default_visibility = ["//test/replay:__subpackages__"])
+
+verilog_library(
+    name = "alu_pkg_sv",
+    srcs = ["alu_pkg.sv"],
+)
+
+verilog_library(
+    name = "alu_aux_pkg_sv",
+    srcs = ["alu_aux_pkg.sv"],
+)
+
+verilog_library(
+    name = "alu_sv",
+    srcs = ["alu.sv"],
+    top_module = "alu",
+    deps = [
+        ":alu_aux_pkg_sv",
+        ":alu_pkg_sv",
+    ],
+)

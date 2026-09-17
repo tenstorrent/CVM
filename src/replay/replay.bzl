@@ -16,7 +16,7 @@ def _replay_ports_impl(ctx):
     args.add("--clock", ctx.attr.clock)
     args.add_all(ctx.attr.exclude, before_each = "--exclude")
     # Read only so slang can pick a branch to elaborate. The spec must come out
-    # the same either way -- see the invariant test in test/replay.
+    # the same either way -- see the invariant test in test/replay/spec.
     args.add_all(ctx.attr.defines, before_each = "--define")
     args.add("--name", ctx.attr.spec_name)
     args.add("--out", ports)

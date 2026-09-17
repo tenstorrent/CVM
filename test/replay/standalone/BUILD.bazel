@@ -1,0 +1,235 @@
+load("@cvm//:defs.bzl", "replay")
+load("@rules_hdl//verilog:providers.bzl", "verilog_library")
+load("@rules_verilator//verilator:defs.bzl", "verilator_cc_library")
+load("//:defs.bzl", "topology_gen")
+
+# Replay with the interposer in a testbench, which is the case that needs no
+# cooperation from the design. //test/replay/buried is the same DUT inside one.
+
+topology_gen(
+    name = "topology",
+    srcs = ["topology.yml"],
+    cc_attrs = {
+        "alwayslink": True,
+        "linkstatic": True,
+    },
+)
+
+# The spec comes from the DUT's own Verilog, so it cannot go stale: every
+# scenario below replays ports slang read out of alu.sv.
+replay(
+    name = "alu_replay",
+    clock = "clk",
+    dut = "alu",
+    dut_lib = "//test/replay/alu:alu_sv",
+)
+
+# replay()'s other mode: a spec kept by hand, for a DUT slang cannot see.
+# Nothing instantiates the module it generates, but the build below elaborates
+# it, which is what keeps `width:` and `imports:` compiling.
+replay(
+    name = "alu_hand",
+    srcs = ["alu_hand.yml"],
+    # The spec names types from this package, so it has to elaborate first.
+    deps = ["//test/replay/alu:alu_pkg_sv"],
+)
+
+verilog_library(
+    name = "tb_sv",
+    srcs = ["tb.sv"],
+    top_module = "top",
+    deps = [
+        ":alu_hand_sv",
+        ":alu_replay_sv",
+        ":topology_sv",
+        "//:plusargs_sv",
+        "//:registry_sv",
+        "//test/lib/sim:sim_sv",
+        "//test/replay/alu:alu_sv",
+    ],
+)
+
+# Two builds of one testbench and one generated interposer, differing only in
+# the define. FEAT_GATE adds a port pair to the DUT, so this is what holds the
+# interposer to adapting the way the DUT does rather than being correct for the
+# setting it happened to be generated under. Defines reach both from here:
+# verilation is a single flat invocation over the whole closure.
+verilator_cc_library(
+    name = "tb_veri_lib",
+    module = ":tb_sv",
+    timing = True,
+    vopts = ["--assert"],
+)
+
+verilator_cc_library(
+    name = "tb_gate_veri_lib",
+    module = ":tb_sv",
+    timing = True,
+    vopts = [
+        "--assert",
+        "+define+FEAT_GATE",
+    ],
+)
+
+SIM_DEPS = [
+    ":topology_cc",
+    "//:logger",
+    "//:plusargs",
+    "//:registry",
+    "//:replay",
+    "//:topology",
+    "//test/lib/sim:sim_dpi",
+    "//test/replay:tb_flags",
+]
+
+cc_binary(
+    name = "sim",
+    # main() only; the checks are in tb.sv so they travel to other simulators.
+    srcs = ["//test/lib/sim:sim_main"],
+    deps = SIM_DEPS + [":tb_veri_lib"],
+)
+
+cc_binary(
+    name = "sim_gate",
+    srcs = ["//test/lib/sim:sim_main"],
+    deps = SIM_DEPS + [":tb_gate_veri_lib"],
+)
+
+# One build, driven entirely by plusargs: replay, a second dump, bypass, and a
+# corrupted dump that must fail.
+[
+    sh_test(
+        name = "sh_" + scenario["name"],
+        srcs = ["//test/lib/sim:sim.sh"],
+        args = ["$(location :%s)" % scenario.get("sim", "sim")] + scenario["args"],
+        data = [
+            ":" + scenario.get("sim", "sim"),
+            "//test/replay/fixtures:evcds",
+        ],
+    )
+    for scenario in [
+        # Runs to cycle 4, recorded result 7. Afterwards the testbench drives
+        # 1 + 2, so a last result of 3 shows the inputs were handed back.
+        {
+            "name": "replay",
+            "args": [
+                "+cvm_replay_file=test/replay/fixtures/alu.evcd",
+                "+expect_errors=0",
+                "+expect_replay_result=7",
+                "+expect_last_result=3",
+                "+expect_done_cycles=7",
+            ],
+        },
+        # Shorter, so the run length demonstrably comes from the recording.
+        {
+            "name": "replay_second_dump",
+            "args": [
+                "+cvm_replay_file=test/replay/fixtures/alu2.evcd",
+                "+expect_errors=0",
+                "+expect_replay_result=7",
+                "+expect_last_result=3",
+                "+expect_done_cycles=5",
+            ],
+        },
+        # Same recording, selected by key rather than as a bare path.
+        {
+            "name": "replay_keyed_dump",
+            "args": [
+                "+cvm_replay_file=TOP.REPLAY=test/replay/fixtures/alu2.evcd",
+                "+expect_errors=0",
+                "+expect_replay_result=7",
+                "+expect_last_result=3",
+                "+expect_done_cycles=5",
+            ],
+        },
+        # A recording loaded and never replayed: the testbench itself passes,
+        # so the host's end-of-run check is the only thing that catches it.
+        {
+            "name": "never_enabled",
+            "args": [
+                "--expect-failure",
+                "+cvm_replay_file=test/replay/fixtures/alu.evcd",
+                "+skip_enable=1",
+                "+expect_errors=0",
+            ],
+        },
+        # No recording, so a transparent wire that finishes immediately -- but
+        # the monitor must still see traffic.
+        {
+            "name": "no_recording",
+            "args": [
+                "+expect_errors=0",
+                "+expect_last_result=3",
+                "+expect_done_cycles=1",
+            ],
+        },
+        # Both workers on, against the corrupted dump: the testbench reads the
+        # host's error count straight after the summary call, so this is what
+        # holds that call to completing before it returns.
+        {
+            "name": "replay_async_report",
+            "args": [
+                "+signal_async=1",
+                "+cb_async=1",
+                "+cvm_replay_file=test/replay/fixtures/alu_bad.evcd",
+                "+expect_errors=1",
+                "+expect_replay_result=7",
+                "+expect_done_cycles=7",
+            ],
+        },
+        # Load bearing: the only scenario that fails if the checker stops
+        # running. One recorded result bit is wrong, so exactly one summary
+        # must appear; the stimulus is untouched.
+        {
+            "name": "replay_mismatch_detected",
+            "args": [
+                "+cvm_replay_file=test/replay/fixtures/alu_bad.evcd",
+                "+expect_errors=1",
+                "+expect_replay_result=7",
+                "+expect_last_result=3",
+                "+expect_done_cycles=7",
+            ],
+        },
+        # A recording of the FEAT_GATE build replayed against the build
+        # without it. The two builds do not have the same ports, so the run
+        # must die rather than quietly replay the ports they share.
+        {
+            "name": "replay_define_mismatch",
+            "args": [
+                "--expect-failure",
+                "--expect-message=`no_gate` is not declared in the dump",
+                "+cvm_replay_file=test/replay/fixtures/alu_gate.evcd",
+                "+expect_errors=0",
+            ],
+        },
+        # The other direction: every port binds, and the recording carries one
+        # more. Indistinguishable from a spec that has drifted from its DUT, so
+        # it is fatal too -- which costs a whole-hierarchy $dumpports an
+        # explicit `exclude`.
+        {
+            "name": "replay_unbound_dump_port",
+            "args": [
+                "--expect-failure",
+                "--expect-message=which the interposer does not replay",
+                "+cvm_replay_file=test/replay/fixtures/alu_extra.evcd",
+                "+expect_errors=0",
+            ],
+        },
+        # The other side of the conditional: two more ports in the DUT, the
+        # interposer and the recording. Every scenario above is the same
+        # interposer with the define off, which is what makes this pair
+        # evidence and not just one more configuration that happens to work.
+        {
+            "name": "replay_gate",
+            "sim": "sim_gate",
+            "args": [
+                "+cvm_replay_file=test/replay/fixtures/alu_gate.evcd",
+                "+expect_errors=0",
+                "+expect_replay_result=7",
+                "+expect_last_result=3",
+                "+expect_done_cycles=7",
+            ],
+        },
+    ]
+]
+

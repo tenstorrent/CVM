@@ -56,21 +56,17 @@ ${spec.localparams.rstrip()}
     // Each port's width from its own declaration, and the flat bit space they
     // tile. All elaboration-time constants, so the part-selects below are legal
     // however a width was spelled.
-<%
-    prev = None
-%>\
+    //
+    // Offsets run through a cursor rather than naming the previous port,
+    // because a port can sit inside a conditional: an absent one passes the
+    // cursor through untouched, where naming it would leave a hole in the chain.
+    localparam int CUR_0 = 0;
 % for p in ports:
     localparam int W_${p.name} = $bits(${p.name}${tb if p.dir == 'in' else du});
-%   if prev is None:
-    localparam int O_${p.name} = 0;
-%   else:
-    localparam int O_${p.name} = O_${prev.name} + W_${prev.name};
-%   endif
-<%
-    prev = p
-%>\
+    localparam int O_${p.name} = CUR_${loop.index};
+    localparam int CUR_${loop.index + 1} = O_${p.name} + W_${p.name};
 % endfor
-    localparam int PORT_BITS  = O_${ports[-1].name} + W_${ports[-1].name};
+    localparam int PORT_BITS  = CUR_${len(ports)};
     localparam int ELEM_WORDS = 2 + 3 * ((PORT_BITS + 31) / 32);
 % if spec.push_max:
     localparam int PUSH_MAX_ELEMENTS = ${spec.push_max};

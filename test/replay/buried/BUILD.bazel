@@ -32,7 +32,7 @@ verilog_library(
     ],
 )
 
-TB_DEPS = [
+TOP_DEPS = [
     ":core_sv",
     ":topology_sv",
     "//:plusargs_sv",
@@ -45,16 +45,16 @@ TB_DEPS = [
 # elaborates and runs anyway is the proof that the interposer, which is
 # synthesized with the design, depends on nothing from cvm.
 verilog_library(
-    name = "tb_off_sv",
-    srcs = ["tb.sv"],
-    deps = TB_DEPS,
+    name = "top_off_sv",
+    srcs = ["top.sv"],
+    deps = TOP_DEPS,
     top_module = "top",
 )
 
 verilog_library(
-    name = "tb_on_sv",
-    srcs = ["tb.sv"],
-    deps = TB_DEPS + [":alu_interposer_bound_sv"],
+    name = "top_on_sv",
+    srcs = ["top.sv"],
+    deps = TOP_DEPS + [":alu_interposer_bound_sv"],
     top_module = "top",
 )
 
@@ -73,15 +73,15 @@ SIM_DEPS = [
 [
     [
         verilator_cc_library(
-            name = "tb_" + flavour + "_veri_lib",
-            module = ":tb_" + flavour + "_sv",
+            name = "top_" + flavour + "_veri_lib",
+            module = ":top_" + flavour + "_sv",
             timing = True,
             vopts = ["--assert"] + extra,
         ),
         cc_binary(
             name = "sim_" + flavour,
             srcs = ["//test/lib/sim:sim_main"],
-            deps = SIM_DEPS + host + [":tb_" + flavour + "_veri_lib"],
+            deps = SIM_DEPS + host + [":top_" + flavour + "_veri_lib"],
         ),
     ]
     for flavour, extra, host in [

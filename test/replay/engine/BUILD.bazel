@@ -12,10 +12,10 @@ topology_gen(
 )
 
 verilog_library(
-    name = "tb_sv",
+    name = "top_sv",
     srcs = [
         "regadd.sv",
-        "tb.sv",
+        "top.sv",
     ],
     deps = [
         ":topology_sv",
@@ -28,8 +28,8 @@ verilog_library(
 )
 
 verilator_cc_library(
-    name = "tb_veri_lib",
-    module = ":tb_sv",
+    name = "top_veri_lib",
+    module = ":top_sv",
     timing = True,
     vopts = ["--assert"],
 )
@@ -38,11 +38,11 @@ cc_binary(
     name = "sim",
     srcs = [
         "tb_dpi.cpp",
-        # main() only; the checks are in tb_engine.sv.
+        # main() only; the checks are in top.sv.
         "//test/lib/sim:sim_main",
     ],
     deps = [
-        ":tb_veri_lib",
+        ":top_veri_lib",
         "//:logger",
         "//:pipe",
         "//:plusargs",

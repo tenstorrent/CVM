@@ -35,8 +35,8 @@ replay(
 )
 
 verilog_library(
-    name = "tb_sv",
-    srcs = ["tb.sv"],
+    name = "top_sv",
+    srcs = ["top.sv"],
     top_module = "top",
     deps = [
         ":alu_hand_sv",
@@ -55,15 +55,15 @@ verilog_library(
 # setting it happened to be generated under. Defines reach both from here:
 # verilation is a single flat invocation over the whole closure.
 verilator_cc_library(
-    name = "tb_veri_lib",
-    module = ":tb_sv",
+    name = "top_veri_lib",
+    module = ":top_sv",
     timing = True,
     vopts = ["--assert"],
 )
 
 verilator_cc_library(
-    name = "tb_gate_veri_lib",
-    module = ":tb_sv",
+    name = "top_gate_veri_lib",
+    module = ":top_sv",
     timing = True,
     vopts = [
         "--assert",
@@ -84,15 +84,15 @@ SIM_DEPS = [
 
 cc_binary(
     name = "sim",
-    # main() only; the checks are in tb.sv so they travel to other simulators.
+    # main() only; the checks are in top.sv so they travel to other simulators.
     srcs = ["//test/lib/sim:sim_main"],
-    deps = SIM_DEPS + [":tb_veri_lib"],
+    deps = SIM_DEPS + [":top_veri_lib"],
 )
 
 cc_binary(
     name = "sim_gate",
     srcs = ["//test/lib/sim:sim_main"],
-    deps = SIM_DEPS + [":tb_gate_veri_lib"],
+    deps = SIM_DEPS + [":top_gate_veri_lib"],
 )
 
 # One build, driven entirely by plusargs: replay, a second dump, bypass, and a

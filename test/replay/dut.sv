@@ -28,6 +28,11 @@ module alu (
 `ifdef FEAT_GATE
     input  logic             gate,
     output logic             gate_echo,
+`else
+    // The else branch, so one port's condition is a negation. Unused on
+    // purpose: what is under test is that the interposer drives it at all,
+    // which the recording's conformance check is what proves.
+    input  logic             no_gate,
 `endif
     inout  wire  [2:0]       bus,
     output logic             bus_echo,

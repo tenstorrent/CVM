@@ -1,8 +1,7 @@
 $date Tue Sep 1 12:00:00 2026 $end
-$version cvm replay hand-written fixture, cycle indexed $end
+$version cvm replay hand-written fixture, cycle indexed, with a port no spec binds $end
 $timescale 1ps $end
 $scope module tb.u_alu $end
-$var port 1 <11 clk $end
 $var port 1 <0 rst_n $end
 $var port [3:0] <1 opa $end
 $var port [3:0] <2 opb $end
@@ -14,20 +13,21 @@ $var port [8:0] <7 resp $end
 $var port [7:0] <8 sum $end
 $var port [2:0] <9 sel $end
 $var port [2:0] <10 sel_echo $end
-$var port [2:0] <12 bus $end
-$var port 1 <13 bus_echo $end
-$var port 1 <14 no_gate $end
+$var port [2:0] <11 bus $end
+$var port 1 <12 bus_echo $end
+$var port 1 <13 no_gate $end
+$var port 1 <14 spare $end
 $upscope $end
 $enddefinitions $end
 #0
 $dumpports
-pU 6 0 <14
-pFLU 6 6 <12
-pL 0 6 <13
-pD 6 0 <11
+pD 6 0 <14
+pU 6 0 <13
+pFLU 6 6 <11
+pL 0 6 <12
 pD 6 0 <0
-pDDUD 6 0 <1
-pDUDU 6 0 <2
+pDDDU 6 0 <1
+pDDUD 6 0 <2
 pLLLLL 0 6 <3
 pL 0 6 <4
 pDDDDDDDDDUDDDDDDDDUDUD 6 0 <5
@@ -40,10 +40,18 @@ $end
 #1
 pU 6 0 <0
 #2
-pFHU 6 6 <12
-pH 0 6 <13
+pFHU 6 6 <11
+pH 0 6 <12
 pHLH 0 6 <10
 pLLLLHLLHL 0 6 <7
 pLLLLLHHH 0 6 <8
-pLLHHH 0 6 <3
+pDUDU 6 0 <1
+pDUUD 6 0 <2
+pLLLHH 0 6 <3
 pH 0 6 <4
+#3
+pDDUU 6 0 <1
+pDUDD 6 0 <2
+pLHLHH 0 6 <3
+#4
+pLLHHH 0 6 <3

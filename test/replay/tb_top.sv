@@ -32,6 +32,8 @@ module top;
     logic             bus_echo_tb;
 `ifdef FEAT_GATE
     logic             gate_tb, gate_echo_tb;
+`else
+    logic             no_gate_tb;
 `endif
 
     logic             rst_n_dut, valid_dut;
@@ -49,6 +51,8 @@ module top;
     wire  [2:0]       bus;
 `ifdef FEAT_GATE
     logic             gate_dut, gate_echo_dut;
+`else
+    logic             no_gate_dut;
 `endif
 
     logic [7:0] mon_edges;
@@ -87,6 +91,8 @@ module top;
 `ifdef FEAT_GATE
         .gate_tb  (gate_tb),   .gate_dut  (gate_dut),
         .gate_echo_dut (gate_echo_dut), .gate_echo_tb (gate_echo_tb),
+`else
+        .no_gate_tb (no_gate_tb), .no_gate_dut (no_gate_dut),
 `endif
         .result_dut (result_dut), .result_tb (result_tb),
         .valid_dut  (valid_dut),  .valid_tb  (valid_tb),
@@ -108,6 +114,8 @@ module top;
 `ifdef FEAT_GATE
         .gate      (gate_dut),
         .gate_echo (gate_echo_dut),
+`else
+        .no_gate   (no_gate_dut),
 `endif
         .result (result_dut),
         .valid  (valid_dut),
@@ -134,6 +142,8 @@ module top;
         // Low, so a gate_echo still high after replay would mean the recording
         // never handed the port back.
         gate_tb  = 1'b0;
+`else
+        no_gate_tb = 1'b0;
 `endif
     end
 

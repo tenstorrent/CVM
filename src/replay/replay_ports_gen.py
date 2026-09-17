@@ -44,6 +44,11 @@ IDENTIFIER = re.compile(r"\b[A-Za-z_][A-Za-z_0-9]*\b")
 # -- so a skipped branch is only a candidate port list if it says so.
 DIRECTION_KEYWORD = re.compile(r"\b(input|output|inout)\b")
 
+# Printing a node or a token yields its leading trivia too, which is where a
+# comment above a declaration ends up. Both paths below strip it the same way,
+# so a type reads identically whether it was elaborated or recovered.
+LEADING_TRIVIA = re.compile(r"\A(?:\s|//[^\n]*\n|/\*.*?\*/)*", re.DOTALL)
+
 
 @dataclass
 class Port:
@@ -103,6 +108,10 @@ def nodes(sequence):
 
 def text_of(tokens) -> str:
     return "".join(str(t) for t in tokens).strip()
+
+
+def written_text(node) -> str:
+    return LEADING_TRIVIA.sub("", str(node)).strip()
 
 
 def type_text(written: str, direction: str) -> str:
@@ -239,11 +248,13 @@ def _fragment_ports(source: str, when: Tuple[str, ...]) -> List[Port]:
     def take(direction_token, data_type, name: str) -> None:
         if direction_token is None:
             return
-        direction = str(direction_token).strip()
+        # valueText, not str: the token carries any comment above it.
+        direction = direction_token.valueText
         if direction not in ("input", "output", "inout"):
             return
         mapped = {"input": "in", "output": "out", "inout": "inout"}[direction]
-        found.append(Port(name, mapped, type_text(str(data_type), mapped), when))
+        found.append(Port(name, mapped,
+                          type_text(written_text(data_type), mapped), when))
 
     port_list = module.header.ports
     if port_list is not None and port_list.kind.name == "AnsiPortList":
@@ -396,7 +407,7 @@ def build(driver, top: str, clock: str, exclude: List[str]) -> Spec:
         if syntax is not None and getattr(syntax, "dimensions", None):
             die(f"port `{port.name}` has an unpacked dimension, which slang "
                 "does not report as part of the type; exclude it")
-        written = str(port.internalSymbol.declaredType.typeSyntax)
+        written = written_text(port.internalSymbol.declaredType.typeSyntax)
         when = ()
         where: Tuple[object, int] = ("", 0)
         if syntax is not None:

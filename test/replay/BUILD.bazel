@@ -240,15 +240,27 @@ cc_binary(
             ],
         },
         # A recording of the FEAT_GATE build replayed against the build
-        # without it. The two ports it carries have no binding, which is
-        # indistinguishable from a spec that has drifted from its DUT -- so the
-        # run must die rather than quietly replay the other eleven.
+        # without it. The two builds do not have the same ports, so the run
+        # must die rather than quietly replay the ports they share.
         {
             "name": "replay_define_mismatch",
             "args": [
                 "--expect-failure",
-                "--expect-message=which the interposer does not replay",
+                "--expect-message=`no_gate` is not declared in the dump",
                 "+cvm_replay_file=test/replay/fixtures/alu_gate.evcd",
+                "+expect_errors=0",
+            ],
+        },
+        # The other direction: every port binds, and the recording carries one
+        # more. Indistinguishable from a spec that has drifted from its DUT, so
+        # it is fatal too -- which costs a whole-hierarchy $dumpports an
+        # explicit `exclude`.
+        {
+            "name": "replay_unbound_dump_port",
+            "args": [
+                "--expect-failure",
+                "--expect-message=which the interposer does not replay",
+                "+cvm_replay_file=test/replay/fixtures/alu_extra.evcd",
                 "+expect_errors=0",
             ],
         },
@@ -283,6 +295,7 @@ test_suite(
         ":sh_replay_define_mismatch",
         ":sh_replay_gate",
         ":sh_replay_second_dump",
+        ":sh_replay_unbound_dump_port",
         ":sh_spec_is_define_independent",
         ":sh_spec_matches_golden",
     ],

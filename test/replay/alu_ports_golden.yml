@@ -33,6 +33,11 @@ alu_replay:
       type: logic
       when:
       - FEAT_GATE
+    no_gate:
+      dir: in
+      type: logic
+      when:
+      - '!FEAT_GATE'
     bus:
       dir: inout
       type: wire [2:0]

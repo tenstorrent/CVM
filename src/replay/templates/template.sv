@@ -14,7 +14,11 @@
 %>\
 <%def name="open_guard(chain)">\
 % for cond in chain:
+%   if cond.startswith('!'):
+`ifndef ${cond[1:]}
+%   else:
 `ifdef ${cond}
+%   endif
 % endfor
 </%def>\
 <%def name="close_guard(chain)">\

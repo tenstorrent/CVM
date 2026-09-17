@@ -53,8 +53,10 @@ class Port:
     width: Optional[int] = None
     dump_name: str = ""
     # The chain of conditions the DUT declares this port under, outermost
-    # first, re-emitted as nested `ifdef`s. The interposer then appears and
-    # disappears with the port, so it needs no defines of its own.
+    # first, re-emitted as nested `ifdef`s -- or `ifndef`, for an entry written
+    # `!COND`, which is what an `else` branch around a declaration means. The
+    # interposer then appears and disappears with the port, so it needs no
+    # defines of its own.
     when: List[str] = field(default_factory=list)
 
     def sv_type(self) -> str:

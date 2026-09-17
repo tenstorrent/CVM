@@ -15,7 +15,7 @@ topology_gen(
 # The interposer is generated from alu's own Verilog and goes into the design
 # build; the bound module and the bind macro are simulation only.
 replay_bind(
-    name = "alu_interp",
+    name = "alu_interposer",
     clock = "clk",
     dut = "alu",
     dut_lib = "//test/replay:alu_sv",
@@ -27,7 +27,7 @@ verilog_library(
     name = "core_sv",
     srcs = ["core.sv"],
     deps = [
-        ":alu_interp_sv",
+        ":alu_interposer_sv",
         "//test/replay:alu_sv",
     ],
 )
@@ -54,7 +54,7 @@ verilog_library(
 verilog_library(
     name = "tb_buried_on_sv",
     srcs = ["tb_buried.sv"],
-    deps = TB_DEPS + [":alu_interp_bound_sv"],
+    deps = TB_DEPS + [":alu_interposer_bound_sv"],
     top_module = "top",
 )
 
@@ -86,7 +86,7 @@ SIM_DEPS = [
     ]
     for flavour, extra, host in [
         ("off", [], []),
-        ("on", ["+define+CVM_REPLAY_ALU_INTERP"], ["//:replay"]),
+        ("on", ["+define+CVM_REPLAY_ALU_INTERPOSER"], ["//:replay"]),
     ]
 ]
 

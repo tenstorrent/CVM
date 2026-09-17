@@ -118,19 +118,17 @@ def _replay_bind_impl(ctx):
 
     interposer = ctx.outputs.interposer
     bound = ctx.outputs.bound
-    bind = ctx.outputs.bind
     merged = ctx.outputs.merged
 
     args = ctx.actions.args()
     args.add_all("--definitions", ctx.files.srcs)
     args.add("--interposer-sv", interposer)
     args.add("--bound-sv", bound)
-    args.add("--bind-svh", bind)
     args.add("--merged", merged)
     if ctx.attr.replay_define:
         args.add("--replay-define", ctx.attr.replay_define)
 
-    outputs = [interposer, bound, bind, merged]
+    outputs = [interposer, bound, merged]
     ctx.actions.run(
         arguments = [args],
         executable = ctx.executable._gen,
@@ -148,7 +146,6 @@ _replay_bind = rule(
         "replay_define": attr.string(),
         "interposer": attr.output(),
         "bound": attr.output(),
-        "bind": attr.output(),
         "merged": attr.output(),
         "_gen": attr.label(
             default = "//src/replay:replay_gen",
@@ -215,7 +212,6 @@ def replay_bind(
         replay_define = replay_define or "",
         interposer = name + ".sv",
         bound = name + "_bound.sv",
-        bind = name + "_bind.svh",
         merged = name + "_merged.yml",
         visibility = visibility,
     )
@@ -228,12 +224,11 @@ def replay_bind(
         visibility = visibility,
     )
 
-    # Simulation only. The bind macro travels as a header, so a testbench needs
-    # only to include it.
+    # Simulation only. A testbench binds this in with one statement: `.*`
+    # fills the boundary by name, because both modules come from one spec.
     verilog_library(
         name = name + "_bound_sv",
         srcs = [name + "_bound.sv"],
-        hdrs = [name + "_bind.svh"],
         deps = ["@cvm//:replay_sv", ":" + name + "_sv"] + (deps or []),
         visibility = visibility,
     )

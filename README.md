@@ -284,17 +284,18 @@ Replay is a registry component, so it needs a [topology](#topology): declare a
 node of type `replay` and pass its location to the generated module.
 
 The generated module is an interposer: the DUT's IO flows through it, so every
-port appears on both sides -- `*_tb` towards the testbench, `*_dut` towards the
-DUT. It never instantiates the DUT and never calls `$finish`, so it drops into a
+port appears on both sides -- `*_outer` towards whatever the DUT sits in and
+`*_inner` towards the DUT. The names are positional on purpose: the same
+interposer goes inside a design, where "tb" would be wrong. It never instantiates the DUT and never calls `$finish`, so it drops into a
 larger testbench.
 
 ```systemverilog
 alu_replay #(.LOCATION(cvm_topology_gen::get_location(topo.TOP.REPLAY.ID, 0))) u_replay (
     .clk(clk), .reset_n(reset_n), .enable(enable), .done(done),
-    .rst_n_tb(rst_n_tb), .rst_n_dut(rst_n_dut),
-    .result_dut(result_dut), .result_tb(result_tb),
+    .rst_n_outer(rst_n_outer), .rst_n_inner(rst_n_inner),
+    .result_inner(result_inner), .result_outer(result_outer),
     .bus(bus), /* ... */ );
-alu u_dut (.clk(clk), .rst_n(rst_n_dut), .bus(bus), /* ... */ );
+alu u_dut (.clk(clk), .rst_n(rst_n_inner), .bus(bus), /* ... */ );
 ```
 
 An `inout` is the exception: it is one net, so it gets **one** port, and the port
@@ -308,6 +309,79 @@ replay finishes, the interposer is a transparent wire. `enable`'s rising edge is
 the time origin, so a testbench can initialise first and then hand over. An
 instance with no recording configured reports `done` without ever driving, so
 leaving one out is how you bypass it.
+
+### Replaying a DUT buried in a larger design
+
+The above needs the instantiation site to be a testbench. For a block inside a
+chip, `replay_bind` generates a pair instead:
+
+```python
+load("@cvm//:defs.bzl", "replay_bind")
+
+replay_bind(
+    name = "alu_interposer",
+    dut = "alu",
+    dut_lib = "//path/to:alu_sv",
+    clock = "clk",
+)
+```
+
+`<name>_sv` is the interposer. It sits **beside** the DUT rather than around it,
+so the DUT's instance keeps its name and therefore its hierarchical path -- what
+every waveform script, coverage database and constraint file depends on. It holds
+nothing of replay: no DPI, no transport, no cvm package, so it is synthesized with
+the design. One `ifdef` sets its `REPLAY_ENABLE` parameter and the parameter
+decides the rest, so with replay off it is wires.
+
+`<name>_bound_sv` is everything else -- the boundary arithmetic, the host calls,
+the engine. A testbench binds it in, and that is what makes the testbench the
+owner of `LOCATION`, `reset_n`, `enable` and `done`: a bind takes parameters and
+ports, and nothing reaching into a hierarchy can. A parameter cannot be set
+hierarchically at all (IEEE 1800 6.20.2 -- parameters build the hierarchy, so
+they cannot be read out of it), and `defparam` reaches only one level.
+
+The design instantiates the interposer unconditionally, beside the DUT, with
+intermediate nets. No `ifdef` and no generate:
+
+```systemverilog
+    wire [3:0] opa_i;
+    wire [4:0] result_i;
+
+    alu_interposer u_alu_replay (
+        .clk(clk),
+        .opa_outer(opa), .opa_inner(opa_i),
+        .result_inner(result_i), .result_outer(result),
+        .bus(bus), /* ... */ );
+
+    alu u_alu (.clk(clk), .opa(opa_i), .result(result_i), .bus(bus), /* ... */ );
+```
+
+An `inout` is **not** repointed. It stays one net, tapped by the interposer, so
+with replay off there is nothing between the design and the block at all. Two
+isolated sides are not available: `alias` on a port and the `tran` primitives are
+both rejected, so one net is the only form -- and during replay a design driving
+that net contends with the recording rather than being overridden.
+
+The testbench's whole side is one statement. `.*` fills the boundary by name,
+which works because both modules come from one spec, and it carries conditional
+ports for free since both declare them under the same `ifdef`:
+
+```systemverilog
+bind alu_interposer alu_interposer_bound #(
+    .LOCATION(cvm_topology_gen::get_location(topo.TOP.REPLAY.ID, 0))
+) u_cvm_replay (
+    .reset_n (tb_reset_n),
+    .enable  (tb_enable),
+    .done    (tb_done),
+    .*
+);
+```
+
+Put the bind under the same define that turns `REPLAY_ENABLE` on, so the two
+cannot disagree. If they do it is loud either way: an interposer with nothing
+bound drives X through its mux, and a bind with the interposer off never
+finishes. Do not instantiate one interposer module at two sites -- both binds
+would land on one `LOCATION` and the two transports would collide.
 
 Runtime plusargs, so the vector file needs no recompile:
 

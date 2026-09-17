@@ -1,7 +1,7 @@
 <%
     ports = spec.ports
-    tb = spec.tb_suffix
-    du = spec.dut_suffix
+    outer = spec.outer_suffix
+    inner = spec.inner_suffix
 %>\
 <%def name="open_guard(chain)">\
 % for cond in chain:
@@ -58,11 +58,11 @@ module ${spec.name}
 ${open_guard(chain)}\
 %   for p in group:
 %     if p.dir == 'in':
-    , input  ${p.sv_type()} ${p.name}${tb}
-    , output ${p.sv_type()} ${p.name}${du}
+    , input  ${p.sv_type()} ${p.name}${outer}
+    , output ${p.sv_type()} ${p.name}${inner}
 %     elif p.dir == 'out':
-    , input  ${p.sv_type()} ${p.name}${du}
-    , output ${p.sv_type()} ${p.name}${tb}
+    , input  ${p.sv_type()} ${p.name}${inner}
+    , output ${p.sv_type()} ${p.name}${outer}
 %     else:
     // One port, because an inout is one net: the parent leaves ${p.name}
     // connected to ${spec.dut} as it was, and this taps the same net.
@@ -94,7 +94,7 @@ ${close_guard(chain)}\
 ${open_guard(chain)}\
 %   for p in group:
 %     if p.dir == 'out':
-    assign ${p.name}${tb} = ${p.name}${du};
+    assign ${p.name}${outer} = ${p.name}${inner};
 %     endif
 %   endfor
 ${close_guard(chain)}\
@@ -105,8 +105,8 @@ ${close_guard(chain)}\
 ${open_guard(chain)}\
 %   for p in group:
 %     if p.dir == 'in':
-        assign ${p.name}${du} =
-            (${p.name}_rep & ${p.name}_en) | (${p.name}${tb} & ~${p.name}_en);
+        assign ${p.name}${inner} =
+            (${p.name}_rep & ${p.name}_en) | (${p.name}${outer} & ~${p.name}_en);
 %     elif p.dir == 'inout':
         for (genvar b = 0; b < $bits(${p.name}); b++) begin : g_${p.name}
             assign ${p.name}[b] = ${p.name}_en[b] ? ${p.name}_rep[b] : 1'bz;
@@ -120,7 +120,7 @@ ${close_guard(chain)}\
 ${open_guard(chain)}\
 %   for p in group:
 %     if p.dir == 'in':
-        assign ${p.name}${du} = ${p.name}${tb};
+        assign ${p.name}${inner} = ${p.name}${outer};
 %     endif
 %   endfor
 ${close_guard(chain)}\

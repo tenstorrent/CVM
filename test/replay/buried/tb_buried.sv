@@ -12,7 +12,7 @@ module top;
     localparam int TAIL_CYCLES    = 10;
     localparam int TIMEOUT_CYCLES = 1000;
 
-`ifdef CVM_REPLAY_ALU_INTERP
+`ifdef CVM_REPLAY_ALU_INTERPOSER
     localparam bit REPLAYING = 1'b1;
 `else
     localparam bit REPLAYING = 1'b0;
@@ -31,6 +31,10 @@ module top;
     logic [alu_pkg::LANES-1:0][3:0] mat;
     logic [$clog2(alu_pkg::LANES*4)-1:0] sel, sel_echo;
     wire  [2:0]                 bus;
+    // Drives the inout only when replay will not, so the passthrough build has
+    // something real to carry: alu echoes bus[0] onto bus[1], so seeing bus[1]
+    // high proves the net runs design -> block -> design with nothing between.
+    assign bus[0] = REPLAYING ? 1'bz : 1'b1;
     logic                       bus_echo, valid;
     logic [4:0]                 result, result_plain;
     alu_pkg::lane_t             resp;
@@ -120,6 +124,14 @@ module top;
                      mon_last_result, expect_last_result);
             errors++;
         end
+        // The inout is one net shared by the design and the block, so in the
+        // passthrough build there is nothing between them at all. In the replay
+        // build the recording owns bus and its own expectations cover it.
+        if (!REPLAYING && (bus[1] !== 1'b1 || bus_echo !== 1'b1)) begin
+            $display("FAIL: bus[1]=%0b bus_echo=%0b, wanted both 1; the inout should be one net",
+                     bus[1], bus_echo);
+            errors++;
+        end
         // The property the sibling form exists for: the DUT is still at the
         // path it was at before replay was inserted. A wrapper would have made
         // this u_core.u_alu.u_real.
@@ -156,10 +168,17 @@ module top;
 
 endmodule
 
-`ifdef CVM_REPLAY_ALU_INTERP
-// One line, and the testbench owns every part of it.
-`include "alu_interp_bind.svh"
-`CVM_REPLAY_ALU_INTERP_BIND(
-    cvm_topology_gen::get_location(cvm_topology_gen::mods.TOP.REPLAY.ID, 0),
-    top.tb_reset_n, top.tb_enable, top.tb_done)
+`ifdef CVM_REPLAY_ALU_INTERPOSER
+// The whole of it. `.*` fills the boundary by name, which works because the
+// interposer and this module come from one spec -- and it carries the
+// conditional ports for free, since both declare them under the same `ifdef`
+// and so match or are both absent. Only the four the testbench owns are named.
+bind alu_interposer alu_interposer_bound #(
+    .LOCATION(cvm_topology_gen::get_location(cvm_topology_gen::mods.TOP.REPLAY.ID, 0))
+) u_cvm_replay (
+    .reset_n (top.tb_reset_n),
+    .enable  (top.tb_enable),
+    .done    (top.tb_done),
+    .*
+);
 `endif

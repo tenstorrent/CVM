@@ -1,7 +1,7 @@
 <%
     ports = spec.ports
-    tb = spec.tb_suffix
-    du = spec.dut_suffix
+    outer = spec.outer_suffix
+    inner = spec.inner_suffix
     cursor = [0]
 
     # An inout has one net, not two sides: the DUT and the testbench connect to
@@ -10,7 +10,7 @@
     def side(p, which):
         if p.dir == 'inout':
             return p.name
-        return p.name + (tb if which == 'tb' else du)
+        return p.name + (outer if which == 'outer' else inner)
 %>\
 <%def name="open_guard(chain)">\
 % for cond in chain:
@@ -30,7 +30,7 @@
 // Spec: ${spec.name}   DUT: ${spec.dut}
 
 // Interposer: the DUT's IO flows through it, so every port appears on both
-// sides -- the testbench connects `*${tb}`, the DUT connects `*${du}`. This
+// sides -- the surrounding design connects `*${outer}`, the block connects `*${inner}`. This
 // file only packs the boundary into the flat vectors cvm_replay_engine works
 // in; the behaviour is all there.
 //
@@ -67,11 +67,11 @@ module ${spec.name}
 ${open_guard(chain)}\
 %   for p in group:
 %     if p.dir == 'in':
-    , input  ${p.sv_type()} ${p.name}${tb}
-    , output ${p.sv_type()} ${p.name}${du}
+    , input  ${p.sv_type()} ${p.name}${outer}
+    , output ${p.sv_type()} ${p.name}${inner}
 %     elif p.dir == 'out':
-    , input  ${p.sv_type()} ${p.name}${du}
-    , output ${p.sv_type()} ${p.name}${tb}
+    , input  ${p.sv_type()} ${p.name}${inner}
+    , output ${p.sv_type()} ${p.name}${outer}
 %     else:
     // One port, because an inout is one net. The testbench and the DUT
     // connect to it and are thereby connected to each other.
@@ -103,7 +103,7 @@ ${spec.localparams.rstrip()}
 %>\
 ${open_guard(chain)}\
 %   for p in group:
-    localparam int W_${p.name} = $bits(${side(p, 'tb' if p.dir == 'in' else 'dut')});
+    localparam int W_${p.name} = $bits(${side(p, 'outer' if p.dir == 'in' else 'inner')});
     localparam int O_${p.name} = CUR_${cursor[0]};
     localparam int CUR_${cursor[0] + 1} = O_${p.name} + W_${p.name};
 <%
@@ -150,11 +150,11 @@ ${open_guard(chain)}\
             drive_en[O_${p.name} + b] ? drive_val[O_${p.name} + b] : 1'bz;
     end
 %     else:
-    assign observed[O_${p.name} +: W_${p.name}] = ${p.name}${tb if p.dir == 'in' else du};
+    assign observed[O_${p.name} +: W_${p.name}] = ${p.name}${outer if p.dir == 'in' else inner};
 %       if p.dir == 'in':
-    assign ${p.name}${du} = driven[O_${p.name} +: W_${p.name}];
+    assign ${p.name}${inner} = driven[O_${p.name} +: W_${p.name}];
 %       else:
-    assign ${p.name}${tb} = ${p.name}${du};
+    assign ${p.name}${outer} = ${p.name}${inner};
 %       endif
 %     endif
 %   endfor
@@ -231,8 +231,8 @@ ${open_guard(chain)}\
 %     if p.dir == 'inout':
     ${p.sv_type()} ${p.name};
 %     else:
-    ${p.sv_type()} ${p.name}${tb};
-    ${p.sv_type()} ${p.name}${du};
+    ${p.sv_type()} ${p.name}${outer};
+    ${p.sv_type()} ${p.name}${inner};
 %     endif
 %   endfor
 ${close_guard(chain)}\
@@ -249,8 +249,8 @@ ${open_guard(chain)}\
 %     if p.dir == 'inout':
         , .${p.name}(${p.name})
 %     else:
-        , .${p.name}${tb}(${p.name}${tb})
-        , .${p.name}${du}(${p.name}${du})
+        , .${p.name}${outer}(${p.name}${outer})
+        , .${p.name}${inner}(${p.name}${inner})
 %     endif
 %   endfor
 ${close_guard(chain)}\
@@ -262,7 +262,7 @@ ${close_guard(chain)}\
 % for chain, group in spec.groups():
 ${open_guard(chain)}\
 %   for p in group:
-        , .${p.name}(${side(p, 'dut')})
+        , .${p.name}(${side(p, 'inner')})
 %   endfor
 ${close_guard(chain)}\
 % endfor

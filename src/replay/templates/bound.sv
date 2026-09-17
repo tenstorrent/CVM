@@ -1,14 +1,14 @@
 <%
     ports = spec.ports
-    tb = spec.tb_suffix
-    du = spec.dut_suffix
+    outer = spec.outer_suffix
+    inner = spec.inner_suffix
     cursor = [0]
 
     def side(p):
         """The signal this module observes for a port."""
         if p.dir == 'inout':
             return p.name
-        return p.name + (tb if p.dir == 'in' else du)
+        return p.name + (outer if p.dir == 'in' else inner)
 %>\
 <%def name="open_guard(chain)">\
 % for cond in chain:
@@ -60,7 +60,7 @@ module ${spec.name}_bound
 ${open_guard(chain)}\
 %   for p in group:
 %     if p.dir == 'out':
-    , input  ${p.sv_type()} ${p.name}${du}
+    , input  ${p.sv_type()} ${p.name}${inner}
 %     else:
     , input  ${p.sv_type()} ${side(p)}
     , output ${p.sv_type()} ${p.name}_rep

@@ -44,23 +44,36 @@ module core import alu_pkg::*, alu_aux_pkg::*; (
     lane_t                      resp_r;
     byte_t                      sum_r;
 
-    alu_interp u_alu_replay (
-        .clk          (clk),
-        .rst_n_tb     (rst_n),      .rst_n_dut     (rst_n_r),
-        .opa_tb       (opa),        .opa_dut       (opa_r),
-        .opb_tb       (opb),        .opb_dut       (opb_r),
-        .cmd_tb       (cmd),        .cmd_dut       (cmd_r),
-        .mat_tb       (mat),        .mat_dut       (mat_r),
-        .sel_tb       (sel),        .sel_dut       (sel_r),
-        .no_gate_tb   (no_gate),    .no_gate_dut   (no_gate_r),
-        // An inout is not repointed: one net, tapped by both.
-        .bus          (bus),
-        .bus_echo_dut (bus_echo_r), .bus_echo_tb   (bus_echo),
-        .result_dut   (result_r),   .result_tb     (result),
-        .valid_dut    (valid_r),    .valid_tb      (valid),
-        .resp_dut     (resp_r),     .resp_tb       (resp),
-        .sum_dut      (sum_r),      .sum_tb        (sum),
-        .sel_echo_dut (sel_echo_r), .sel_echo_tb   (sel_echo)
+    alu_interposer u_alu_replay (
+        .clk (clk),
+        .rst_n_outer (rst_n),
+        .rst_n_inner (rst_n_r),
+        .opa_outer (opa),
+        .opa_inner (opa_r),
+        .opb_outer (opb),
+        .opb_inner (opb_r),
+        .cmd_outer (cmd),
+        .cmd_inner (cmd_r),
+        .mat_outer (mat),
+        .mat_inner (mat_r),
+        .sel_outer (sel),
+        .sel_inner (sel_r),
+        .no_gate_outer (no_gate),
+        .no_gate_inner (no_gate_r),
+        // An inout is not repointed: one net, and the interposer taps it.
+        .bus (bus),
+        .bus_echo_inner (bus_echo_r),
+        .bus_echo_outer (bus_echo),
+        .result_inner (result_r),
+        .result_outer (result),
+        .valid_inner (valid_r),
+        .valid_outer (valid),
+        .resp_inner (resp_r),
+        .resp_outer (resp),
+        .sum_inner (sum_r),
+        .sum_outer (sum),
+        .sel_echo_inner (sel_echo_r),
+        .sel_echo_outer (sel_echo)
     );
 
     alu u_alu (

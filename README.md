@@ -189,60 +189,125 @@ For now, fields using the same qualify should be contiguous. This requirement ma
 
 ## replay (experimental)
 
-Replays a recorded vector stream against an arbitrary Verilog module:
-drives the module's inputs from the recorded timeline and checks its outputs
-against the recorded values. Useful for turning a full-chip capture into a
-block-level regression, or for reproducing a failure without the surrounding
-environment.
+Replays a recorded vector stream against an arbitrary Verilog module: drives the
+module's inputs from the recorded timeline and checks its outputs against the
+recorded values. Useful for turning a full-chip capture into a block-level
+regression, or for reproducing a failure without the surrounding environment.
 
-A yaml port spec format is introduced to generate SV glue.
+The recording is an [EVCD](https://en.wikipedia.org/wiki/Value_change_dump)
+(`$dumpports`), read as cycles: at cycle *k* the dump holds the inputs for cycle
+*k* beside the outputs standing *during* it. It is a runtime input, not a build
+input, so one build replays any number of conforming recordings.
 
-```yaml
-# alu_ports.yml
-alu_replay:
-  dut: alu
-  ports:
-    clk:    { width: 1, dir: in }
-    opa:    { width: 4, dir: in }
-    result: { width: 5, dir: out }
-    valid:  { width: 1, dir: out, check: false }   # passed through, not compared
-    dbg:    { width: 4, dir: in, dump_name: dbg_bus }  # dump uses another name
-    tclk:   { width: 1, dir: in, source: external }    # always TB-driven
-```
+### Generating the interposer
+
+Point the rule at the DUT's own `verilog_library` and it derives the port spec
+with slang:
 
 ```python
 load("@cvm//:defs.bzl", "replay")
 
-replay(name = "alu_replay", srcs = ["alu_ports.yml"])
+replay(
+    name = "alu_replay",
+    dut = "alu",
+    dut_lib = ":alu_sv",
+    clock = "clk",
+)
 ```
 
-Replay is a registry component, so it needs a [topology](#topology): declare a
-node of type `replay` and pass its location to the generated module. The rule's
-optional `topology` attribute is a separate thing -- it only resolves
-`${A.B.C}` interpolation of widths and depths inside the yml, so a spec with
-literal widths does not need it.
+| attribute | |
+|---|---|
+| `dut_lib` | the DUT's `verilog_library`. Carries its sources, its include dirs and its package closure, and is added to the generated library's `deps` -- which it must be, or the interposer elaborates before the packages its port types name. |
+| `dut` | the module to replay. |
+| `clock` | the DUT's clock port. Human input by necessity: a cycle-indexed recording samples once per cycle, so a clock reads as a constant in it and the dump cannot say which port is special. Never replayed. |
+| `exclude` | ports to leave unreplayed -- one on a second clock domain, which no cycle-indexed recording describes. Also how a whole-hierarchy `$dumpports` is made usable, since a dump port nothing binds is fatal. |
+| `slang_defines` | read only so slang can pick a branch to elaborate. The spec must come out identical whichever way these are set; `//test/replay:sh_spec_is_define_independent` is that check. |
+| `srcs` | a hand-written spec instead of `dut_lib`, for a DUT slang cannot see. Exactly one of the two. |
+| `topology` | resolves `${A.B.C}` interpolation of widths and depths inside a hand-written spec. Unrelated to the topology replay needs at runtime. |
+
+### The spec
+
+The same format either way, so a generated spec and a hand-written one are read
+by one parser. Everything in it is a SystemVerilog *expression*, never a resolved
+number: the interposer re-declares each port with the DUT's own type and measures
+it with `$bits`, so **one generated interposer holds for every parameterization
+and every define setting of the DUT**. A resolved width in a spec has silently
+stopped describing anything but the configuration it was taken from.
+
+```yaml
+alu_replay:                 # = the generated interposer's module name
+  dut: alu
+  clock: clk
+  imports: [alu_pkg]        # emitted in the interposer's header, where port
+                            # types resolve; a body import is too late
+  parameters:               # with default *expressions*, never values
+    LANES: { type: int, default: "alu_pkg::LANES" }
+  localparams: |            # widths the DUT keeps private, restated verbatim
+    localparam int C_C = 1;
+  exclude: [tck]
+  ports:
+    rst_n:    { dir: in,    width: 1 }                        # a literal, if you know it
+    cmd:      { dir: in,    type: "alu_pkg::bundle_t" }       # a struct
+    mat:      { dir: in,    type: "logic [alu_pkg::LANES-1:0][3:0]" }
+    sel:      { dir: in,    type: "logic [$clog2(alu_pkg::LANES*4)-1:0]" }
+    bus:      { dir: inout, type: "wire [2:0]" }              # must name a net
+    resp:     { dir: out,   type: "alu_pkg::lane_t" }
+    gate:     { dir: in,    width: 1, when: [FEAT_GATE] }     # conditional in the DUT
+    no_gate:  { dir: in,    width: 1, when: ["!FEAT_GATE"] }  # ...its else branch
+    dbg:      { dir: in,    width: 4, dump_name: dbg_bus }    # dump names it differently
+```
 
 `dir` is **always** from the DUT's perspective: `in` means driven *into* the DUT.
+Give exactly one of `type` (the declaration as written) or `width` (a literal).
+`when` is the chain of conditions the DUT declares the port under, emitted as
+nested `` `ifdef ``s -- or `` `ifndef `` for an entry written `!COND` -- so the
+interposer adapts to defines exactly as the DUT does. Defines are never passed to
+the generator.
+
+There is no switch for what to check or what to drive: every input is driven and
+every output checked, and the recording decides the rest. An output the dump never
+wrote, or wrote as X, is simply not compared.
+
+### Conformance
+
+Both directions are fatal, because both mean the recording is not of this module:
+
++ a port in the spec that the recording lacks, or disagrees on the width of
++ a port the recording carries that nothing binds -- the clock and `exclude` aside
+
+The second is what stops a spec that has drifted from its DUT narrowing the test
+in silence.
+
+### Wiring it in
+
+Replay is a registry component, so it needs a [topology](#topology): declare a
+node of type `replay` and pass its location to the generated module.
 
 The generated module is an interposer: the DUT's IO flows through it, so every
-port appears on both sides (`*_tb` towards the testbench, `*_dut` towards the
-DUT). It never instantiates the DUT and never calls `$finish`, so it drops into a
-larger testbench. `enable`'s rising edge is the time origin, and every recorded
-timestamp is applied relative to it, which lets a testbench initialise first and
-then hand over. When `enable` falls, or the dump runs out, the DUT's inputs revert
-to the testbench side.
+port appears on both sides -- `*_tb` towards the testbench, `*_dut` towards the
+DUT. It never instantiates the DUT and never calls `$finish`, so it drops into a
+larger testbench.
 
 ```systemverilog
 alu_replay #(.LOCATION(cvm_topology_gen::get_location(topo.TOP.REPLAY.ID, 0))) u_replay (
-    .enable(enable), .done(done),
-    .clk_tb(clk_tb), .clk_dut(clk_dut), /* ... */ );
-alu u_dut (.clk(clk_dut), /* ... */ );
+    .clk(clk), .reset_n(reset_n), .enable(enable), .done(done),
+    .rst_n_tb(rst_n_tb), .rst_n_dut(rst_n_dut),
+    .result_dut(result_dut), .result_tb(result_tb),
+    .bus(bus), /* ... */ );
+alu u_dut (.clk(clk), .rst_n(rst_n_dut), .bus(bus), /* ... */ );
 ```
 
+An `inout` is the exception: it is one net, so it gets **one** port, and the port
+connection is what joins the testbench to the DUT. The interposer drives the bits
+the recording says the outside had and releases the rest, which means it does not
+isolate an inout the way it isolates an input -- a testbench driving one during
+replay contends with the recording instead of being overridden.
+
 `enable` is the only control over who drives the DUT: until it rises, and after
-replay finishes, the interposer is a transparent wire. An instance with no
-recording configured reports `done` without ever driving, so leaving one out is
-how you bypass it.
+replay finishes, the interposer is a transparent wire. `enable`'s rising edge is
+the time origin, so a testbench can initialise first and then hand over. An
+instance with no recording configured reports `done` without ever driving, so
+leaving one out is how you bypass it.
 
 Runtime plusargs, so the vector file needs no recompile:
 

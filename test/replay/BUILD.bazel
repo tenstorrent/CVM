@@ -1,3 +1,4 @@
+load("@cvm_pypi//:requirements.bzl", "requirement")
 load("@cvm//:defs.bzl", "replay")
 load("@rules_hdl//verilog:providers.bzl", "verilog_library")
 load("@rules_verilator//verilator:defs.bzl", "verilator_cc_library")
@@ -199,4 +200,13 @@ test_suite(
         ":sh_replay_mismatch_detected",
         ":sh_replay_second_dump",
     ],
+)
+
+# Guards the two slang capabilities the port-spec producer depends on, under the
+# interpreter bazel resolves rather than whatever is installed system-wide.
+py_test(
+    name = "pyslang_test",
+    size = "small",
+    srcs = ["pyslang_test.py"],
+    deps = [requirement("pyslang")],
 )

@@ -4,6 +4,9 @@
 alu_replay:
   dut: alu
   clock: clk
+  imports:
+  - alu_pkg
+  - alu_aux_pkg
   ports:
     rst_n:
       dir: in
@@ -16,13 +19,13 @@ alu_replay:
       type: logic [3:0]
     cmd:
       dir: in
-      type: alu_pkg::bundle_t
+      type: bundle_t
     mat:
       dir: in
       type: logic [alu_pkg::LANES-1:0][3:0]
     sel:
       dir: in
-      type: logic [$clog2(alu_pkg::LANES*4)-1:0]
+      type: logic [$clog2(LANES*4)-1:0]
     gate:
       dir: in
       type: logic
@@ -52,10 +55,10 @@ alu_replay:
       type: logic
     resp:
       dir: out
-      type: alu_pkg::lane_t
+      type: lane_t
     sum:
       dir: out
-      type: logic [7:0]
+      type: byte_t
     sel_echo:
       dir: out
-      type: logic [$clog2(alu_pkg::LANES*4)-1:0]
+      type: logic [$clog2(LANES*4)-1:0]

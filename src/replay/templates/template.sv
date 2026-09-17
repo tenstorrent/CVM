@@ -40,9 +40,11 @@
 // module holds for every parameterization and every define setting of
 // ${spec.dut}, from one generated file.
 module ${spec.name}
-% for pkg in spec.imports:
+% if spec.imports:
   // In the header, not the body: these resolve the port types below, and a
   // body import comes too late for a port declaration.
+% endif
+% for pkg in spec.imports:
   import ${pkg}::*;
 % endfor
 #(

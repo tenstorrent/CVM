@@ -17,14 +17,19 @@
 // port covers them: bit 0 is the outside's, bit 1 is the DUT's, bit 2 is
 // nobody's. Bit 1 is what the DUT sampled off bit 0, so the round trip goes out
 // through the same port it came in on.
-module alu (
+//
+// Imports in the header, not the body: that is the only place they resolve a
+// port type, and the interposer has to do the same. Two packages, in one
+// declaration, so a port type reaching either one is covered -- and `mat` below
+// stays qualified so both ways of naming a package type are.
+module alu import alu_pkg::*, alu_aux_pkg::*; (
     input  logic             clk,
     input  logic             rst_n,
     input  logic [3:0]       opa,
     input  logic [3:0]       opb,
-    input  alu_pkg::bundle_t cmd,
+    input  bundle_t          cmd,
     input  logic [alu_pkg::LANES-1:0][3:0] mat,
-    input  logic [$clog2(alu_pkg::LANES*4)-1:0] sel,
+    input  logic [$clog2(LANES*4)-1:0] sel,
 `ifdef FEAT_GATE
     input  logic             gate,
     output logic             gate_echo,
@@ -38,9 +43,9 @@ module alu (
     output logic             bus_echo,
     output logic [4:0]       result,
     output logic             valid,
-    output alu_pkg::lane_t   resp,
-    output logic [7:0]       sum,
-    output logic [$clog2(alu_pkg::LANES*4)-1:0] sel_echo
+    output lane_t            resp,
+    output byte_t            sum,
+    output logic [$clog2(LANES*4)-1:0] sel_echo
 );
 
     // Only bit 1, so the other two stay the outside's and nobody's.

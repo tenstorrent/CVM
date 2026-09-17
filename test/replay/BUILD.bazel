@@ -33,9 +33,17 @@ verilog_library(
 )
 
 verilog_library(
+    name = "alu_aux_pkg_sv",
+    srcs = ["alu_aux_pkg.sv"],
+)
+
+verilog_library(
     name = "alu_sv",
     srcs = ["dut.sv"],
-    deps = [":alu_pkg_sv"],
+    deps = [
+        ":alu_aux_pkg_sv",
+        ":alu_pkg_sv",
+    ],
     top_module = "alu",
 )
 

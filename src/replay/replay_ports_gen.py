@@ -287,18 +287,18 @@ def module_of(instance):
 def collect_imports(module) -> List[str]:
     """The packages the DUT's header imports, by name.
 
-    They have to be in the interposer's header too: a port declared with a
-    package type does not resolve from a body import.
+    They have to be in the interposer's header too: a port declared with an
+    unqualified package type does not resolve from a body import.
+
+    Read per item rather than per declaration, because one declaration can
+    import from several packages -- `import a::*, b::t;` is two of them.
     """
     names: List[str] = []
     for declaration in module.header.imports:
-        for item in IDENTIFIER.finditer(str(declaration)):
-            name = item.group(0)
-            if name == "import":
-                continue
-            if name not in names:
+        for item in nodes(declaration.items):
+            name = item.package.valueText
+            if name and name not in names:
                 names.append(name)
-            break  # the package name is the first identifier of each item
     return names
 
 

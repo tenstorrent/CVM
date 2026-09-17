@@ -1,9 +1,13 @@
 // SPDX-FileCopyrightText: © 2026 Tenstorrent USA, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// The interposer never sees these: a packed aggregate is assignment-compatible
-// with a same-width vector, so the spec gives each port as a width.
+// The interposer declares its ports with these types and measures them with
+// $bits, so a width stated here is the only place it is stated.
 package alu_pkg;
+
+    // A width the DUT's ports derive from, so the spec cannot state a literal
+    // without duplicating it.
+    parameter int LANES = 2;
 
     typedef struct packed {
         logic [7:0] data;

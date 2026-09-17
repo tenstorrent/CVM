@@ -26,20 +26,27 @@ cc_test(
     ],
 )
 
+verilog_library(
+    name = "alu_pkg_sv",
+    srcs = ["alu_pkg.sv"],
+)
+
 replay(
     name = "alu_replay",
     srcs = ["alu_ports.yml"],
+    # The spec names types from this package, so it has to elaborate first.
+    deps = [":alu_pkg_sv"],
 )
 
 verilog_library(
     name = "tb_top_sv",
     srcs = [
-        "alu_pkg.sv",
         "dut.sv",
         "tb_top.sv",
     ],
     deps = [
         ":topology_sv",
+        ":alu_pkg_sv",
         ":alu_replay_sv",
         "//:plusargs_sv",
         "//:registry_sv",

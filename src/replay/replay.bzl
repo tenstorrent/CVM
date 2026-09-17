@@ -60,13 +60,18 @@ _replay = rule(
     ],
 )
 
-def replay(name, srcs, topology = None, visibility = None, **kwargs):
+def replay(name, srcs, topology = None, deps = None, visibility = None, **kwargs):
     """Generate a replay interposer from a YAML spec.
 
     Emits only SystemVerilog: the port layout is handed to the runtime by the
     generated module's bind calls, so there is no generated C++. The recording is
     not a build input either, so one build replays any number of conforming
     recordings.
+
+    `deps` are verilog_library targets providing the packages the spec's port
+    types name. They have to be elaborated before the interposer, so a spec that
+    uses a package type without listing it here fails with the type reported as
+    undeclared.
     """
 
     sv = name + ".sv"
@@ -85,6 +90,6 @@ def replay(name, srcs, topology = None, visibility = None, **kwargs):
     verilog_library(
         name = name + "_sv",
         srcs = [sv],
-        deps = ["@cvm//:replay_sv"],
+        deps = ["@cvm//:replay_sv"] + (deps or []),
         visibility = visibility,
     )

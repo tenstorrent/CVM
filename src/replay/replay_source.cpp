@@ -52,52 +52,18 @@ namespace cvm {
       return false;
     }
 
-    bool source::open(std::istream& in, const std::string& layout,
-                      const std::string& name) {
+    bool source::open(std::istream& in, const std::string& name) {
       reader_.emplace(in, name);
       if (!reader_->ok()) {
         error_ = reader_->error();
         return false;
       }
       to_bound_.assign(reader_->ports().size(), npos);
-
-      // `name:width:offset:is_output;...`
-      std::size_t pos = 0;
-      while (pos < layout.size()) {
-        const std::size_t end = layout.find(';', pos);
-        const std::string record = layout.substr(
-            pos, end == std::string::npos ? std::string::npos : end - pos);
-        pos = (end == std::string::npos) ? layout.size() : end + 1;
-        if (record.empty())
-          continue;
-
-        std::string field[5];
-        std::size_t fp = 0;
-        bool ok = true;
-        for (int i = 0; i < 5; ++i) {
-          const std::size_t colon = record.find(':', fp);
-          field[i] = record.substr(
-              fp, colon == std::string::npos ? std::string::npos : colon - fp);
-          if (colon == std::string::npos) {
-            ok = (i == 4);
-            break;
-          }
-          fp = colon + 1;
-        }
-        if (!ok)
-          return fail("malformed layout record `" + record + "`");
-
-        const std::size_t width = std::stoul(field[1]);
-        const std::size_t offset = std::stoul(field[2]);
-        if (bind(field[0], width, field[3] == "1", offset, field[4] == "1") < 0) {
-          return false;
-        }
-      }
       return true;
     }
 
     int source::bind(const std::string& name, std::size_t width, bool is_output,
-                     std::size_t bit_offset, bool check) {
+                     std::size_t bit_offset) {
       const auto& dump = reader_->ports();
       for (std::size_t d = 0; d < dump.size(); ++d) {
         if (dump[d].name != name)
@@ -114,7 +80,6 @@ namespace cvm {
         bp.width = width;
         bp.bit_offset = bit_offset;
         bp.is_output = is_output;
-        bp.check = check;
         bound_.push_back(bp);
         to_bound_[d] = bound_.size() - 1;
         recorded_.push_back(false);
@@ -242,7 +207,7 @@ namespace cvm {
           } else {
             if (a)
               out.exp[w] |= m;
-            if (bp.check && known_port && !x)
+            if (known_port && !x)
               out.care[w] |= m;
           }
         }

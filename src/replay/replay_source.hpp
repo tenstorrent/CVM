@@ -17,17 +17,21 @@ namespace cvm {
   namespace replay {
 
     // A recording, read as the cycles the engine replays. The port layout
-    // arrives at runtime through open() rather than being generated a second
+    // arrives at runtime through bind() rather than being generated a second
     // time in C++.
     class source {
       public:
-        // `layout` is the port list as `name:width:offset:is_output:check;...`,
-        // emitted by the generated interposer: one call rather than a per-port
-        // handshake back across the DPI boundary. Binding is the conformance
-        // check, so a dump that disagrees fails here. `name` appears in parse
-        // diagnostics; pass the path `in` came from.
-        bool open(std::istream& in, const std::string& layout,
-                  const std::string& name = "");
+        // Reads the header. `name` appears in parse diagnostics; pass the path
+        // `in` came from.
+        bool open(std::istream& in, const std::string& name = "");
+
+        // Declares one port and checks the dump agrees about it -- the
+        // conformance check, so a recording that lacks the port or disagrees on
+        // width fails here. Returns the bind index, or -1. `is_output` selects
+        // which side of the recorded value to take: what the fixture drove, or
+        // what the DUT did.
+        int bind(const std::string& name, std::size_t width, bool is_output,
+                 std::size_t bit_offset);
 
         // Next recorded cycle, split into stimulus, expectation and care mask.
         // An emulator has no X, so an unknown *input* bit is resolved to 0 here
@@ -66,16 +70,10 @@ namespace cvm {
             std::size_t width = 0;
             std::size_t bit_offset = 0;
             bool is_output = false;
-            bool check = true;
             bool saw_dut_in = false;
             bool saw_dut_out = false;
         };
 
-        // Declares one port and checks the dump agrees about it. Returns the
-        // bind index, or -1. `is_output` selects which side of the recorded
-        // value to take: what the fixture drove, or what the DUT did.
-        int bind(const std::string& name, std::size_t width, bool is_output,
-                 std::size_t bit_offset, bool check = true);
         bool next(replay_vector& out);
 
         void write_bit(std::size_t bit, evcd::drive d);

@@ -12,12 +12,22 @@ REGISTRY_register(cvm::replay::engine, REPLAY, cvm::registry::all)
 
 extern "C" {
 
-  int cvm_replay_load(unsigned int location, const char* layout,
-                      int port_bits) {
+  int cvm_replay_bind(unsigned int location, const char* name, int width,
+                      int bit_offset, int is_output) {
+    int status = -1;
+    std::atomic<bool> done(false);
+    cvm::registry::messenger.signal_async<cvm::replay::bind_request>(
+        location, {name, width, bit_offset, is_output != 0, &status, &done},
+        cvm::messenger::highest_priority);
+    done.wait(false);
+    return status;
+  }
+
+  int cvm_replay_load(unsigned int location, int port_bits, int elem_words) {
     int status = -1;
     std::atomic<bool> done(false);
     cvm::registry::messenger.signal_async<cvm::replay::load_request>(
-        location, {layout, port_bits, &status, &done},
+        location, {port_bits, elem_words, &status, &done},
         cvm::messenger::highest_priority);
     done.wait(false);
     return status;

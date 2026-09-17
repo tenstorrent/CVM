@@ -34,6 +34,13 @@ namespace cvm {
         : loc_(loc), who_(cvm::topology::name(loc)), pipe_(loc, id) {
       auto& m = cvm::registry::messenger;
 
+      m.connect<bind_request>(loc, [this](const bind_request& r) {
+        const release _{r.done};
+        const int status = bind(r);
+        if (r.status != nullptr)
+          *r.status = status;
+      });
+
       m.connect<load_request>(loc, [this](const load_request& r) {
         const release _{r.done};
         const int status = load(r);
@@ -89,10 +96,19 @@ namespace cvm {
                who_, path_, encoder_.produced());
     }
 
+    int engine::bind(const bind_request& r) {
+      if (r.name == nullptr || r.width <= 0)
+        return -1;
+      bindings_.push_back(binding{std::string(r.name),
+                                  static_cast<std::size_t>(r.width),
+                                  static_cast<std::size_t>(r.bit_offset),
+                                  r.is_output});
+      return 0;
+    }
+
     int engine::load(const load_request& r) {
-      const std::size_t nwords =
-          (static_cast<std::size_t>(r.port_bits) + 31) / 32;
-      const std::size_t words_per_element = 2 + 3 * nwords;
+      const std::size_t words_per_element =
+          static_cast<std::size_t>(r.elem_words);
 
       // No recording for this instance. The producer is still installed, and
       // reports end-of-stream on its first call, so the design finishes without
@@ -111,13 +127,21 @@ namespace cvm {
         cvm::log(cvm::ERROR, "Error: cvm::replay: cannot open `{}`\n", *path);
         return -1;
       }
-      if (!src_.open(file_, r.layout, *path))
+      if (!src_.open(file_, *path))
         return -1;
+
+      // A port the recording does not carry is fatal: the spec describes the
+      // boundary, so a dump missing one of them is not the recording this
+      // interposer was built for.
+      for (const binding& b : bindings_) {
+        if (src_.bind(b.name, b.width, b.is_output, b.bit_offset) < 0)
+          return -1;
+      }
 
       if (static_cast<int>(src_.total_bits()) != r.port_bits) {
         cvm::log(cvm::ERROR,
-                 "Error: cvm::replay: {}: layout needs {} bits but the interposer has "
-                 "{}\n",
+                 "Error: cvm::replay: {}: the bound ports span {} bits but the "
+                 "interposer has {}\n",
                  who_, src_.total_bits(), r.port_bits);
         return -1;
       }

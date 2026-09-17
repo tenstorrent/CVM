@@ -150,7 +150,9 @@ extern "C" void tb_engine_stimulus(unsigned int location, int boundary_bits) {
 // though this testbench drives the engine directly and opens no recording.
 extern "C" {
 
-  int cvm_replay_load(unsigned int, const char*, int) { return 0; }
+  int cvm_replay_bind(unsigned int, const char*, int, int, int) { return 0; }
+
+  int cvm_replay_load(unsigned int, int, int) { return 0; }
 
   void cvm_replay_report_word(unsigned int, int, unsigned int) {}
 

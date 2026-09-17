@@ -25,7 +25,8 @@ module top;
     logic [3:0]       opa_tb, opb_tb;
     logic [4:0]       result_tb;
     alu_pkg::bundle_t cmd_tb;
-    logic [1:0][3:0]  mat_tb;
+    logic [alu_pkg::LANES-1:0][3:0] mat_tb;
+    logic [$clog2(alu_pkg::LANES*4)-1:0] sel_tb, sel_echo_tb;
     alu_pkg::lane_t   resp_tb;
     logic [7:0]       sum_tb;
 
@@ -33,7 +34,8 @@ module top;
     logic [3:0]       opa_dut, opb_dut;
     logic [4:0]       result_dut;
     alu_pkg::bundle_t cmd_dut;
-    logic [1:0][3:0]  mat_dut;
+    logic [alu_pkg::LANES-1:0][3:0] mat_dut;
+    logic [$clog2(alu_pkg::LANES*4)-1:0] sel_dut, sel_echo_dut;
     alu_pkg::lane_t   resp_dut;
     logic [7:0]       sum_dut;
 
@@ -64,10 +66,12 @@ module top;
         .opb_tb   (opb_tb),    .opb_dut   (opb_dut),
         .cmd_tb   (cmd_tb),    .cmd_dut   (cmd_dut),
         .mat_tb   (mat_tb),    .mat_dut   (mat_dut),
+        .sel_tb   (sel_tb),    .sel_dut   (sel_dut),
         .result_dut (result_dut), .result_tb (result_tb),
         .valid_dut  (valid_dut),  .valid_tb  (valid_tb),
         .resp_dut   (resp_dut),   .resp_tb   (resp_tb),
-        .sum_dut    (sum_dut),    .sum_tb    (sum_tb)
+        .sum_dut    (sum_dut),    .sum_tb    (sum_tb),
+        .sel_echo_dut (sel_echo_dut), .sel_echo_tb (sel_echo_tb)
     );
 
     alu u_dut (
@@ -77,10 +81,12 @@ module top;
         .opb    (opb_dut),
         .cmd    (cmd_dut),
         .mat    (mat_dut),
+        .sel    (sel_dut),
         .result (result_dut),
         .valid  (valid_dut),
         .resp   (resp_dut),
-        .sum    (sum_dut)
+        .sum    (sum_dut),
+        .sel_echo (sel_echo_dut)
     );
 
     // Ignored in REPLAY until it finishes; drives in BYPASS.
@@ -94,6 +100,7 @@ module top;
         opb_tb   = 4'd2;
         cmd_tb   = '0;
         mat_tb   = '0;
+        sel_tb   = '0;
     end
 
     // Knows nothing of the mode, and must see traffic either way.

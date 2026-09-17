@@ -20,10 +20,6 @@ INTERPOLATION = re.compile(r"\$\{([^}]*)\}")
 
 DIRECTIONS = ("in", "out", "inout")
 
-# Must match CVM_PIPE_MAX_WORDS in src/pipe/cvm_pipe_pkg.sv: the largest array
-# formal the sized DPI families provide.
-PIPE_MAX_WORDS = 32768
-
 
 def interpolate(value, topology, where):
     """Resolve ${A.B.C} against topology attributes, if a topology was given."""
@@ -47,19 +43,18 @@ def interpolate(value, topology, where):
 @dataclass
 class Port:
     name: str
-    width: int
     dir: str
+    # The port's declaration as written in the DUT, passed through to the
+    # generated module untouched -- `logic [NUM_CORES-1:0]`, `my_pkg::cmd_t`.
+    # Never parsed here: the interposer takes $bits of the declared signal, so
+    # a width that depends on a parameter stays a parameter.
+    type_text: str = ""
+    # The literal alternative, for a hand-written spec that knows its widths.
+    width: Optional[int] = None
     dump_name: str = ""
-    check: bool = True
-    source: str = "replay"        # "replay" or "external"
-    bit_offset: int = 0
 
-    @property
-    def is_external(self) -> bool:
-        return self.source == "external"
-
-    def sv_range(self) -> str:
-        return f"[{self.width - 1}:0]"
+    def sv_type(self) -> str:
+        return self.type_text if self.type_text else f"logic [{self.width - 1}:0]"
 
 
 @dataclass
@@ -67,45 +62,29 @@ class Spec:
     name: str
     dut: str
     ports: List[Port]
+    # The DUT port carrying the clock. Named here because a cycle-indexed
+    # recording samples once per cycle, so a clock reads as a constant in it --
+    # the dump cannot say which port is special. Never replayed.
+    clock: str = ""
+    # Packages the port types below resolve in, and DUT-private widths they
+    # reference, both emitted into the generated module verbatim.
+    imports: List[str] = field(default_factory=list)
+    localparams: str = ""
+    # Parameters the port types reference. The testbench must pass the same
+    # values to the interposer and to the DUT.
+    parameters: Dict = field(default_factory=dict)
     pipe_depth: int = 4096
-    # 0 means "compute it from the payload width"; see push_max_elements.
+    # 0 means "let the generated module compute it from the element size".
     push_max: int = 0
     tb_suffix: str = "_tb"
     dut_suffix: str = "_dut"
     standalone_top: bool = False
-    total_bits: int = 0
-
-    @property
-    def words(self) -> int:
-        return (self.total_bits + 31) // 32
-
-    @property
-    def element_words(self) -> int:
-        """Words the transport carries per cycle: a 64-bit cycle number plus
-        the stimulus, the expectation and the care mask."""
-        return 2 + 3 * self.words
-
-    @property
-    def push_max_elements(self) -> int:
-        """Most elements one push may carry, when `push_max` overrides the
-        expression the generated module computes."""
-        return self.push_max or PIPE_MAX_WORDS // self.element_words
 
     def inputs(self) -> List[Port]:
         return [p for p in self.ports if p.dir == "in"]
 
     def outputs(self) -> List[Port]:
         return [p for p in self.ports if p.dir == "out"]
-
-    def driven_inputs(self) -> List[Port]:
-        """DUT inputs the interposer drives from the dump."""
-        return [p for p in self.inputs() if not p.is_external]
-
-    def external_inputs(self) -> List[Port]:
-        return [p for p in self.inputs() if p.is_external]
-
-    def checked_outputs(self) -> List[Port]:
-        return [p for p in self.outputs() if p.check]
 
     @classmethod
     def load(cls, definitions: List[str], topology: Optional[Dict]) -> "Spec":
@@ -129,11 +108,22 @@ class Spec:
         raw_ports = body.get("ports")
         assert raw_ports, f"{name}: `ports` is required and must be non-empty"
 
+        clock = body.get("clock")
+        assert clock, (
+            f"{name}: `clock` is required -- name the DUT's clock port. A "
+            "cycle-indexed recording samples once per cycle, so a clock reads "
+            "as a constant in it and must never be replayed."
+        )
+
         suffixes = body.get("suffixes") or {}
         spec = cls(
             name=name,
             dut=dut,
             ports=[],
+            clock=clock,
+            imports=list(body.get("imports") or []),
+            localparams=body.get("localparams", "") or "",
+            parameters=body.get("parameters") or {},
             pipe_depth=int(interpolate(body.get("pipe_depth", 4096), topology, name)),
             push_max=int(interpolate(body.get("push_max", 0), topology, name)),
             tb_suffix=suffixes.get("tb", "_tb"),
@@ -141,15 +131,12 @@ class Spec:
             standalone_top=bool(body.get("standalone_top", False)),
         )
 
-        offset = 0
         for port_name, attrs in raw_ports.items():
             assert isinstance(attrs, dict), f"{name}.{port_name}: must be a mapping"
             where = f"{name}.{port_name}"
-
-            width = interpolate(attrs.get("width"), topology, where)
-            assert width is not None, f"{where}: `width` is required"
-            width = int(width)
-            assert width > 0, f"{where}: width must be positive, got {width}"
+            assert port_name != clock, (
+                f"{where}: this is the clock, so it must not be a replayed port"
+            )
 
             direction = attrs.get("dir")
             assert direction in DIRECTIONS, (
@@ -158,43 +145,29 @@ class Spec:
             )
             if direction == "inout":
                 sys.exit(
-                    f"{where}: `dir: inout` is not supported. A pass-through "
-                    "interposer would need tristate resolution in both "
-                    "directions, which is out of scope for now."
+                    f"{where}: `dir: inout` is not supported yet."
                 )
 
-            source = attrs.get("source", "replay")
-            assert source in ("replay", "external"), (
-                f"{where}: `source` must be `replay` or `external`, got {source!r}"
+            type_text = attrs.get("type")
+            width = attrs.get("width")
+            assert (type_text is None) != (width is None), (
+                f"{where}: give exactly one of `type` (the declaration as "
+                "written, so the width stays parametric) or `width` (a literal)"
             )
-            if source == "external" and direction != "in":
-                sys.exit(f"{where}: `source: external` only applies to `dir: in`")
+            if width is not None:
+                width = int(interpolate(width, topology, where))
+                assert width > 0, f"{where}: width must be positive, got {width}"
 
             spec.ports.append(
                 Port(
                     name=port_name,
-                    width=width,
                     dir=direction,
+                    type_text=str(type_text) if type_text is not None else "",
+                    width=width,
                     dump_name=attrs.get("dump_name", "") or port_name,
-                    check=bool(attrs.get("check", True)),
-                    source=source,
-                    bit_offset=offset,
                 )
             )
-            offset += width
 
-        spec.total_bits = offset
-
-        # Only reachable through `push_max`: the generated default cannot
-        # exceed the formal, because it is derived from it.
-        if spec.push_max_elements * spec.element_words > PIPE_MAX_WORDS:
-            sys.exit(
-                f"{name}: {spec.total_bits} bits of ports need "
-                f"{spec.element_words} words per element, so a push of "
-                f"{spec.push_max_elements} exceeds the push formal "
-                f"({PIPE_MAX_WORDS} words). Lower `push_max`, or raise "
-                "CVM_PIPE_MAX_WORDS in src/pipe/cvm_pipe_pkg.sv."
-            )
         return spec
 
 
@@ -247,15 +220,12 @@ def main() -> None:
             {
                 spec.name: {
                     "dut": spec.dut,
-                    "total_bits": spec.total_bits,
+                    "clock": spec.clock,
                     "ports": {
                         p.name: {
-                            "width": p.width,
                             "dir": p.dir,
+                            "type": p.sv_type(),
                             "dump_name": p.dump_name,
-                            "check": p.check,
-                            "source": p.source,
-                            "bit_offset": p.bit_offset,
                         }
                         for p in spec.ports
                     },

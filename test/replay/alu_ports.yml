@@ -1,17 +1,24 @@
 alu_replay:
   dut: alu
-  # clk is not listed: all of the DUT's IO is on one clock, which the
-  # interposer takes as infrastructure rather than as a replayed port.
-  #
-  # An aggregate is given by its total width and nothing else, which is also how
-  # $dumpports records it: one signal of that width, named after the port.
+  # Infrastructure, never replayed: a cycle-indexed recording samples once per
+  # cycle, so a clock reads as a constant in it.
+  clock: clk
+  # Resolves the unqualified type names below, the way the DUT's own header
+  # does.
+  imports: [alu_pkg]
+  # Each port is given as its declaration, not a width, so a width that comes
+  # from a package parameter or a $clog2 stays parametric: the interposer takes
+  # $bits of what it declared. `width:` is still accepted for a spec that knows
+  # its numbers, and rst_n below keeps that path covered.
   ports:
-    rst_n:  { width: 1,  dir: in }
-    opa:    { width: 4,  dir: in }
-    opb:    { width: 4,  dir: in }
-    cmd:    { width: 22, dir: in }   # bundle_t
-    mat:    { width: 8,  dir: in }   # logic [1:0][3:0]
-    result: { width: 5,  dir: out }
-    valid:  { width: 1,  dir: out }
-    resp:   { width: 9,  dir: out }  # lane_t
-    sum:    { width: 8,  dir: out }
+    rst_n:    { width: 1, dir: in }
+    opa:      { type: "logic [3:0]",                            dir: in }
+    opb:      { type: "logic [3:0]",                            dir: in }
+    cmd:      { type: "bundle_t",                               dir: in }
+    mat:      { type: "logic [alu_pkg::LANES-1:0][3:0]",        dir: in }
+    sel:      { type: "logic [$clog2(alu_pkg::LANES*4)-1:0]",   dir: in }
+    result:   { type: "logic [4:0]",                            dir: out }
+    valid:    { width: 1, dir: out }
+    resp:     { type: "alu_pkg::lane_t",                        dir: out }
+    sum:      { type: "logic [7:0]",                            dir: out }
+    sel_echo: { type: "logic [$clog2(alu_pkg::LANES*4)-1:0]",   dir: out }

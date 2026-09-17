@@ -66,6 +66,9 @@ class Port:
 @dataclass
 class Spec:
     dut: str
+    # Every port the DUT declares, in declaration order. `clock` and `exclude`
+    # are checked against this and then dropped, so what is emitted is what
+    # gets replayed.
     ports: List[Port] = field(default_factory=list)
     imports: List[str] = field(default_factory=list)
     parameters: Dict[str, Dict[str, str]] = field(default_factory=dict)
@@ -379,7 +382,7 @@ def collect_localparams(module, conditionals: Conditionals,
     return out
 
 
-def build(driver, top: str, clock: str, exclude: List[str]) -> Spec:
+def build(driver, top: str) -> Spec:
     compilation = driver.createCompilation()
     instances = [i for i in compilation.getRoot().topInstances if i.name == top]
     if not instances:
@@ -393,12 +396,9 @@ def build(driver, top: str, clock: str, exclude: List[str]) -> Spec:
         conditionals.scan(tree.root)
 
     spec = Spec(dut=top)
-    skip = set(exclude) | {clock}
     seen = set()
 
     for port in instance.body.portList:
-        if port.name in skip:
-            continue
         direction = DIRECTIONS.get(port.direction)
         if direction is None:
             die(f"port `{port.name}` is `{port.direction}`, which a recording "
@@ -423,7 +423,7 @@ def build(driver, top: str, clock: str, exclude: List[str]) -> Spec:
     # this build rather than of the module.
     for body, when, where in conditionals.skipped:
         for port in parse_fragment(body, when, where):
-            if port.name in skip or port.name in seen:
+            if port.name in seen:
                 continue
             spec.ports.append(port)
             seen.add(port.name)
@@ -440,6 +440,7 @@ def build(driver, top: str, clock: str, exclude: List[str]) -> Spec:
 
 
 def emit(spec: Spec, name: str, clock: str, exclude: List[str]) -> str:
+    skip = set(exclude) | {clock}
     body: Dict[str, object] = {"dut": spec.dut, "clock": clock}
     if spec.imports:
         body["imports"] = spec.imports
@@ -448,10 +449,10 @@ def emit(spec: Spec, name: str, clock: str, exclude: List[str]) -> str:
     if spec.localparams:
         body["localparams"] = "".join(f"    {line}\n"
                                       for line in spec.localparams)
-    if exclude:
-        body["exclude"] = list(exclude)
     ports: Dict[str, object] = {}
     for port in spec.ports:
+        if port.name in skip:
+            continue
         entry: Dict[str, object] = {"dir": port.dir, "type": port.type_text}
         if port.when:
             entry["when"] = list(port.when)
@@ -500,9 +501,16 @@ def main() -> None:
     if not driver.parseAllSources():
         die(f"could not parse the sources for `{args.top}`")
 
-    spec = build(driver, args.top, args.clock, args.exclude)
+    spec = build(driver, args.top)
     if not spec.ports:
-        die(f"`{args.top}` has no replayable ports")
+        die(f"`{args.top}` has no ports")
+    names = {port.name for port in spec.ports}
+    if args.clock not in names:
+        die(f"`{args.clock}` is not a port of `{args.top}`; its ports are "
+            f"{sorted(names)}")
+    for name in args.exclude:
+        if name not in names:
+            die(f"excluded port `{name}` is not a port of `{args.top}`")
 
     name = args.name or f"{args.top}_replay"
     with open(args.out, "w") as handle:

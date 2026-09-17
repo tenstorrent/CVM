@@ -1,0 +1,140 @@
+load("@cvm//:defs.bzl", "replay_bind")
+load("@rules_hdl//verilog:providers.bzl", "verilog_library")
+load("@rules_verilator//verilator:defs.bzl", "verilator_cc_library")
+load("//:defs.bzl", "topology_gen")
+
+topology_gen(
+    name = "topology",
+    srcs = ["topology.yml"],
+    cc_attrs = {
+        "alwayslink": True,
+        "linkstatic": True,
+    },
+)
+
+# The interposer is generated from alu's own Verilog and goes into the design
+# build; the bound module and the bind macro are simulation only.
+replay_bind(
+    name = "alu_interp",
+    clock = "clk",
+    dut = "alu",
+    dut_lib = "//test/replay:alu_sv",
+)
+
+# The design: core.sv holds the committed edit, and the interposer is part of
+# it. Nothing of replay is here.
+verilog_library(
+    name = "core_sv",
+    srcs = ["core.sv"],
+    deps = [
+        ":alu_interp_sv",
+        "//test/replay:alu_sv",
+    ],
+)
+
+TB_DEPS = [
+    ":core_sv",
+    ":topology_sv",
+    "//:plusargs_sv",
+    "//:registry_sv",
+    "//test/lib/sim:sim_sv",
+]
+
+# The off build has none of replay in it -- not the bound module, not the
+# engine, not the transport, and none of the host libraries either. That it
+# elaborates and runs anyway is the proof that the interposer, which is
+# synthesized with the design, depends on nothing from cvm.
+verilog_library(
+    name = "tb_buried_off_sv",
+    srcs = ["tb_buried.sv"],
+    deps = TB_DEPS,
+    top_module = "top",
+)
+
+verilog_library(
+    name = "tb_buried_on_sv",
+    srcs = ["tb_buried.sv"],
+    deps = TB_DEPS + [":alu_interp_bound_sv"],
+    top_module = "top",
+)
+
+SIM_DEPS = [
+    "//:logger",
+    "//:plusargs",
+    "//:registry",
+    "//:topology",
+    ":topology_cc",
+    "//test/lib/sim:sim_dpi",
+    "//test/replay:tb_flags",
+]
+
+# One source, two builds. The define decides whether the interposer is a mux or
+# plain wires -- and whether the testbench binds anything into it at all.
+[
+    [
+        verilator_cc_library(
+            name = "tb_buried_" + flavour + "_veri_lib",
+            module = ":tb_buried_" + flavour + "_sv",
+            timing = True,
+            vopts = ["--assert"] + extra,
+        ),
+        cc_binary(
+            name = "sim_" + flavour,
+            srcs = ["//test/lib/sim:sim_main"],
+            deps = SIM_DEPS + host + [":tb_buried_" + flavour + "_veri_lib"],
+        ),
+    ]
+    for flavour, extra, host in [
+        ("off", [], []),
+        ("on", ["+define+CVM_REPLAY_ALU_INTERP"], ["//:replay"]),
+    ]
+]
+
+[
+    sh_test(
+        name = "sh_" + scenario["name"],
+        srcs = ["//test/lib/sim:sim.sh"],
+        args = ["$(location :%s)" % scenario["sim"]] + scenario["args"],
+        data = [
+            ":" + scenario["sim"],
+            "//test/replay/fixtures:evcds",
+        ],
+    )
+    for scenario in [
+        # REPLAY_ENABLE is 0, so the interposer is wires. This build has no
+        # replay in it at all -- it does not even know the +cvm_replay_file
+        # flag, which is what makes it stand for the synthesis build.
+        {
+            "name": "passthrough",
+            "sim": "sim_off",
+            "args": [
+                "+expect_errors=0",
+                "+expect_last_result=3",
+            ],
+        },
+        # The same design, replaying the buried instance.
+        {
+            "name": "buried",
+            "sim": "sim_on",
+            "args": [
+                "+cvm_replay_file=test/replay/fixtures/alu.evcd",
+                "+expect_errors=0",
+                "+expect_replay_result=7",
+                "+expect_last_result=3",
+                "+expect_done_cycles=7",
+            ],
+        },
+        # Load bearing: one recorded output bit is wrong, so the checker must
+        # report it through the bind.
+        {
+            "name": "buried_mismatch",
+            "sim": "sim_on",
+            "args": [
+                "+cvm_replay_file=test/replay/fixtures/alu_bad.evcd",
+                "+expect_errors=1",
+                "+expect_replay_result=7",
+                "+expect_done_cycles=7",
+            ],
+        },
+    ]
+]

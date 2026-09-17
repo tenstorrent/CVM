@@ -98,6 +98,10 @@ class Spec:
     pipe_depth: int = 4096
     # 0 means "let the generated module compute it from the element size".
     push_max: int = 0
+    # The macro whose presence turns the interposer's REPLAY_ENABLE on. Per
+    # interposer, not one global: a single define would turn on every replay
+    # site in the design at once.
+    replay_define: str = ""
     tb_suffix: str = "_tb"
     dut_suffix: str = "_dut"
     standalone_top: bool = False
@@ -174,6 +178,8 @@ class Spec:
             tb_suffix=suffixes.get("tb", "_tb"),
             dut_suffix=suffixes.get("dut", "_dut"),
             standalone_top=bool(body.get("standalone_top", False)),
+            replay_define=body.get("replay_define", "") or
+                          "CVM_REPLAY_" + name.upper(),
         )
 
         for port_name, attrs in raw_ports.items():
@@ -252,16 +258,33 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--definitions", nargs="+", required=True)
     parser.add_argument("--topology", default=None)
-    parser.add_argument("--sv", required=True)
+    parser.add_argument("--sv", default=None)
+    # The buried-block pair: an interposer that is synthesized alongside the
+    # DUT, and the replay stack a testbench binds into it.
+    parser.add_argument("--interposer-sv", default=None)
+    parser.add_argument("--bound-sv", default=None)
+    parser.add_argument("--bind-svh", default=None)
+    parser.add_argument("--replay-define", default=None)
     parser.add_argument("--merged", required=True)
     args = parser.parse_args()
 
     topology = load_topology(args.topology)
     spec = Spec.load(args.definitions, topology)
+    if args.replay_define:
+        spec.replay_define = args.replay_define
 
     # Templates are runfiles beside this script, as packet_gen.py does it.
     templates = pathlib.Path(os.path.abspath(__file__)).parent / "templates"
-    render(str(templates / "template.sv"), args.sv, spec)
+    if not (args.sv or args.interposer_sv or args.bound_sv or args.bind_svh):
+        sys.exit("give at least one of --sv, --interposer-sv or --bound-sv")
+    if args.sv:
+        render(str(templates / "template.sv"), args.sv, spec)
+    if args.interposer_sv:
+        render(str(templates / "interposer.sv"), args.interposer_sv, spec)
+    if args.bound_sv:
+        render(str(templates / "bound.sv"), args.bound_sv, spec)
+    if args.bind_svh:
+        render(str(templates / "bind.svh"), args.bind_svh, spec)
 
     with open(args.merged, "w") as handle:
         yaml.safe_dump(

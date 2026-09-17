@@ -113,6 +113,131 @@ _replay = rule(
     ],
 )
 
+def _replay_bind_impl(ctx):
+    """Generate the interposer and the replay stack a testbench binds into it."""
+
+    interposer = ctx.outputs.interposer
+    bound = ctx.outputs.bound
+    bind = ctx.outputs.bind
+    merged = ctx.outputs.merged
+
+    args = ctx.actions.args()
+    args.add_all("--definitions", ctx.files.srcs)
+    args.add("--interposer-sv", interposer)
+    args.add("--bound-sv", bound)
+    args.add("--bind-svh", bind)
+    args.add("--merged", merged)
+    if ctx.attr.replay_define:
+        args.add("--replay-define", ctx.attr.replay_define)
+
+    outputs = [interposer, bound, bind, merged]
+    ctx.actions.run(
+        arguments = [args],
+        executable = ctx.executable._gen,
+        inputs = ctx.files.srcs,
+        outputs = outputs,
+        mnemonic = "CVMReplayBind",
+    )
+
+    return [DefaultInfo(files = depset(outputs))]
+
+_replay_bind = rule(
+    _replay_bind_impl,
+    attrs = {
+        "srcs": attr.label_list(mandatory = True, allow_files = True),
+        "replay_define": attr.string(),
+        "interposer": attr.output(),
+        "bound": attr.output(),
+        "bind": attr.output(),
+        "merged": attr.output(),
+        "_gen": attr.label(
+            default = "//src/replay:replay_gen",
+            executable = True,
+            cfg = "exec",
+        ),
+    },
+    provides = [DefaultInfo],
+)
+
+def replay_bind(
+        name,
+        srcs = None,
+        dut = None,
+        dut_lib = None,
+        clock = None,
+        exclude = None,
+        slang_defines = None,
+        replay_define = None,
+        deps = None,
+        visibility = None):
+    """Generate an interposer for a DUT buried in a larger design.
+
+    Two files, with different lives:
+
+      `<name>_sv` is the interposer. It sits *beside* the DUT rather than
+      around it, so the DUT's instance keeps its hierarchical path. It holds no
+      replay machinery at all -- no DPI, no transport, no cvm package -- so it
+      is synthesized along with the design. Its REPLAY_ENABLE parameter,
+      defaulted from a define, decides whether it is a mux or plain wires.
+
+      `<name>_bound_sv` is everything else: the boundary arithmetic, the host
+      calls and the engine. A testbench binds it into the interposer, which is
+      how the testbench comes to own LOCATION, enable and done -- a bind takes
+      parameters and ports, and nothing reaching into a hierarchy can.
+
+    The parent instantiates the interposer unconditionally, beside the DUT, and
+    repoints the DUT's inputs and outputs at the intermediate nets. An `inout`
+    is not repointed: the interposer taps the same net.
+    """
+
+    if (srcs == None) == (dut_lib == None):
+        fail("replay_bind(%s): give exactly one of `srcs` or `dut_lib`" % name)
+
+    if dut_lib != None:
+        if dut == None or clock == None:
+            fail("replay_bind(%s): `dut_lib` needs `dut` and `clock`" % name)
+        replay_ports(
+            name = name + "_ports",
+            dut_lib = dut_lib,
+            dut = dut,
+            clock = clock,
+            exclude = exclude,
+            slang_defines = slang_defines,
+            spec_name = name,
+            visibility = visibility,
+        )
+        srcs = [name + "_ports.yml"]
+        deps = (deps or []) + [dut_lib]
+
+    _replay_bind(
+        name = name,
+        srcs = srcs,
+        replay_define = replay_define or "",
+        interposer = name + ".sv",
+        bound = name + "_bound.sv",
+        bind = name + "_bind.svh",
+        merged = name + "_merged.yml",
+        visibility = visibility,
+    )
+
+    # Synthesized with the design, so it depends only on the DUT's own packages.
+    verilog_library(
+        name = name + "_sv",
+        srcs = [name + ".sv"],
+        deps = deps or [],
+        visibility = visibility,
+    )
+
+    # Simulation only. The bind macro travels as a header, so a testbench needs
+    # only to include it.
+    verilog_library(
+        name = name + "_bound_sv",
+        srcs = [name + "_bound.sv"],
+        hdrs = [name + "_bind.svh"],
+        deps = ["@cvm//:replay_sv", ":" + name + "_sv"] + (deps or []),
+        visibility = visibility,
+    )
+
 def replay_ports(
         name,
         dut,

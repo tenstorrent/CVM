@@ -97,7 +97,7 @@ py_binary(
         requirement("Mako"),
         requirement("PyYAML"),
     ],
-    data = glob(["templates/template.*"]),
+    data = glob(["templates/*"]),
     visibility = ["//visibility:public"],
 )
 

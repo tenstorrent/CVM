@@ -40,6 +40,8 @@ verilog_library(
 verilog_library(
     name = "alu_sv",
     srcs = ["dut.sv"],
+    # //test/replay/buried replays this same DUT, buried in a design.
+    visibility = ["//test/replay:__subpackages__"],
     deps = [
         ":alu_aux_pkg_sv",
         ":alu_pkg_sv",
@@ -121,6 +123,7 @@ verilator_cc_library(
 # Declares the scenario expectations so gflags validates them.
 cc_library(
     name = "tb_flags",
+    visibility = ["//test/replay:__subpackages__"],
     srcs = ["tb_flags.cpp"],
     alwayslink = True,
     linkstatic = True,

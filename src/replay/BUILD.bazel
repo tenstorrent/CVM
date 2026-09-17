@@ -100,3 +100,15 @@ py_binary(
     data = glob(["templates/template.*"]),
     visibility = ["//visibility:public"],
 )
+
+# Derives a port spec from Verilog. Separate from replay_gen so the slang
+# dependency stays on the producer side: a hand-written spec needs neither.
+py_binary(
+    name = "replay_ports_gen",
+    srcs = ["replay_ports_gen.py"],
+    deps = [
+        requirement("PyYAML"),
+        requirement("pyslang"),
+    ],
+    visibility = ["//visibility:public"],
+)

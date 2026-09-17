@@ -1,5 +1,5 @@
 load("@cvm_pypi//:requirements.bzl", "requirement")
-load("@cvm//:defs.bzl", "replay")
+load("@cvm//:defs.bzl", "replay", "replay_ports")
 load("@rules_hdl//verilog:providers.bzl", "verilog_library")
 load("@rules_verilator//verilator:defs.bzl", "verilator_cc_library")
 load("//:defs.bzl", "topology_gen")
@@ -32,8 +32,41 @@ verilog_library(
     srcs = ["alu_pkg.sv"],
 )
 
+verilog_library(
+    name = "alu_sv",
+    srcs = ["dut.sv"],
+    deps = [":alu_pkg_sv"],
+    top_module = "alu",
+)
+
+# The spec comes from the DUT's own Verilog, so it cannot go stale: every
+# scenario below replays ports slang read out of dut.sv.
 replay(
     name = "alu_replay",
+    clock = "clk",
+    dut = "alu",
+    dut_lib = ":alu_sv",
+)
+
+# The same DUT read with the define set. Only the spec is used -- it must be
+# byte-identical to the one above, which is what proves the conditional ports
+# are recovered rather than elaborated.
+replay_ports(
+    name = "alu_replay_defined_ports",
+    clock = "clk",
+    dut = "alu",
+    dut_lib = ":alu_sv",
+    slang_defines = ["FEAT_GATE"],
+    # The same key, because the key is the only thing about the spec that comes
+    # from the target rather than from the DUT.
+    spec_name = "alu_replay",
+)
+
+# replay()'s other mode: a spec kept by hand. Nothing instantiates the module,
+# but the testbench build elaborates it, so `width:` and `imports:` stay
+# compiled.
+replay(
+    name = "alu_hand",
     srcs = ["alu_ports.yml"],
     # The spec names types from this package, so it has to elaborate first.
     deps = [":alu_pkg_sv"],
@@ -41,14 +74,13 @@ replay(
 
 verilog_library(
     name = "tb_top_sv",
-    srcs = [
-        "dut.sv",
-        "tb_top.sv",
-    ],
+    srcs = ["tb_top.sv"],
     deps = [
         ":topology_sv",
         ":alu_pkg_sv",
+        ":alu_hand_sv",
         ":alu_replay_sv",
+        ":alu_sv",
         "//:plusargs_sv",
         "//:registry_sv",
         "//test/lib/sim:sim_sv",
@@ -251,6 +283,44 @@ test_suite(
         ":sh_replay_define_mismatch",
         ":sh_replay_gate",
         ":sh_replay_second_dump",
+        ":sh_spec_is_define_independent",
+        ":sh_spec_matches_golden",
+    ],
+)
+
+# The producer's invariant. slang has to pick a branch to elaborate, so the
+# only way the spec can describe the module rather than the build is if the
+# defines make no difference to it. If these differ, a port in the untaken
+# branch was elaborated instead of recovered -- or dropped.
+sh_test(
+    name = "sh_spec_is_define_independent",
+    size = "small",
+    srcs = ["spec_diff.sh"],
+    args = [
+        "$(location :alu_replay_ports.yml)",
+        "$(location :alu_replay_defined_ports.yml)",
+        "the spec depends on FEAT_GATE, so it describes one build of alu rather than alu",
+    ],
+    data = [
+        ":alu_replay_defined_ports.yml",
+        ":alu_replay_ports.yml",
+    ],
+)
+
+# So a change in what slang reports shows up in review rather than as a
+# downstream elaboration error.
+sh_test(
+    name = "sh_spec_matches_golden",
+    size = "small",
+    srcs = ["spec_diff.sh"],
+    args = [
+        "$(location alu_ports_golden.yml)",
+        "$(location :alu_replay_ports.yml)",
+        "regenerate with: bazel build //test/replay:alu_replay_ports && cp bazel-bin/test/replay/alu_replay_ports.yml test/replay/alu_ports_golden.yml",
+    ],
+    data = [
+        "alu_ports_golden.yml",
+        ":alu_replay_ports.yml",
     ],
 )
 

@@ -1,4 +1,4 @@
-alu_replay:
+alu_hand:
   dut: alu
   # Infrastructure, never replayed: a cycle-indexed recording samples once per
   # cycle, so a clock reads as a constant in it.
@@ -6,7 +6,12 @@ alu_replay:
   # Resolves the unqualified type names below, the way the DUT's own header
   # does.
   imports: [alu_pkg]
-  # Each port is given as its declaration, not a width, so a width that comes
+  # Kept by hand on purpose: this is the second mode of replay(), for a DUT slang
+# cannot see. The interposer it generates is elaborated by the testbench build
+# without being instantiated, which is what keeps `width:` and `imports:`
+# compiling.
+#
+# Each port is given as its declaration, not a width, so a width that comes
   # from a package parameter or a $clog2 stays parametric: the interposer takes
   # $bits of what it declared. `width:` is still accepted for a spec that knows
   # its numbers, and rst_n below keeps that path covered.

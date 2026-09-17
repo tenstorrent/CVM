@@ -74,9 +74,10 @@ ${close_guard(chain)}\
 );
 
     // What a bound module drives to take a bit over. `_en` selects per bit, so
-    // one mechanism serves an input and an inout alike, and nothing here needs
-    // to know which cycle replay starts on. Unwritten and unread when
-    // REPLAY_ENABLE is 0, so synthesis drops them.
+    // an input and an inout are the same mechanism -- an input mostly to the
+    // recording's value, an inout mostly to releasing the net -- and nothing
+    // here needs to know which cycle replay starts on. Unwritten and unread
+    // when REPLAY_ENABLE is 0, so synthesis drops them.
 % for chain, group in spec.groups():
 ${open_guard(chain)}\
 %   for p in group:
@@ -100,13 +101,22 @@ ${open_guard(chain)}\
 ${close_guard(chain)}\
 % endfor
 
+    // An input's enable is all of it or none -- the recording drives every bit
+    // of an input, or replay has not started -- so one reduction selects the
+    // whole port. Per bit would index the outer dimension of a
+    // multi-dimensional packed type rather than a bit of it.
+    //
+    // An inout is the opposite: its enable varies bit by bit, because the
+    // recording says which side had each one. So it is driven per bit, and
+    // released where the recording says this side did not have it -- at which
+    // point the net is the block's and whatever the design has on it, since it
+    // is one net and was never cut.
     if (REPLAY_ENABLE) begin : g_replay
 % for chain, group in spec.groups():
 ${open_guard(chain)}\
 %   for p in group:
 %     if p.dir == 'in':
-        assign ${p.name}${inner} =
-            (${p.name}_rep & ${p.name}_en) | (${p.name}${outer} & ~${p.name}_en);
+        assign ${p.name}${inner} = (|${p.name}_en) ? ${p.name}_rep : ${p.name}${outer};
 %     elif p.dir == 'inout':
         for (genvar b = 0; b < $bits(${p.name}); b++) begin : g_${p.name}
             assign ${p.name}[b] = ${p.name}_en[b] ? ${p.name}_rep[b] : 1'bz;

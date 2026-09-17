@@ -90,13 +90,27 @@ TEST(Conformance, LayoutOrderDecidesOffsetsNotDumpOrder) {
   EXPECT_TRUE(bit_set(e.in, 1));
 }
 
-TEST(Conformance, UnboundDumpPortsAreIgnored) {
+TEST(Conformance, AnUnboundDumpPortIsFatal) {
+  // The mirror of the missing-port check. A spec that has drifted from the DUT
+  // would otherwise replay the ports it still lists and say nothing about the
+  // rest, which reads exactly like a pass.
   std::istringstream in(
       header("$var port 1 <0 clk $end\n$var port 1 <1 spare $end\n") +
       "#0\npD 6 0 <0\npD 6 0 <1\n");
   source s;
   ASSERT_TRUE(open_bound(s, in, {{"clk", 1, false, 0}})) << s.error();
-  EXPECT_EQ(s.total_bits(), 1u);
+  EXPECT_FALSE(s.require_all_bound({}));
+  EXPECT_NE(s.error().find("`spare`"), std::string::npos) << s.error();
+}
+
+TEST(Conformance, AnExemptDumpPortNeedNotBeBound) {
+  // How the clock passes: it is in every recording and must never be replayed.
+  std::istringstream in(
+      header("$var port 1 <0 clk $end\n$var port 1 <1 a $end\n") +
+      "#0\npD 6 0 <0\npD 6 0 <1\n");
+  source s;
+  ASSERT_TRUE(open_bound(s, in, {{"a", 1, false, 1}})) << s.error();
+  EXPECT_TRUE(s.require_all_bound({"clk"})) << s.error();
 }
 
 TEST(Conformance, DirectionContradictionIsAnError) {

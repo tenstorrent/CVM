@@ -23,6 +23,15 @@ extern "C" {
     return status;
   }
 
+  int cvm_replay_ignore(unsigned int location, const char* name) {
+    int status = -1;
+    std::atomic<bool> done(false);
+    cvm::registry::messenger.signal_async<cvm::replay::ignore_request>(
+        location, {name, &status, &done}, cvm::messenger::highest_priority);
+    done.wait(false);
+    return status;
+  }
+
   int cvm_replay_load(unsigned int location, int port_bits, int elem_words) {
     int status = -1;
     std::atomic<bool> done(false);

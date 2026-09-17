@@ -28,6 +28,14 @@ namespace cvm {
         std::atomic<bool>* done = nullptr;
     };
 
+    // A dump port that is deliberately not replayed: the clock, or one the
+    // spec excluded. Declared the same way and at the same time as a bind.
+    struct ignore_request {
+        const char* name = nullptr;
+        int* status = nullptr;
+        std::atomic<bool>* done = nullptr;
+    };
+
     struct load_request {
         int port_bits = 0;
         // The transport's element size, computed by the generated module so
@@ -64,6 +72,7 @@ namespace cvm {
 
       private:
         int bind(const bind_request& r);
+        int ignore(const ignore_request& r);
         int load(const load_request& r);
         void install_producer(std::size_t words_per_element);
         std::size_t produce(std::uint32_t* out, std::size_t max_elements);
@@ -87,6 +96,7 @@ namespace cvm {
             bool is_output = false;
         };
         std::vector<binding> bindings_;
+        std::vector<std::string> ignored_;
 
         std::string path_;
         bool reported_ = false;

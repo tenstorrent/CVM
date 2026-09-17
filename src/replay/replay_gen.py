@@ -74,6 +74,10 @@ class Spec:
     # reference, both emitted into the generated module verbatim.
     imports: List[str] = field(default_factory=list)
     localparams: str = ""
+    # Ports the recording may carry that this interposer does not replay. A
+    # port the dump carries and nobody binds is otherwise fatal, which is what
+    # stops a spec that has drifted from the DUT narrowing the test in silence.
+    exclude: List[str] = field(default_factory=list)
     # Parameters the port types reference. The testbench must pass the same
     # values to the interposer and to the DUT.
     parameters: Dict = field(default_factory=dict)
@@ -89,6 +93,10 @@ class Spec:
 
     def outputs(self) -> List[Port]:
         return [p for p in self.ports if p.dir == "out"]
+
+    def ignored(self) -> List[str]:
+        """Dump ports deliberately left unreplayed -- the clock, plus `exclude`."""
+        return [self.clock] + self.exclude
 
     def groups(self) -> List[Tuple[List[str], List[Port]]]:
         """Ports in order, with consecutive same-condition runs coalesced.
@@ -142,6 +150,7 @@ class Spec:
             clock=clock,
             imports=list(body.get("imports") or []),
             localparams=body.get("localparams", "") or "",
+            exclude=[str(name) for name in (body.get("exclude") or [])],
             parameters=body.get("parameters") or {},
             pipe_depth=int(interpolate(body.get("pipe_depth", 4096), topology, name)),
             push_max=int(interpolate(body.get("push_max", 0), topology, name)),
@@ -241,6 +250,7 @@ def main() -> None:
                 spec.name: {
                     "dut": spec.dut,
                     "clock": spec.clock,
+                    **({"exclude": spec.exclude} if spec.exclude else {}),
                     "ports": {
                         p.name: {
                             "dir": p.dir,

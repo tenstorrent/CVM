@@ -41,6 +41,13 @@ namespace cvm {
           *r.status = status;
       });
 
+      m.connect<ignore_request>(loc, [this](const ignore_request& r) {
+        const release _{r.done};
+        const int status = ignore(r);
+        if (r.status != nullptr)
+          *r.status = status;
+      });
+
       m.connect<load_request>(loc, [this](const load_request& r) {
         const release _{r.done};
         const int status = load(r);
@@ -106,6 +113,11 @@ namespace cvm {
       return 0;
     }
 
+    int engine::ignore(const ignore_request& r) {
+      ignored_.emplace_back(r.name);
+      return 0;
+    }
+
     int engine::load(const load_request& r) {
       const std::size_t words_per_element =
           static_cast<std::size_t>(r.elem_words);
@@ -137,6 +149,9 @@ namespace cvm {
         if (src_.bind(b.name, b.width, b.is_output, b.bit_offset) < 0)
           return -1;
       }
+
+      if (!src_.require_all_bound(ignored_))
+        return -1;
 
       if (static_cast<int>(src_.total_bits()) != r.port_bits) {
         cvm::log(cvm::ERROR,

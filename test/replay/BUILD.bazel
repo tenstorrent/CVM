@@ -207,6 +207,19 @@ cc_binary(
                 "+expect_done_cycles=7",
             ],
         },
+        # A recording of the FEAT_GATE build replayed against the build
+        # without it. The two ports it carries have no binding, which is
+        # indistinguishable from a spec that has drifted from its DUT -- so the
+        # run must die rather than quietly replay the other eleven.
+        {
+            "name": "replay_define_mismatch",
+            "args": [
+                "--expect-failure",
+                "--expect-message=which the interposer does not replay",
+                "+cvm_replay_file=test/replay/fixtures/alu_gate.evcd",
+                "+expect_errors=0",
+            ],
+        },
         # The other side of the conditional: two more ports in the DUT, the
         # interposer and the recording. Every scenario above is the same
         # interposer with the define off, which is what makes this pair
@@ -235,6 +248,7 @@ test_suite(
         ":sh_replay_async_report",
         ":sh_replay_keyed_dump",
         ":sh_replay_mismatch_detected",
+        ":sh_replay_define_mismatch",
         ":sh_replay_gate",
         ":sh_replay_second_dump",
     ],

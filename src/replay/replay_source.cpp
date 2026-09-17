@@ -97,6 +97,26 @@ namespace cvm {
       return -1;
     }
 
+    bool source::require_all_bound(const std::vector<std::string>& exempt) {
+      std::string unbound;
+      const auto& dump = reader_->ports();
+      for (std::size_t d = 0; d < dump.size(); ++d) {
+        if (to_bound_[d] != npos)
+          continue;
+        if (std::find(exempt.begin(), exempt.end(), dump[d].name) != exempt.end())
+          continue;
+        if (!unbound.empty())
+          unbound += ", ";
+        unbound += "`" + dump[d].name + "`";
+      }
+      if (unbound.empty())
+        return true;
+      return fail("the recording carries " + unbound +
+                  ", which the interposer does not replay. Either the spec has "
+                  "drifted from the DUT, or this recording is of a different "
+                  "configuration");
+    }
+
     void source::write_bit(std::size_t bit, evcd::drive d) {
       bool aval = false;
       bool bval = false;

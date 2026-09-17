@@ -33,6 +33,12 @@ namespace cvm {
         int bind(const std::string& name, std::size_t width, bool is_output,
                  std::size_t bit_offset);
 
+        // The mirror of bind()'s check: every port the dump carries must have
+        // been bound, or be named in `exempt`. Without this a spec that has
+        // drifted from the DUT narrows the test in silence -- it replays the
+        // ports it still lists and says nothing about the rest.
+        bool require_all_bound(const std::vector<std::string>& exempt);
+
         // Next recorded cycle, split into stimulus, expectation and care mask.
         // An emulator has no X, so an unknown *input* bit is resolved to 0 here
         // and every platform replays identical bits.

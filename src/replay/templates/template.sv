@@ -147,6 +147,11 @@ ${open_guard(chain)}\
 %   endfor
 ${close_guard(chain)}\
 % endfor
+            // The recording carries these and the interposer does not replay
+            // them, so they are declared rather than left to look like drift.
+% for name in spec.ignored():
+            void'(cvm_replay_ignore(LOCATION, "${name}"));
+% endfor
             if (cvm_replay_load(LOCATION, PORT_BITS, ELEM_WORDS) < 0)
                 $error("%m: could not load the recording");
         end

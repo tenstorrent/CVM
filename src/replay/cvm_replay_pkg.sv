@@ -15,6 +15,14 @@ package cvm_replay_pkg;
         int          is_output
     );
 
+    // Declares a port the recording may carry that this interposer does not
+    // replay -- the clock, or one the spec excluded. Called beside the binds;
+    // without it any such port would fail the load.
+    import "DPI-C" function int cvm_replay_ignore (
+        int unsigned location,
+        string       name
+    );
+
     // Returns 0, or -1 on failure. Called once, after the binds.
     // `elem_words` is the transport's element size, computed by the generated
     // module so the host does not re-derive it.

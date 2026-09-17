@@ -12,6 +12,11 @@
 //
 // FEAT_GATE adds a port pair, so one generated interposer has to be correct
 // both with the define and without it.
+//
+// `bus` is an inout holding all three cases a recording distinguishes, so one
+// port covers them: bit 0 is the outside's, bit 1 is the DUT's, bit 2 is
+// nobody's. Bit 1 is what the DUT sampled off bit 0, so the round trip goes out
+// through the same port it came in on.
 module alu (
     input  logic             clk,
     input  logic             rst_n,
@@ -24,12 +29,19 @@ module alu (
     input  logic             gate,
     output logic             gate_echo,
 `endif
+    inout  wire  [2:0]       bus,
+    output logic             bus_echo,
     output logic [4:0]       result,
     output logic             valid,
     output alu_pkg::lane_t   resp,
     output logic [7:0]       sum,
     output logic [$clog2(alu_pkg::LANES*4)-1:0] sel_echo
 );
+
+    // Only bit 1, so the other two stay the outside's and nobody's.
+    assign bus[1] = bus_echo;
+    assign bus[0] = 1'bz;
+    assign bus[2] = 1'bz;
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -38,6 +50,7 @@ module alu (
             resp   <= '0;
             sum    <= '0;
             sel_echo <= '0;
+            bus_echo <= 1'b0;
 `ifdef FEAT_GATE
             gate_echo <= 1'b0;
 `endif
@@ -48,6 +61,7 @@ module alu (
             resp.valid <= cmd.hdr != 4'd0;
             sum        <= {4'd0, mat[0]} + {4'd0, mat[1]};
             sel_echo   <= sel;
+            bus_echo   <= bus[0];
 `ifdef FEAT_GATE
             gate_echo  <= gate;
 `endif

@@ -12,7 +12,9 @@ package cvm_replay_pkg;
         string       name,
         int          width,
         int          bit_offset,
-        int          is_output
+        // 0 in, 1 out, 2 inout. An inout is driven and checked, bit by
+        // bit and cycle by cycle, as the recording says.
+        int          dir
     );
 
     // Declares a port the recording may carry that this interposer does not

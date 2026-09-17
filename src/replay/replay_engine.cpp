@@ -28,6 +28,19 @@ namespace cvm {
           }
       };
 
+      // Out of range is `in`: a bind that far wrong fails the conformance check
+      // anyway, and this keeps the switch total.
+      direction to_direction(int dir) {
+        switch (dir) {
+        case 1:
+          return direction::out;
+        case 2:
+          return direction::inout;
+        default:
+          return direction::in;
+        }
+      }
+
     } // namespace
 
     engine::engine(cvm::topology::loc_t loc, unsigned id)
@@ -109,7 +122,7 @@ namespace cvm {
       bindings_.push_back(binding{std::string(r.name),
                                   static_cast<std::size_t>(r.width),
                                   static_cast<std::size_t>(r.bit_offset),
-                                  r.is_output});
+                                  to_direction(r.dir)});
       return 0;
     }
 
@@ -146,7 +159,7 @@ namespace cvm {
       // boundary, so a dump missing one of them is not the recording this
       // interposer was built for.
       for (const binding& b : bindings_) {
-        if (src_.bind(b.name, b.width, b.is_output, b.bit_offset) < 0)
+        if (src_.bind(b.name, b.width, b.dir, b.bit_offset) < 0)
           return -1;
       }
 

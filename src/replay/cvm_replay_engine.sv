@@ -3,9 +3,18 @@
 
 // Cycle-based replay, synthesizable so it runs on a hardware emulator.
 //
-//   observed - the DUT boundary as it stands: the testbench's value on each
-//              input slice, the DUT's value on each output slice
-//   driven   - what to drive onto the DUT's inputs
+//   observed   - the DUT boundary as it stands: the testbench's value on each
+//                input slice, the DUT's value on each output slice
+//   driven     - what to drive onto the DUT's inputs
+//   drive_en   - which of those bits to actually drive. All ones over an input
+//                slice and all zeros over an output one, so it only varies
+//                across an `inout`, where the recording says bit by bit which
+//                side had the net.
+//   drive_val  - the recorded stimulus alone, with no bypass fallback. An
+//                inout's driver has to come from here rather than from
+//                `driven`: it shares the net it would otherwise read back
+//                through, and `driven` falls back to `observed`, so the two
+//                together are a combinational loop.
 //
 // Elements arrive over cvm_pipe, one per cycle that changes anything; see
 // element_t. The host resolves X first, so every platform replays identical
@@ -30,6 +39,8 @@ module cvm_replay_engine #(
 
     input  logic [PORT_BITS-1:0] observed,
     output logic [PORT_BITS-1:0] driven,
+    output logic [PORT_BITS-1:0] drive_en,
+    output logic [PORT_BITS-1:0] drive_val,
 
     // Exposed so a testbench need not use DPI. 64-bit because a long emulation
     // run outlasts a 32-bit cycle count, and mismatches counts bit-cycles.
@@ -48,10 +59,11 @@ module cvm_replay_engine #(
     // One element is a whole cycle's update. The host packs words LSB first, so
     // `cycle` is the low field and `care` the high one.
     typedef struct packed {
-        logic [PADDED-1:0] care;   // which exp bits are compared
-        logic [PADDED-1:0] exp;    // the recorded outputs for that cycle
-        logic [PADDED-1:0] in;     // what to drive onto the DUT's inputs
-        logic [63:0]       cycle;  // absolute, counted from enable
+        logic [PADDED-1:0] care;      // which exp bits are compared
+        logic [PADDED-1:0] exp;       // the recorded outputs for that cycle
+        logic [PADDED-1:0] drive_en;  // which `in` bits to drive
+        logic [PADDED-1:0] in;        // what to drive onto the DUT's inputs
+        logic [63:0]       cycle;     // absolute, counted from enable
     } element_t;
 
     logic        pipe_valid, pipe_pop, pipe_eos;
@@ -81,12 +93,16 @@ module cvm_replay_engine #(
 
     logic                running, drive, reported, fail_seen;
     logic [63:0]         cyc;
-    logic [PORT_BITS-1:0] drive_q;
+    logic [PORT_BITS-1:0] drive_q, drive_en_q;
     // A cycle with no element keeps the previous expectation.
     logic [PORT_BITS-1:0] exp_cur, care_cur;
 
-    // In BYPASS, or once replay is over, the testbench drives straight through.
-    assign driven = drive ? drive_q : observed;
+    // In BYPASS, or once replay is over, the testbench drives straight through
+    // -- and the enable falls to zero, so any `inout` goes back to the
+    // testbench rather than being held by a stale recorded value.
+    assign driven    = drive ? drive_q    : observed;
+    assign drive_en  = drive ? drive_en_q : '0;
+    assign drive_val = drive_q;
 
     // Consume the element for this cycle, and only this cycle.
     assign pipe_pop = running && pipe_valid && (element.cycle == cyc);
@@ -119,6 +135,7 @@ module cvm_replay_engine #(
             fail_seen        <= 1'b0;
             cyc              <= '0;
             drive_q          <= '0;
+            drive_en_q       <= '0;
             exp_cur          <= '0;
             // Zero so the check is inert until an element sets it.
             care_cur         <= '0;
@@ -145,7 +162,8 @@ module cvm_replay_engine #(
                 cyc <= cyc + 64'd1;
 
                 if (pipe_valid && element.cycle == cyc) begin
-                    drive_q  <= element.in[PORT_BITS-1:0];
+                    drive_q    <= element.in[PORT_BITS-1:0];
+                    drive_en_q <= element.drive_en[PORT_BITS-1:0];
                     exp_cur  <= element.exp[PORT_BITS-1:0];
                     care_cur <= element.care[PORT_BITS-1:0];
                 end else if (pipe_valid && element.cycle < cyc && !late_seen) begin

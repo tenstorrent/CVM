@@ -15,10 +15,14 @@ $var port [2:0] <9 sel $end
 $var port [2:0] <10 sel_echo $end
 $var port 1 <11 gate $end
 $var port 1 <12 gate_echo $end
+$var port [2:0] <13 bus $end
+$var port 1 <14 bus_echo $end
 $upscope $end
 $enddefinitions $end
 #0
 $dumpports
+pFLU 6 6 <13
+pL 0 6 <14
 pD 6 0 <0
 pDDDU 6 0 <1
 pDDUD 6 0 <2
@@ -36,6 +40,8 @@ $end
 #1
 pU 6 0 <0
 #2
+pFHU 6 6 <13
+pH 0 6 <14
 pHLH 0 6 <10
 pH 0 6 <12
 pLLLLHLLHL 0 6 <7

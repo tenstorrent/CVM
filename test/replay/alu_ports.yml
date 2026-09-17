@@ -22,6 +22,11 @@ alu_replay:
     # for both settings without the generator being told about defines.
     gate:      { width: 1, dir: in,  when: [FEAT_GATE] }
     gate_echo: { width: 1, dir: out, when: [FEAT_GATE] }
+    # An inout is driven and checked at once, bit by bit, as the recording
+    # says. `width` gives it a net type; a `type` for one must name a net
+    # itself.
+    bus:      { width: 3, dir: inout }
+    bus_echo: { width: 1, dir: out }
     result:   { type: "logic [4:0]",                            dir: out }
     valid:    { width: 1, dir: out }
     resp:     { type: "alu_pkg::lane_t",                        dir: out }

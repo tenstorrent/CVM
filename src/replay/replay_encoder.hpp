@@ -14,8 +14,8 @@ namespace cvm {
 
     // Turns a recording into the elements the transport carries: skips cycles
     // that change nothing, and packs each one as cvm_replay_engine's element_t
-    // expects it -- the cycle as two words, then the stimulus, expectation and
-    // care mask.
+    // expects it -- the cycle as two words, then the stimulus, its drive enable,
+    // the expectation and the care mask.
     //
     // Knows nothing of the transport beyond its element size.
     class encoder {

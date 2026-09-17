@@ -13,11 +13,11 @@ REGISTRY_register(cvm::replay::engine, REPLAY, cvm::registry::all)
 extern "C" {
 
   int cvm_replay_bind(unsigned int location, const char* name, int width,
-                      int bit_offset, int is_output) {
+                      int bit_offset, int dir) {
     int status = -1;
     std::atomic<bool> done(false);
     cvm::registry::messenger.signal_async<cvm::replay::bind_request>(
-        location, {name, width, bit_offset, is_output != 0, &status, &done},
+        location, {name, width, bit_offset, dir, &status, &done},
         cvm::messenger::highest_priority);
     done.wait(false);
     return status;

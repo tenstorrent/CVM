@@ -3,6 +3,14 @@
     tb = spec.tb_suffix
     du = spec.dut_suffix
     cursor = [0]
+
+    # An inout has one net, not two sides: the DUT and the testbench connect to
+    # the same port, and the port connection is what joins them. There is no
+    # `*_tb`/`*_dut` pair to name because there is nothing between them.
+    def side(p, which):
+        if p.dir == 'inout':
+            return p.name
+        return p.name + (tb if which == 'tb' else du)
 %>\
 <%def name="open_guard(chain)">\
 % for cond in chain:
@@ -55,9 +63,13 @@ ${open_guard(chain)}\
 %     if p.dir == 'in':
     , input  ${p.sv_type()} ${p.name}${tb}
     , output ${p.sv_type()} ${p.name}${du}
-%     else:
+%     elif p.dir == 'out':
     , input  ${p.sv_type()} ${p.name}${du}
     , output ${p.sv_type()} ${p.name}${tb}
+%     else:
+    // One port, because an inout is one net. The testbench and the DUT
+    // connect to it and are thereby connected to each other.
+    , inout  ${p.sv_type()} ${p.name}
 %     endif
 %   endfor
 ${close_guard(chain)}\
@@ -85,7 +97,7 @@ ${spec.localparams.rstrip()}
 %>\
 ${open_guard(chain)}\
 %   for p in group:
-    localparam int W_${p.name} = $bits(${p.name}${tb if p.dir == 'in' else du});
+    localparam int W_${p.name} = $bits(${side(p, 'tb' if p.dir == 'in' else 'dut')});
     localparam int O_${p.name} = CUR_${cursor[0]};
     localparam int CUR_${cursor[0] + 1} = O_${p.name} + W_${p.name};
 <%
@@ -99,7 +111,7 @@ ${open_guard(chain)}\
 %   endfor
 % endfor
     localparam int PORT_BITS  = CUR_${cursor[0]};
-    localparam int ELEM_WORDS = 2 + 3 * ((PORT_BITS + 31) / 32);
+    localparam int ELEM_WORDS = 2 + 4 * ((PORT_BITS + 31) / 32);
 % if spec.push_max:
     localparam int PUSH_MAX_ELEMENTS = ${spec.push_max};
 % else:
@@ -109,19 +121,35 @@ ${open_guard(chain)}\
 
     logic [PORT_BITS-1:0] observed;
     logic [PORT_BITS-1:0] driven;
+    logic [PORT_BITS-1:0] drive_en;
+    logic [PORT_BITS-1:0] drive_val;
 
     // The DUT boundary as it stands: the testbench's value on each input slice,
     // the DUT's value on each output slice. DUT inputs then come from the
     // engine, which muxes between the recording and the testbench side, and
     // DUT outputs pass straight through in both modes.
+    //
+    // An inout is neither, and cannot be: it is one shared net with a per-bit
+    // tristate driver for the bits the recording says the outside had. So an
+    // inout is the one port the interposer does not isolate -- a testbench
+    // driving one during replay contends with the recording instead of being
+    // overridden.
 % for chain, group in spec.groups():
 ${open_guard(chain)}\
 %   for p in group:
-    assign observed[O_${p.name} +: W_${p.name}] = ${p.name}${tb if p.dir == 'in' else du};
-%     if p.dir == 'in':
-    assign ${p.name}${du} = driven[O_${p.name} +: W_${p.name}];
+%     if p.dir == 'inout':
+    assign observed[O_${p.name} +: W_${p.name}] = ${p.name};
+    for (genvar b = 0; b < W_${p.name}; b++) begin : g_${p.name}
+        assign ${p.name}[b] =
+            drive_en[O_${p.name} + b] ? drive_val[O_${p.name} + b] : 1'bz;
+    end
 %     else:
+    assign observed[O_${p.name} +: W_${p.name}] = ${p.name}${tb if p.dir == 'in' else du};
+%       if p.dir == 'in':
+    assign ${p.name}${du} = driven[O_${p.name} +: W_${p.name}];
+%       else:
     assign ${p.name}${tb} = ${p.name}${du};
+%       endif
 %     endif
 %   endfor
 ${close_guard(chain)}\
@@ -143,7 +171,7 @@ ${close_guard(chain)}\
 % for chain, group in spec.groups():
 ${open_guard(chain)}\
 %   for p in group:
-            void'(cvm_replay_bind(LOCATION, "${p.dump_name}", W_${p.name}, O_${p.name}, ${1 if p.dir == 'out' else 0}));
+            void'(cvm_replay_bind(LOCATION, "${p.dump_name}", W_${p.name}, O_${p.name}, ${p.dir_code()}));
 %   endfor
 ${close_guard(chain)}\
 % endfor
@@ -169,6 +197,8 @@ ${close_guard(chain)}\
         .done             (done),
         .observed         (observed),
         .driven           (driven),
+        .drive_en         (drive_en),
+        .drive_val        (drive_val),
         .mismatches       (),
         .first_fail_cycle (),
         .fail_bits        ()
@@ -192,8 +222,12 @@ module ${spec.name}_top (
 % for chain, group in spec.groups():
 ${open_guard(chain)}\
 %   for p in group:
+%     if p.dir == 'inout':
+    ${p.sv_type()} ${p.name};
+%     else:
     ${p.sv_type()} ${p.name}${tb};
     ${p.sv_type()} ${p.name}${du};
+%     endif
 %   endfor
 ${close_guard(chain)}\
 % endfor
@@ -206,8 +240,12 @@ ${close_guard(chain)}\
 % for chain, group in spec.groups():
 ${open_guard(chain)}\
 %   for p in group:
+%     if p.dir == 'inout':
+        , .${p.name}(${p.name})
+%     else:
         , .${p.name}${tb}(${p.name}${tb})
         , .${p.name}${du}(${p.name}${du})
+%     endif
 %   endfor
 ${close_guard(chain)}\
 % endfor
@@ -218,7 +256,7 @@ ${close_guard(chain)}\
 % for chain, group in spec.groups():
 ${open_guard(chain)}\
 %   for p in group:
-        , .${p.name}(${p.name}${du})
+        , .${p.name}(${side(p, 'dut')})
 %   endfor
 ${close_guard(chain)}\
 % endfor

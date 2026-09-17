@@ -58,7 +58,19 @@ class Port:
     when: List[str] = field(default_factory=list)
 
     def sv_type(self) -> str:
-        return self.type_text if self.type_text else f"logic [{self.width - 1}:0]"
+        if self.type_text:
+            return self.type_text
+        # An `inout` port has to be a net, not a variable: the interposer
+        # aliases the two sides into one net and drives it conditionally.
+        kind = "wire" if self.dir == "inout" else "logic"
+        return f"{kind} [{self.width - 1}:0]"
+
+    def sv_dir(self) -> str:
+        return {"in": "input ", "out": "output", "inout": "inout "}[self.dir]
+
+    def dir_code(self) -> int:
+        """What cvm_replay_bind takes -- cvm::replay::direction as an int."""
+        return {"in": 0, "out": 1, "inout": 2}[self.dir]
 
 
 @dataclass
@@ -90,6 +102,9 @@ class Spec:
 
     def inputs(self) -> List[Port]:
         return [p for p in self.ports if p.dir == "in"]
+
+    def has_inout(self) -> bool:
+        return any(p.dir == "inout" for p in self.ports)
 
     def outputs(self) -> List[Port]:
         return [p for p in self.ports if p.dir == "out"]
@@ -171,12 +186,14 @@ class Spec:
                 f"{where}: `dir` must be one of {DIRECTIONS}, got {direction!r}. "
                 "Direction is always stated from the DUT's perspective."
             )
-            if direction == "inout":
-                sys.exit(
-                    f"{where}: `dir: inout` is not supported yet."
-                )
-
             type_text = attrs.get("type")
+            if direction == "inout" and type_text and \
+                    type_text.split()[0] in ("logic", "bit", "reg"):
+                sys.exit(
+                    f"{where}: an `inout` must be declared as a net, so its "
+                    f"`type` cannot start with `{type_text.split()[0]}`. Give "
+                    "the DUT's own net declaration, or use `width`."
+                )
             width = attrs.get("width")
             assert (type_text is None) != (width is None), (
                 f"{where}: give exactly one of `type` (the declaration as "

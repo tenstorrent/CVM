@@ -78,8 +78,9 @@ namespace {
       void build(int boundary_bits) {
         const std::size_t pw =
             (static_cast<std::size_t>(boundary_bits) + 31) / 32;
-        // Two words for the 64-bit cycle, then the boundary three times over.
-        words_ = 2 + 3 * pw;
+        // Two words for the 64-bit cycle, then the boundary four times over:
+        // stimulus, its drive enable, expectation, care.
+        words_ = 2 + 4 * pw;
 
         const bool sparse = FLAGS_scenario == 3;
         std::uint32_t prev_in = 0;
@@ -108,8 +109,10 @@ namespace {
           std::vector<std::uint32_t> e(words_, 0u);
           e[0] = static_cast<std::uint32_t>(t);
           e[2] = in;
-          e[2 + pw] = exp;
-          e[2 + 2 * pw] = care;
+          // The input slice is the low byte, and an input is always driven.
+          e[2 + pw] = 0xFFu;
+          e[2 + 2 * pw] = exp;
+          e[2 + 3 * pw] = care;
           queued_.insert(queued_.end(), e.begin(), e.end());
         }
       }

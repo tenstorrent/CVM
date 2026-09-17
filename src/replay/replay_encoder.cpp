@@ -19,8 +19,9 @@ namespace cvm {
       out[1] = static_cast<std::uint32_t>(e.cycle >> 32);
       for (std::size_t i = 0; i < n; ++i) {
         out[2 + i] = e.in[i];
-        out[2 + n + i] = i < e.exp.size() ? e.exp[i] : 0u;
-        out[2 + 2 * n + i] = i < e.care.size() ? e.care[i] : 0u;
+        out[2 + n + i] = i < e.drive_en.size() ? e.drive_en[i] : 0u;
+        out[2 + 2 * n + i] = i < e.exp.size() ? e.exp[i] : 0u;
+        out[2 + 3 * n + i] = i < e.care.size() ? e.care[i] : 0u;
       }
     }
 

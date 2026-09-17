@@ -14,10 +14,14 @@ $var port [8:0] <7 resp $end
 $var port [7:0] <8 sum $end
 $var port [2:0] <9 sel $end
 $var port [2:0] <10 sel_echo $end
+$var port [2:0] <12 bus $end
+$var port 1 <13 bus_echo $end
 $upscope $end
 $enddefinitions $end
 #0
 $dumpports
+pFLU 6 6 <12
+pL 0 6 <13
 pD 6 0 <11
 pD 6 0 <0
 pDDUD 6 0 <1
@@ -34,6 +38,8 @@ $end
 #1
 pU 6 0 <0
 #2
+pFHU 6 6 <12
+pH 0 6 <13
 pHLH 0 6 <10
 pLLLLHLLHL 0 6 <7
 pLLLLLHHH 0 6 <8

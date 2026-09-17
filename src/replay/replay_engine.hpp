@@ -23,7 +23,9 @@ namespace cvm {
         const char* name = nullptr;
         int width = 0;
         int bit_offset = 0;
-        bool is_output = false;
+        // 0 in, 1 out, 2 inout -- cvm::replay::direction, as an int because it
+        // crosses a DPI.
+        int dir = 0;
         int* status = nullptr;
         std::atomic<bool>* done = nullptr;
     };
@@ -93,7 +95,7 @@ namespace cvm {
             std::string name;
             std::size_t width = 0;
             std::size_t bit_offset = 0;
-            bool is_output = false;
+            direction dir = direction::in;
         };
         std::vector<binding> bindings_;
         std::vector<std::string> ignored_;

@@ -62,7 +62,7 @@ namespace cvm {
       return true;
     }
 
-    int source::bind(const std::string& name, std::size_t width, bool is_output,
+    int source::bind(const std::string& name, std::size_t width, direction dir,
                      std::size_t bit_offset) {
       const auto& dump = reader_->ports();
       for (std::size_t d = 0; d < dump.size(); ++d) {
@@ -79,7 +79,7 @@ namespace cvm {
         bp.dump_index = d;
         bp.width = width;
         bp.bit_offset = bit_offset;
-        bp.is_output = is_output;
+        bp.dir = dir;
         bound_.push_back(bp);
         to_bound_[d] = bound_.size() - 1;
         recorded_.push_back(false);
@@ -88,8 +88,9 @@ namespace cvm {
         // Grow to cover this port. Doing it here rather than in open() means a
         // caller that binds directly gets a correctly sized buffer too.
         total_bits_ = std::max(total_bits_, bit_offset + width);
-        if (current_.size() < words()) {
-          current_.resize(words(), logic_word{0xFFFFFFFFu, 0xFFFFFFFFu});
+        if (current_in_.size() < words()) {
+          current_in_.resize(words(), logic_word{0xFFFFFFFFu, 0xFFFFFFFFu});
+          current_out_.resize(words(), logic_word{0xFFFFFFFFu, 0xFFFFFFFFu});
         }
         return static_cast<int>(bound_.size()) - 1;
       }
@@ -117,12 +118,13 @@ namespace cvm {
                   "configuration");
     }
 
-    void source::write_bit(std::size_t bit, evcd::drive d) {
+    void source::write_bit(std::vector<logic_word>& buf, std::size_t bit,
+                           evcd::drive d) {
       bool aval = false;
       bool bval = false;
       bit_encoding(d, aval, bval);
 
-      logic_word& w = current_[bit / 32];
+      logic_word& w = buf[bit / 32];
       const std::uint32_t mask = 1u << (bit % 32);
       w.aval = aval ? (w.aval | mask) : (w.aval & ~mask);
       w.bval = bval ? (w.bval | mask) : (w.bval & ~mask);
@@ -130,11 +132,13 @@ namespace cvm {
 
     void source::set_port(std::size_t bound,
                           const std::vector<evcd::port_state>& state) {
+      // Both sides, always. Which one matters is the direction's business, and
+      // for an `inout` the answer is both.
       const bound_port& bp = bound_[bound];
       for (std::size_t b = 0; b < bp.width; ++b) {
         const evcd::port_state st = state[b];
-        write_bit(bp.bit_offset + b,
-                  bp.is_output ? st.dut_out() : st.dut_in());
+        write_bit(current_in_, bp.bit_offset + b, st.dut_in());
+        write_bit(current_out_, bp.bit_offset + b, st.dut_out());
       }
       recorded_[bound] = true;
       ever_recorded_[bound] = true;
@@ -143,7 +147,8 @@ namespace cvm {
     void source::fill_port(std::size_t bound, evcd::drive d) {
       const bound_port& bp = bound_[bound];
       for (std::size_t b = 0; b < bp.width; ++b) {
-        write_bit(bp.bit_offset + b, d);
+        write_bit(current_in_, bp.bit_offset + b, d);
+        write_bit(current_out_, bp.bit_offset + b, d);
       }
       recorded_[bound] = true;
       ever_recorded_[bound] = true;
@@ -178,14 +183,15 @@ namespace cvm {
             bp.saw_dut_out = true;
         }
 
-        // Disagreement about direction is an error, not something to reinterpret.
+        // Disagreement about direction is an error, not something to
+        // reinterpret. An `inout` claims both sides, so neither is a surprise.
         const std::string& name = reader_->ports()[c.port].name;
-        if (!bp.is_output && !bp.saw_dut_in && bp.saw_dut_out) {
+        if (bp.dir == direction::in && !bp.saw_dut_in && bp.saw_dut_out) {
           return fail("port `" + name +
                       "` is declared `in` but the dump shows only the DUT driving "
                       "it");
         }
-        if (bp.is_output && !bp.saw_dut_out && bp.saw_dut_in) {
+        if (bp.dir == direction::out && !bp.saw_dut_out && bp.saw_dut_in) {
           return fail("port `" + name +
                       "` is declared `out` but the dump shows only the test "
                       "fixture driving it");
@@ -195,7 +201,8 @@ namespace cvm {
       }
 
       out.time = step.time;
-      out.value = current_;
+      out.driven_in = current_in_;
+      out.driven_out = current_out_;
       out.recorded = recorded_;
       return true;
     }
@@ -208,6 +215,7 @@ namespace cvm {
       const std::size_t nw = words();
       out.cycle = v.time;
       out.in.assign(nw, 0u);
+      out.drive_en.assign(nw, 0u);
       out.exp.assign(nw, 0u);
       out.care.assign(nw, 0u);
 
@@ -218,17 +226,43 @@ namespace cvm {
           const std::size_t bit = bp.bit_offset + b;
           const std::size_t w = bit / 32;
           const std::uint32_t m = 1u << (bit % 32);
-          const bool a = (v.value[w].aval & m) != 0;
-          const bool x = (v.value[w].bval & m) != 0;
+          // {aval,bval}: bval set is Z or X, so `!x` is "the side was driving a
+          // level". Both sides are read here and the direction picks.
+          const bool in_a = (v.driven_in[w].aval & m) != 0;
+          const bool in_x = (v.driven_in[w].bval & m) != 0;
+          const bool out_a = (v.driven_out[w].aval & m) != 0;
+          const bool out_x = (v.driven_out[w].bval & m) != 0;
 
-          if (!bp.is_output) {
-            if (!x && a)
+          switch (bp.dir) {
+          case direction::in:
+            // Driven unconditionally, and an unknown resolves to 0 so every
+            // platform replays identical bits.
+            out.drive_en[w] |= m;
+            if (!in_x && in_a)
               out.in[w] |= m;
-          } else {
-            if (a)
+            break;
+          case direction::out:
+            if (out_a)
               out.exp[w] |= m;
-            if (known_port && !x)
+            if (known_port && !out_x)
               out.care[w] |= m;
+            break;
+          case direction::inout:
+            // The recording says which side had the net, bit by bit. Drive
+            // where the outside did, and check only where the DUT alone did:
+            // a bit this side is driving cannot also be read back off the DUT,
+            // because the interposer shares the net rather than isolating it.
+            if (!in_x) {
+              out.drive_en[w] |= m;
+              if (in_a)
+                out.in[w] |= m;
+            } else {
+              if (out_a)
+                out.exp[w] |= m;
+              if (known_port && !out_x)
+                out.care[w] |= m;
+            }
+            break;
           }
         }
       }

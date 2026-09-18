@@ -1,5 +1,5 @@
 top:
   replay:
-    count: 1
+    count: 3
     type:
       - replay

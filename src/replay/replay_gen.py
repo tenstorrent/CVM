@@ -98,10 +98,6 @@ class Spec:
     pipe_depth: int = 4096
     # 0 means "let the generated module compute it from the element size".
     push_max: int = 0
-    # The instance this harness replays, as a hierarchical path. Baked in
-    # because SystemVerilog cannot build a hierarchical name from a parameter,
-    # which is also why a harness is one per replayed instance.
-    instance_path: str = ""
     # The two sides of the standalone interposer, named positionally: `_outer`
     # faces whatever the block sits in and `_inner` faces the block.
     outer_suffix: str = "_outer"
@@ -180,7 +176,6 @@ class Spec:
             outer_suffix=suffixes.get("outer", "_outer"),
             inner_suffix=suffixes.get("inner", "_inner"),
             standalone_top=bool(body.get("standalone_top", False)),
-            instance_path=body.get("instance_path", "") or "",
         )
 
         for port_name, attrs in raw_ports.items():
@@ -262,31 +257,25 @@ def main() -> None:
     parser.add_argument("--sv", default=None)
     # The buried-block pair: an interposer that is synthesized alongside the
     # DUT, and the replay stack a testbench binds into it.
-    parser.add_argument("--force-sv", default=None)
+    parser.add_argument("--attach-sv", default=None)
+    parser.add_argument("--attach-svh", default=None)
     parser.add_argument("--bound-sv", default=None)
-    parser.add_argument("--instance-path", default=None)
     parser.add_argument("--merged", required=True)
     args = parser.parse_args()
 
     topology = load_topology(args.topology)
     spec = Spec.load(args.definitions, topology)
-    if args.instance_path:
-        spec.instance_path = args.instance_path
 
     # Templates are runfiles beside this script, as packet_gen.py does it.
     templates = pathlib.Path(os.path.abspath(__file__)).parent / "templates"
-    if not (args.sv or args.force_sv or args.bound_sv):
+    if not (args.sv or args.attach_sv or args.attach_svh):
         sys.exit("give at least one of --sv, --force-sv or --bound-sv")
     if args.sv:
         render(str(templates / "template.sv"), args.sv, spec)
-    if args.force_sv:
-        if not spec.instance_path:
-            sys.exit("--force-sv needs --instance-path: the harness reaches "
-                     "into the design by hierarchical name, which cannot come "
-                     "from a parameter")
-        render(str(templates / "force.sv"), args.force_sv, spec)
-    if args.bound_sv:
-        render(str(templates / "bound.sv"), args.bound_sv, spec)
+    if args.attach_sv:
+        render(str(templates / "attach.sv"), args.attach_sv, spec)
+    if args.attach_svh:
+        render(str(templates / "attach.svh"), args.attach_svh, spec)
 
     with open(args.merged, "w") as handle:
         yaml.safe_dump(

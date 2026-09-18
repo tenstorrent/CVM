@@ -5,6 +5,8 @@
 // harness is an ordinary module instantiated here: it reaches into core by
 // hierarchical name and takes the boundary with force, so the testbench owns
 // LOCATION, reset, enable and done as ordinary parameters and ports.
+`include "alu_replay_attach.svh"
+
 module top;
 
     import cvm_sim_pkg::*;
@@ -15,7 +17,12 @@ module top;
     logic clk = 1'b0;
     always #5 clk = ~clk;
 
-    logic tb_reset_n, tb_enable, tb_done;
+    logic tb_reset_n, tb_enable;
+    // One per replayed site: the single instance, and each element of the
+    // array.
+    logic tb_done_alu;
+    logic [1:0] tb_done_lane;
+    wire  tb_done = tb_done_alu & &tb_done_lane;
 
     logic                       rst_n, no_gate;
     logic [3:0]                 opa, opb;
@@ -25,6 +32,7 @@ module top;
     wire  [2:0]                 bus;
     logic                       bus_echo, valid;
     logic [4:0]                 result, result_plain;
+    logic [1:0][4:0]            result_lane;
     alu_pkg::lane_t             resp;
     alu_aux_pkg::byte_t         sum;
 
@@ -34,6 +42,7 @@ module top;
     assign bus[0] = drive_bus ? 1'b1 : 1'bz;
 
     logic [4:0] mon_replay_result, mon_last_result, mon_plain_result;
+    logic [1:0][4:0] mon_lane_result;
     int         mon_done_cycles, cycles;
 
     localparam cvm_topology_gen::topology_t topo = cvm_topology_gen::mods;
@@ -44,19 +53,22 @@ module top;
         .clk(clk), .rst_n(rst_n), .opa(opa), .opb(opb), .cmd(cmd), .mat(mat),
         .sel(sel), .no_gate(no_gate), .bus(bus), .bus_echo(bus_echo),
         .result(result), .valid(valid), .resp(resp), .sum(sum),
-        .sel_echo(sel_echo), .result_plain(result_plain)
+        .sel_echo(sel_echo), .result_lane(result_lane),
+        .result_plain(result_plain)
     );
 
-    // Points at top.u_core.u_alu, which is generated into it. Nothing about
-    // core or alu changes to accommodate this.
-    alu_replay #(
-        .LOCATION (cvm_topology_gen::get_location(topo.TOP.REPLAY.ID, 0))
-    ) u_replay (
-        .clk     (clk),
-        .reset_n (tb_reset_n),
-        .enable  (tb_enable),
-        .done    (tb_done)
-    );
+    // One invocation per site. Neither generated file names any of this.
+    `ALU_REPLAY_ATTACH(alu, top.u_core.u_alu,
+                       cvm_topology_gen::get_location(topo.TOP.REPLAY.ID, 0),
+                       tb_reset_n, tb_enable, tb_done_alu)
+
+    // The same macro in a loop reaches an arrayed instance, each element its
+    // own site with its own location.
+    for (genvar i = 0; i < 2; i++) begin : g_lane
+        `ALU_REPLAY_ATTACH(lane, top.u_core.u_lane[i],
+                           cvm_topology_gen::get_location(topo.TOP.REPLAY.ID, i + 1),
+                           tb_reset_n, tb_enable, tb_done_lane[i])
+    end
 
     initial begin
         tb_reset_n = 1'b0;
@@ -77,7 +89,10 @@ module top;
         end
         // Only while replay runs, so it shows the sibling was never forced
         // rather than what the design drove afterwards.
-        if (tb_done !== 1'b1) mon_plain_result <= result_plain;
+        if (tb_done !== 1'b1) begin
+            mon_plain_result  <= result_plain;
+            mon_lane_result   <= result_lane;
+        end
     end
 
     always_ff @(posedge clk) begin
@@ -108,6 +123,7 @@ module top;
         mon_replay_result = 5'd0;
         mon_last_result   = 5'd0;
         mon_plain_result  = 5'd0;
+        mon_lane_result   = '0;
 
         repeat (4) @(negedge clk);
         tb_reset_n = 1'b1;
@@ -149,6 +165,15 @@ module top;
         if (u_core.u_alu.result !== result) begin
             $display("FAIL: core.u_alu.result=%0d but core.result=%0d",
                      u_core.u_alu.result, result);
+            errors++;
+        end
+        // The array elements were reached through a loop over one macro, so
+        // they must have replayed too.
+        if (expect_replay_result >= 0 &&
+                (int'(mon_lane_result[0]) != expect_replay_result ||
+                 int'(mon_lane_result[1]) != expect_replay_result)) begin
+            $display("FAIL: arrayed instances produced %0d and %0d under replay, recording says %0d",
+                     mon_lane_result[0], mon_lane_result[1], expect_replay_result);
             errors++;
         end
         // The sibling instance is on the same stimulus and was never forced.

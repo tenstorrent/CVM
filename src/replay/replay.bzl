@@ -113,38 +113,36 @@ _replay = rule(
     ],
 )
 
-def _replay_force_impl(ctx):
-    """Generate the replay harness for one instance, and the engine it wraps."""
+def _replay_attach_impl(ctx):
+    """Generate the replay module and the macro that attaches it to a DUT."""
 
-    harness = ctx.outputs.harness
-    bound = ctx.outputs.bound
+    module = ctx.outputs.module
+    macro = ctx.outputs.macro
     merged = ctx.outputs.merged
 
     args = ctx.actions.args()
     args.add_all("--definitions", ctx.files.srcs)
-    args.add("--force-sv", harness)
-    args.add("--bound-sv", bound)
+    args.add("--attach-sv", module)
+    args.add("--attach-svh", macro)
     args.add("--merged", merged)
-    args.add("--instance-path", ctx.attr.instance_path)
 
-    outputs = [harness, bound, merged]
+    outputs = [module, macro, merged]
     ctx.actions.run(
         arguments = [args],
         executable = ctx.executable._gen,
         inputs = ctx.files.srcs,
         outputs = outputs,
-        mnemonic = "CVMReplayForce",
+        mnemonic = "CVMReplayAttach",
     )
 
     return [DefaultInfo(files = depset(outputs))]
 
-_replay_force = rule(
-    _replay_force_impl,
+_replay_attach = rule(
+    _replay_attach_impl,
     attrs = {
         "srcs": attr.label_list(mandatory = True, allow_files = True),
-        "instance_path": attr.string(mandatory = True),
-        "harness": attr.output(),
-        "bound": attr.output(),
+        "module": attr.output(),
+        "macro": attr.output(),
         "merged": attr.output(),
         "_gen": attr.label(
             default = "//src/replay:replay_gen",
@@ -155,9 +153,8 @@ _replay_force = rule(
     provides = [DefaultInfo],
 )
 
-def replay_force(
+def replay_attach(
         name,
-        instance_path,
         srcs = None,
         dut = None,
         dut_lib = None,
@@ -166,32 +163,36 @@ def replay_force(
         slang_defines = None,
         deps = None,
         visibility = None):
-    """Replay a DUT where it stands, inside a design that is not modified.
+    """Replay a DUT where it stands, in a design that is not modified.
 
-    The harness reads the instance's boundary by hierarchical reference and
-    drives it with `force`, so the DUT keeps its ports, its connections and its
-    hierarchical path, and the design containing it needs no edit at all -- not
-    even an instantiation. A forced port overrides every other driver, so the
-    block is genuinely isolated, which a shared net cannot manage for an inout.
+    Emits two files, and neither names a design, an instance or a path:
 
-    `instance_path` is the instance to replay, as a hierarchical name. It is
-    generated into the harness because SystemVerilog cannot build a
-    hierarchical name from a parameter, so a harness replays one instance.
+      `<name>.sv` is the replay module -- the transport, the host calls and the
+      boundary arithmetic. It observes through `_obs` ports and answers with
+      `_rep` and `_en`, so it knows nothing about where the DUT is.
 
-    A testbench instantiates the harness and drives `reset_n`, `enable` and
-    `done`, and passes `LOCATION`. Everything is ordinary ports and parameters,
-    because the harness is an ordinary module.
+      `<name>_attach.svh` is a macro that attaches one of those to one
+      instance, taking the instance as an argument. It reads the boundary by
+      hierarchical reference and drives it with `force`, so the DUT keeps its
+      ports, its connections and its hierarchical path, and the design needs no
+      edit at all. A forced port overrides every other driver, so the instance
+      is genuinely isolated -- an inout included, which a shared net cannot be.
+
+    A testbench invokes the macro once per instance. It expands to a named
+    generate block, so several invocations coexist, and invoking it inside a
+    `for (genvar ...)` attaches to an arrayed instance. Each site is a separate
+    registry component, so each needs its own topology node.
 
     Use `replay()` instead when the block is extracted and replayed on its own:
-    there is no hierarchy to point at, so the interposer is the only option.
+    there is no hierarchy to point at, so an interposer is the only option.
     """
 
     if (srcs == None) == (dut_lib == None):
-        fail("replay_force(%s): give exactly one of `srcs` or `dut_lib`" % name)
+        fail("replay_attach(%s): give exactly one of `srcs` or `dut_lib`" % name)
 
     if dut_lib != None:
         if dut == None or clock == None:
-            fail("replay_force(%s): `dut_lib` needs `dut` and `clock`" % name)
+            fail("replay_attach(%s): `dut_lib` needs `dut` and `clock`" % name)
         replay_ports(
             name = name + "_ports",
             dut_lib = dut_lib,
@@ -205,22 +206,20 @@ def replay_force(
         srcs = [name + "_ports.yml"]
         deps = (deps or []) + [dut_lib]
 
-    _replay_force(
+    _replay_attach(
         name = name,
         srcs = srcs,
-        instance_path = instance_path,
-        harness = name + ".sv",
-        bound = name + "_bound.sv",
+        module = name + ".sv",
+        macro = name + "_attach.svh",
         merged = name + "_merged.yml",
         visibility = visibility,
     )
 
+    # The macro travels as a header, so a testbench only has to include it.
     verilog_library(
         name = name + "_sv",
-        srcs = [
-            name + ".sv",
-            name + "_bound.sv",
-        ],
+        srcs = [name + ".sv"],
+        hdrs = [name + "_attach.svh"],
         deps = ["@cvm//:replay_sv"] + (deps or []),
         visibility = visibility,
     )

@@ -313,42 +313,63 @@ leaving one out is how you bypass it.
 ### Replaying a DUT buried in a larger design
 
 The above needs the instantiation site to be a testbench. For a block inside a
-chip, `replay_force` reaches it where it stands:
+chip, `replay_attach` reaches it where it stands:
 
 ```python
-load("@cvm//:defs.bzl", "replay_force")
+load("@cvm//:defs.bzl", "replay_attach")
 
-replay_force(
+replay_attach(
     name = "alu_replay",
     dut = "alu",
     dut_lib = "//path/to:alu_sv",
     clock = "clk",
-    instance_path = "top.u_chip.u_cluster.u_alu",
 )
 ```
 
-**The design is not modified.** Not the block, not its parent, not an
-instantiation -- the harness reads the instance's boundary by hierarchical
-reference and drives it with `force`, so the DUT keeps its ports, its
-connections and its hierarchical path. A testbench instantiates the harness and
-wires four ordinary ports:
+**The design is not modified** -- not the block, not its parent, not an
+instantiation. And neither generated file names a design, an instance or a
+path, so both are reusable:
+
++ `alu_replay.sv` is the replay module: the transport, the host calls and the
+  boundary arithmetic. It observes through `_obs` ports and answers with `_rep`
+  and `_en`, so it knows nothing about where the DUT is.
++ `alu_replay_attach.svh` is a macro that attaches one of those to one
+  instance, **taking the instance as an argument**. It reads the boundary by
+  hierarchical reference and drives it with `force`.
+
+A testbench includes the header and invokes the macro once per instance:
 
 ```systemverilog
-alu_replay #(.LOCATION(cvm_topology_gen::get_location(topo.TOP.REPLAY.ID, 0)))
-    u_replay (.clk(clk), .reset_n(tb_reset_n), .enable(tb_enable), .done(tb_done));
+`include "alu_replay_attach.svh"
+
+`ALU_REPLAY_ATTACH(alu, top.u_core.u_alu,
+                   cvm_topology_gen::get_location(topo.TOP.REPLAY.ID, 0),
+                   tb_reset_n, tb_enable, tb_done_alu)
+
+// The same macro in a loop reaches an arrayed instance.
+for (genvar i = 0; i < 2; i++) begin : g_lane
+    `ALU_REPLAY_ATTACH(lane, top.u_core.u_lane[i],
+                       cvm_topology_gen::get_location(topo.TOP.REPLAY.ID, i + 1),
+                       tb_reset_n, tb_enable, tb_done_lane[i])
+end
 ```
 
-`instance_path` is generated into the harness, because SystemVerilog cannot
-build a hierarchical name from a parameter -- so a harness replays one instance,
-and a second instance of the same module is untouched.
+It expands to a named generate block, so several invocations coexist and a loop
+gives one site per array element. The expansion imports whatever the DUT's port
+types need, so the testbench does not have to know. The clock comes from the
+instance, so it cannot be wired to the wrong domain.
 
-A forced port overrides every other driver, so the block is **genuinely
-isolated** -- including an `inout`, where the standalone interposer shares a net
-and cannot be. Inputs are forced whole, since an input's enable is all-or-
-nothing; an `inout` is forced and released a bit at a time, because the
+A forced port overrides every other driver, so the instance is **genuinely
+isolated** -- an `inout` included, where the standalone interposer shares a net
+and cannot be. Inputs are forced whole, since an input's enable is
+all-or-nothing; an `inout` is forced and released a bit at a time, because the
 recording says which side had each bit.
 
-Two things to know:
+Each site is a separate registry component, so the topology needs one `replay`
+node per site, and each carries its own transport -- `pipe_depth` is worth a
+look before attaching to many instances at once.
+
+Three things to know:
 
 + **`release` restores a port on its driver's next evaluation**, not instantly.
   For a block driven by clocked logic that is the next cycle. For an input tied
@@ -356,6 +377,9 @@ Two things to know:
 + The force is **combinational, not clocked**. The engine presents each cycle's
   stimulus just after an edge and the DUT samples it at the next one; forcing on
   the edge lands a cycle late and shifts the whole replay.
++ Macro arguments substitute textually, which is why every one of them is
+  prefixed `CVM_`. An argument named `LOC` would rewrite the `.LOCATION(`
+  formal inside the expansion too.
 
 Use `replay()` instead when the block is extracted and replayed on its own:
 there is no hierarchy to point at, so the interposer is the only option.

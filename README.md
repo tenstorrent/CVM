@@ -313,75 +313,52 @@ leaving one out is how you bypass it.
 ### Replaying a DUT buried in a larger design
 
 The above needs the instantiation site to be a testbench. For a block inside a
-chip, `replay_bind` generates a pair instead:
+chip, `replay_force` reaches it where it stands:
 
 ```python
-load("@cvm//:defs.bzl", "replay_bind")
+load("@cvm//:defs.bzl", "replay_force")
 
-replay_bind(
-    name = "alu_interposer",
+replay_force(
+    name = "alu_replay",
     dut = "alu",
     dut_lib = "//path/to:alu_sv",
     clock = "clk",
+    instance_path = "top.u_chip.u_cluster.u_alu",
 )
 ```
 
-`<name>_sv` is the interposer. It sits **beside** the DUT rather than around it,
-so the DUT's instance keeps its name and therefore its hierarchical path -- what
-every waveform script, coverage database and constraint file depends on. It holds
-nothing of replay: no DPI, no transport, no cvm package, so it is synthesized with
-the design. One `ifdef` sets its `REPLAY_ENABLE` parameter and the parameter
-decides the rest, so with replay off it is wires.
-
-`<name>_bound_sv` is everything else -- the boundary arithmetic, the host calls,
-the engine. A testbench binds it in, and that is what makes the testbench the
-owner of `LOCATION`, `reset_n`, `enable` and `done`: a bind takes parameters and
-ports, and nothing reaching into a hierarchy can. A parameter cannot be set
-hierarchically at all (IEEE 1800 6.20.2 -- parameters build the hierarchy, so
-they cannot be read out of it), and `defparam` reaches only one level.
-
-The design instantiates the interposer unconditionally, beside the DUT, with
-intermediate nets. No `ifdef` and no generate:
+**The design is not modified.** Not the block, not its parent, not an
+instantiation -- the harness reads the instance's boundary by hierarchical
+reference and drives it with `force`, so the DUT keeps its ports, its
+connections and its hierarchical path. A testbench instantiates the harness and
+wires four ordinary ports:
 
 ```systemverilog
-    wire [3:0] opa_i;
-    wire [4:0] result_i;
-
-    alu_interposer u_alu_replay (
-        .clk(clk),
-        .opa_outer(opa), .opa_inner(opa_i),
-        .result_inner(result_i), .result_outer(result),
-        .bus(bus), /* ... */ );
-
-    alu u_alu (.clk(clk), .opa(opa_i), .result(result_i), .bus(bus), /* ... */ );
+alu_replay #(.LOCATION(cvm_topology_gen::get_location(topo.TOP.REPLAY.ID, 0)))
+    u_replay (.clk(clk), .reset_n(tb_reset_n), .enable(tb_enable), .done(tb_done));
 ```
 
-An `inout` is **not** repointed. It stays one net, tapped by the interposer, so
-with replay off there is nothing between the design and the block at all. Two
-isolated sides are not available: `alias` on a port and the `tran` primitives are
-both rejected, so one net is the only form -- and during replay a design driving
-that net contends with the recording rather than being overridden.
+`instance_path` is generated into the harness, because SystemVerilog cannot
+build a hierarchical name from a parameter -- so a harness replays one instance,
+and a second instance of the same module is untouched.
 
-The testbench's whole side is one statement. `.*` fills the boundary by name,
-which works because both modules come from one spec, and it carries conditional
-ports for free since both declare them under the same `ifdef`:
+A forced port overrides every other driver, so the block is **genuinely
+isolated** -- including an `inout`, where the standalone interposer shares a net
+and cannot be. Inputs are forced whole, since an input's enable is all-or-
+nothing; an `inout` is forced and released a bit at a time, because the
+recording says which side had each bit.
 
-```systemverilog
-bind alu_interposer alu_interposer_bound #(
-    .LOCATION(cvm_topology_gen::get_location(topo.TOP.REPLAY.ID, 0))
-) u_cvm_replay (
-    .reset_n (tb_reset_n),
-    .enable  (tb_enable),
-    .done    (tb_done),
-    .*
-);
-```
+Two things to know:
 
-Put the bind under the same define that turns `REPLAY_ENABLE` on, so the two
-cannot disagree. If they do it is loud either way: an interposer with nothing
-bound drives X through its mux, and a bind with the interposer off never
-finishes. Do not instantiate one interposer module at two sites -- both binds
-would land on one `LOCATION` and the two transports would collide.
++ **`release` restores a port on its driver's next evaluation**, not instantly.
+  For a block driven by clocked logic that is the next cycle. For an input tied
+  to a constant, the forced value persists -- there is no driver to come back.
++ The force is **combinational, not clocked**. The engine presents each cycle's
+  stimulus just after an edge and the DUT samples it at the next one; forcing on
+  the edge lands a cycle late and shifts the whole replay.
+
+Use `replay()` instead when the block is extracted and replayed on its own:
+there is no hierarchy to point at, so the interposer is the only option.
 
 Runtime plusargs, so the vector file needs no recompile:
 

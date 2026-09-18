@@ -113,38 +113,37 @@ _replay = rule(
     ],
 )
 
-def _replay_bind_impl(ctx):
-    """Generate the interposer and the replay stack a testbench binds into it."""
+def _replay_force_impl(ctx):
+    """Generate the replay harness for one instance, and the engine it wraps."""
 
-    interposer = ctx.outputs.interposer
+    harness = ctx.outputs.harness
     bound = ctx.outputs.bound
     merged = ctx.outputs.merged
 
     args = ctx.actions.args()
     args.add_all("--definitions", ctx.files.srcs)
-    args.add("--interposer-sv", interposer)
+    args.add("--force-sv", harness)
     args.add("--bound-sv", bound)
     args.add("--merged", merged)
-    if ctx.attr.replay_define:
-        args.add("--replay-define", ctx.attr.replay_define)
+    args.add("--instance-path", ctx.attr.instance_path)
 
-    outputs = [interposer, bound, merged]
+    outputs = [harness, bound, merged]
     ctx.actions.run(
         arguments = [args],
         executable = ctx.executable._gen,
         inputs = ctx.files.srcs,
         outputs = outputs,
-        mnemonic = "CVMReplayBind",
+        mnemonic = "CVMReplayForce",
     )
 
     return [DefaultInfo(files = depset(outputs))]
 
-_replay_bind = rule(
-    _replay_bind_impl,
+_replay_force = rule(
+    _replay_force_impl,
     attrs = {
         "srcs": attr.label_list(mandatory = True, allow_files = True),
-        "replay_define": attr.string(),
-        "interposer": attr.output(),
+        "instance_path": attr.string(mandatory = True),
+        "harness": attr.output(),
         "bound": attr.output(),
         "merged": attr.output(),
         "_gen": attr.label(
@@ -156,43 +155,43 @@ _replay_bind = rule(
     provides = [DefaultInfo],
 )
 
-def replay_bind(
+def replay_force(
         name,
+        instance_path,
         srcs = None,
         dut = None,
         dut_lib = None,
         clock = None,
         exclude = None,
         slang_defines = None,
-        replay_define = None,
         deps = None,
         visibility = None):
-    """Generate an interposer for a DUT buried in a larger design.
+    """Replay a DUT where it stands, inside a design that is not modified.
 
-    Two files, with different lives:
+    The harness reads the instance's boundary by hierarchical reference and
+    drives it with `force`, so the DUT keeps its ports, its connections and its
+    hierarchical path, and the design containing it needs no edit at all -- not
+    even an instantiation. A forced port overrides every other driver, so the
+    block is genuinely isolated, which a shared net cannot manage for an inout.
 
-      `<name>_sv` is the interposer. It sits *beside* the DUT rather than
-      around it, so the DUT's instance keeps its hierarchical path. It holds no
-      replay machinery at all -- no DPI, no transport, no cvm package -- so it
-      is synthesized along with the design. Its REPLAY_ENABLE parameter,
-      defaulted from a define, decides whether it is a mux or plain wires.
+    `instance_path` is the instance to replay, as a hierarchical name. It is
+    generated into the harness because SystemVerilog cannot build a
+    hierarchical name from a parameter, so a harness replays one instance.
 
-      `<name>_bound_sv` is everything else: the boundary arithmetic, the host
-      calls and the engine. A testbench binds it into the interposer, which is
-      how the testbench comes to own LOCATION, enable and done -- a bind takes
-      parameters and ports, and nothing reaching into a hierarchy can.
+    A testbench instantiates the harness and drives `reset_n`, `enable` and
+    `done`, and passes `LOCATION`. Everything is ordinary ports and parameters,
+    because the harness is an ordinary module.
 
-    The parent instantiates the interposer unconditionally, beside the DUT, and
-    repoints the DUT's inputs and outputs at the intermediate nets. An `inout`
-    is not repointed: the interposer taps the same net.
+    Use `replay()` instead when the block is extracted and replayed on its own:
+    there is no hierarchy to point at, so the interposer is the only option.
     """
 
     if (srcs == None) == (dut_lib == None):
-        fail("replay_bind(%s): give exactly one of `srcs` or `dut_lib`" % name)
+        fail("replay_force(%s): give exactly one of `srcs` or `dut_lib`" % name)
 
     if dut_lib != None:
         if dut == None or clock == None:
-            fail("replay_bind(%s): `dut_lib` needs `dut` and `clock`" % name)
+            fail("replay_force(%s): `dut_lib` needs `dut` and `clock`" % name)
         replay_ports(
             name = name + "_ports",
             dut_lib = dut_lib,
@@ -206,30 +205,23 @@ def replay_bind(
         srcs = [name + "_ports.yml"]
         deps = (deps or []) + [dut_lib]
 
-    _replay_bind(
+    _replay_force(
         name = name,
         srcs = srcs,
-        replay_define = replay_define or "",
-        interposer = name + ".sv",
+        instance_path = instance_path,
+        harness = name + ".sv",
         bound = name + "_bound.sv",
         merged = name + "_merged.yml",
         visibility = visibility,
     )
 
-    # Synthesized with the design, so it depends only on the DUT's own packages.
     verilog_library(
         name = name + "_sv",
-        srcs = [name + ".sv"],
-        deps = deps or [],
-        visibility = visibility,
-    )
-
-    # Simulation only. A testbench binds this in with one statement: `.*`
-    # fills the boundary by name, because both modules come from one spec.
-    verilog_library(
-        name = name + "_bound_sv",
-        srcs = [name + "_bound.sv"],
-        deps = ["@cvm//:replay_sv", ":" + name + "_sv"] + (deps or []),
+        srcs = [
+            name + ".sv",
+            name + "_bound.sv",
+        ],
+        deps = ["@cvm//:replay_sv"] + (deps or []),
         visibility = visibility,
     )
 

@@ -98,14 +98,12 @@ class Spec:
     pipe_depth: int = 4096
     # 0 means "let the generated module compute it from the element size".
     push_max: int = 0
-    # The macro whose presence turns the interposer's REPLAY_ENABLE on. Per
-    # interposer, not one global: a single define would turn on every replay
-    # site in the design at once.
-    replay_define: str = ""
-    # The two sides of the interposer, named positionally: `_outer` faces
-    # whatever the block sits in and `_inner` faces the block. Neither "tb" nor
-    # "dut" is right once the interposer is inside a design rather than a
-    # testbench.
+    # The instance this harness replays, as a hierarchical path. Baked in
+    # because SystemVerilog cannot build a hierarchical name from a parameter,
+    # which is also why a harness is one per replayed instance.
+    instance_path: str = ""
+    # The two sides of the standalone interposer, named positionally: `_outer`
+    # faces whatever the block sits in and `_inner` faces the block.
     outer_suffix: str = "_outer"
     inner_suffix: str = "_inner"
     standalone_top: bool = False
@@ -182,8 +180,7 @@ class Spec:
             outer_suffix=suffixes.get("outer", "_outer"),
             inner_suffix=suffixes.get("inner", "_inner"),
             standalone_top=bool(body.get("standalone_top", False)),
-            replay_define=body.get("replay_define", "") or
-                          "CVM_REPLAY_" + name.upper(),
+            instance_path=body.get("instance_path", "") or "",
         )
 
         for port_name, attrs in raw_ports.items():
@@ -265,25 +262,29 @@ def main() -> None:
     parser.add_argument("--sv", default=None)
     # The buried-block pair: an interposer that is synthesized alongside the
     # DUT, and the replay stack a testbench binds into it.
-    parser.add_argument("--interposer-sv", default=None)
+    parser.add_argument("--force-sv", default=None)
     parser.add_argument("--bound-sv", default=None)
-    parser.add_argument("--replay-define", default=None)
+    parser.add_argument("--instance-path", default=None)
     parser.add_argument("--merged", required=True)
     args = parser.parse_args()
 
     topology = load_topology(args.topology)
     spec = Spec.load(args.definitions, topology)
-    if args.replay_define:
-        spec.replay_define = args.replay_define
+    if args.instance_path:
+        spec.instance_path = args.instance_path
 
     # Templates are runfiles beside this script, as packet_gen.py does it.
     templates = pathlib.Path(os.path.abspath(__file__)).parent / "templates"
-    if not (args.sv or args.interposer_sv or args.bound_sv):
-        sys.exit("give at least one of --sv, --interposer-sv or --bound-sv")
+    if not (args.sv or args.force_sv or args.bound_sv):
+        sys.exit("give at least one of --sv, --force-sv or --bound-sv")
     if args.sv:
         render(str(templates / "template.sv"), args.sv, spec)
-    if args.interposer_sv:
-        render(str(templates / "interposer.sv"), args.interposer_sv, spec)
+    if args.force_sv:
+        if not spec.instance_path:
+            sys.exit("--force-sv needs --instance-path: the harness reaches "
+                     "into the design by hierarchical name, which cannot come "
+                     "from a parameter")
+        render(str(templates / "force.sv"), args.force_sv, spec)
     if args.bound_sv:
         render(str(templates / "bound.sv"), args.bound_sv, spec)
 

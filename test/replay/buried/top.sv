@@ -1,10 +1,10 @@
 // SPDX-FileCopyrightText: © 2026 Tenstorrent USA, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Replay of a DUT buried inside a larger design. The testbench never reaches
-// into the hierarchy: it binds the replay stack into the interposer, and the
-// bind is what lets it own LOCATION, reset, enable and done as ordinary
-// parameters and ports.
+// Replay of a DUT buried in a larger design, with the design untouched. The
+// harness is an ordinary module instantiated here: it reaches into core by
+// hierarchical name and takes the boundary with force, so the testbench owns
+// LOCATION, reset, enable and done as ordinary parameters and ports.
 module top;
 
     import cvm_sim_pkg::*;
@@ -12,18 +12,10 @@ module top;
     localparam int TAIL_CYCLES    = 10;
     localparam int TIMEOUT_CYCLES = 1000;
 
-`ifdef CVM_REPLAY_ALU_INTERPOSER
-    localparam bit REPLAYING = 1'b1;
-`else
-    localparam bit REPLAYING = 1'b0;
-`endif
-
     logic clk = 1'b0;
     always #5 clk = ~clk;
 
-    // The testbench's own, handed to the bound module through the bind.
-    logic tb_reset_n, tb_enable;
-    logic tb_done;
+    logic tb_reset_n, tb_enable, tb_done;
 
     logic                       rst_n, no_gate;
     logic [3:0]                 opa, opb;
@@ -31,14 +23,15 @@ module top;
     logic [alu_pkg::LANES-1:0][3:0] mat;
     logic [$clog2(alu_pkg::LANES*4)-1:0] sel, sel_echo;
     wire  [2:0]                 bus;
-    // Drives the inout only when replay will not, so the passthrough build has
-    // something real to carry: alu echoes bus[0] onto bus[1], so seeing bus[1]
-    // high proves the net runs design -> block -> design with nothing between.
-    assign bus[0] = REPLAYING ? 1'bz : 1'b1;
     logic                       bus_echo, valid;
     logic [4:0]                 result, result_plain;
     alu_pkg::lane_t             resp;
     alu_aux_pkg::byte_t         sum;
+
+    // Drives the inout only when replay will not, so the untouched run has
+    // something real to carry: alu echoes bus[0] onto bus[1].
+    logic drive_bus;
+    assign bus[0] = drive_bus ? 1'b1 : 1'bz;
 
     logic [4:0] mon_replay_result, mon_last_result, mon_plain_result;
     int         mon_done_cycles, cycles;
@@ -52,6 +45,17 @@ module top;
         .sel(sel), .no_gate(no_gate), .bus(bus), .bus_echo(bus_echo),
         .result(result), .valid(valid), .resp(resp), .sum(sum),
         .sel_echo(sel_echo), .result_plain(result_plain)
+    );
+
+    // Points at top.u_core.u_alu, which is generated into it. Nothing about
+    // core or alu changes to accommodate this.
+    alu_replay #(
+        .LOCATION (cvm_topology_gen::get_location(topo.TOP.REPLAY.ID, 0))
+    ) u_replay (
+        .clk     (clk),
+        .reset_n (tb_reset_n),
+        .enable  (tb_enable),
+        .done    (tb_done)
     );
 
     initial begin
@@ -71,7 +75,9 @@ module top;
             mon_last_result <= result;
             if (tb_done !== 1'b1) mon_replay_result <= result;
         end
-        mon_plain_result <= result_plain;
+        // Only while replay runs, so it shows the sibling was never forced
+        // rather than what the design drove afterwards.
+        if (tb_done !== 1'b1) mon_plain_result <= result_plain;
     end
 
     always_ff @(posedge clk) begin
@@ -94,9 +100,11 @@ module top;
         automatic int expect_replay_result = cvm_plusargs::get_int("expect_replay_result");
         automatic int expect_last_result   = cvm_plusargs::get_int("expect_last_result");
         automatic int expect_done_cycles   = cvm_plusargs::get_int("expect_done_cycles");
+        automatic int skip_enable          = cvm_plusargs::get_int("skip_enable");
         automatic int errors               = 0;
 
         cvm_error_count_start();
+        drive_bus         = (skip_enable != 0);
         mon_replay_result = 5'd0;
         mon_last_result   = 5'd0;
         mon_plain_result  = 5'd0;
@@ -106,9 +114,14 @@ module top;
         rst_n      = 1'b1;
         repeat (2) @(negedge clk);
 
-        if (REPLAYING) begin
+        if (skip_enable == 0) begin
             tb_enable = 1'b1;
             @(posedge tb_done);
+            // Release restores a port to its driver's *next* evaluation, so
+            // the design has to drive for the block to come back. Moving the
+            // stimulus here is what a live design does every cycle anyway.
+            opa = 4'd4;
+            opb = 4'd5;
         end
         repeat (TAIL_CYCLES) @(posedge clk);
 
@@ -124,26 +137,23 @@ module top;
                      mon_last_result, expect_last_result);
             errors++;
         end
-        // The inout is one net shared by the design and the block, so in the
-        // passthrough build there is nothing between them at all. In the replay
-        // build the recording owns bus and its own expectations cover it.
-        if (!REPLAYING && (bus[1] !== 1'b1 || bus_echo !== 1'b1)) begin
-            $display("FAIL: bus[1]=%0b bus_echo=%0b, wanted both 1; the inout should be one net",
+        // Nothing was forced, so the design's inout runs design -> block ->
+        // design exactly as it did before the harness existed.
+        if (skip_enable != 0 && (bus[1] !== 1'b1 || bus_echo !== 1'b1)) begin
+            $display("FAIL: bus[1]=%0b bus_echo=%0b, wanted both 1; an unforced design should be untouched",
                      bus[1], bus_echo);
             errors++;
         end
-        // The property the sibling form exists for: the DUT is still at the
-        // path it was at before replay was inserted. A wrapper would have made
-        // this u_core.u_alu.u_real.
+        // The DUT is at the path it always was -- force needed no interposing,
+        // so nothing moved.
         if (u_core.u_alu.result !== result) begin
-            $display("FAIL: core.u_alu.result=%0d but core.result=%0d; the DUT should still be at its original path",
+            $display("FAIL: core.u_alu.result=%0d but core.result=%0d",
                      u_core.u_alu.result, result);
             errors++;
         end
-        // The sibling instance is on the same stimulus and was never
-        // interposed, so it must never have followed the recording.
+        // The sibling instance is on the same stimulus and was never forced.
         if (int'(mon_plain_result) != 3) begin
-            $display("FAIL: the uninterposed alu produced %0d, wanted 3; only one site should be replayed",
+            $display("FAIL: the unforced alu produced %0d, wanted 3; force should reach one instance",
                      mon_plain_result);
             errors++;
         end
@@ -158,8 +168,8 @@ module top;
             errors++;
         end
 
-        $display("replaying=%0b done_cycles=%0d replay_result=%0d last_result=%0d plain=%0d",
-                 REPLAYING, mon_done_cycles, mon_replay_result, mon_last_result,
+        $display("skip_enable=%0d done_cycles=%0d replay_result=%0d last_result=%0d plain=%0d",
+                 skip_enable, mon_done_cycles, mon_replay_result, mon_last_result,
                  mon_plain_result);
         if (errors != 0) $fatal(1, "%0d checks failed", errors);
         $display("PASS");
@@ -167,18 +177,3 @@ module top;
     end
 
 endmodule
-
-`ifdef CVM_REPLAY_ALU_INTERPOSER
-// The whole of it. `.*` fills the boundary by name, which works because the
-// interposer and this module come from one spec -- and it carries the
-// conditional ports for free, since both declare them under the same `ifdef`
-// and so match or are both absent. Only the four the testbench owns are named.
-bind alu_interposer alu_interposer_bound #(
-    .LOCATION(cvm_topology_gen::get_location(cvm_topology_gen::mods.TOP.REPLAY.ID, 0))
-) u_cvm_replay (
-    .reset_n (top.tb_reset_n),
-    .enable  (top.tb_enable),
-    .done    (top.tb_done),
-    .*
-);
-`endif

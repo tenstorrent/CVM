@@ -45,7 +45,7 @@ test_suite(
     tests = [
         ":replay_test",
         "//test/replay/buried:sh_buried",
-        "//test/replay/buried:sh_passthrough",
+        "//test/replay/buried:sh_untouched",
         "//test/replay/spec:sh_define_independent",
         "//test/replay/spec:sh_matches_golden",
         "//test/replay/standalone:sh_never_enabled",

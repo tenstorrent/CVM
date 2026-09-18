@@ -1,7 +1,11 @@
-load("@cvm//:defs.bzl", "replay_bind")
+load("@cvm//:defs.bzl", "replay_force")
 load("@rules_hdl//verilog:providers.bzl", "verilog_library")
 load("@rules_verilator//verilator:defs.bzl", "verilator_cc_library")
 load("//:defs.bzl", "topology_gen")
+
+# Replay of a DUT where it stands, inside a design that is not modified for it.
+# One build: the harness is always present and does nothing until enabled, so
+# there is no configuration to get wrong.
 
 topology_gen(
     name = "topology",
@@ -12,123 +16,96 @@ topology_gen(
     },
 )
 
-# The interposer is generated from alu's own Verilog and goes into the design
-# build; the bound module and the bind macro are simulation only.
-replay_bind(
-    name = "alu_interposer",
+# The spec comes from alu's own Verilog; the instance is named here because a
+# hierarchical name cannot be a parameter.
+replay_force(
+    name = "alu_replay",
     clock = "clk",
     dut = "alu",
     dut_lib = "//test/replay/alu:alu_sv",
+    instance_path = "top.u_core.u_alu",
 )
 
-# The design: core.sv holds the committed edit, and the interposer is part of
-# it. Nothing of replay is here.
 verilog_library(
     name = "core_sv",
     srcs = ["core.sv"],
+    deps = ["//test/replay/alu:alu_sv"],
+)
+
+verilog_library(
+    name = "top_sv",
+    srcs = ["top.sv"],
+    top_module = "top",
     deps = [
-        ":alu_interposer_sv",
-        "//test/replay/alu:alu_sv",
+        ":alu_replay_sv",
+        ":core_sv",
+        ":topology_sv",
+        "//:plusargs_sv",
+        "//:registry_sv",
+        "//test/lib/sim:sim_sv",
     ],
 )
 
-TOP_DEPS = [
-    ":core_sv",
-    ":topology_sv",
-    "//:plusargs_sv",
-    "//:registry_sv",
-    "//test/lib/sim:sim_sv",
-]
-
-# The off build has none of replay in it -- not the bound module, not the
-# engine, not the transport, and none of the host libraries either. That it
-# elaborates and runs anyway is the proof that the interposer, which is
-# synthesized with the design, depends on nothing from cvm.
-verilog_library(
-    name = "top_off_sv",
-    srcs = ["top.sv"],
-    deps = TOP_DEPS,
-    top_module = "top",
+verilator_cc_library(
+    name = "top_veri_lib",
+    module = ":top_sv",
+    timing = True,
+    vopts = ["--assert"],
 )
 
-verilog_library(
-    name = "top_on_sv",
-    srcs = ["top.sv"],
-    deps = TOP_DEPS + [":alu_interposer_bound_sv"],
-    top_module = "top",
+cc_binary(
+    name = "sim",
+    srcs = ["//test/lib/sim:sim_main"],
+    deps = [
+        ":top_veri_lib",
+        ":topology_cc",
+        "//:logger",
+        "//:plusargs",
+        "//:registry",
+        "//:replay",
+        "//:topology",
+        "//test/lib/sim:sim_dpi",
+        "//test/replay:tb_flags",
+    ],
 )
-
-SIM_DEPS = [
-    "//:logger",
-    "//:plusargs",
-    "//:registry",
-    "//:topology",
-    ":topology_cc",
-    "//test/lib/sim:sim_dpi",
-    "//test/replay:tb_flags",
-]
-
-# One source, two builds. The define decides whether the interposer is a mux or
-# plain wires -- and whether the testbench binds anything into it at all.
-[
-    [
-        verilator_cc_library(
-            name = "top_" + flavour + "_veri_lib",
-            module = ":top_" + flavour + "_sv",
-            timing = True,
-            vopts = ["--assert"] + extra,
-        ),
-        cc_binary(
-            name = "sim_" + flavour,
-            srcs = ["//test/lib/sim:sim_main"],
-            deps = SIM_DEPS + host + [":top_" + flavour + "_veri_lib"],
-        ),
-    ]
-    for flavour, extra, host in [
-        ("off", [], []),
-        ("on", ["+define+CVM_REPLAY_ALU_INTERPOSER"], ["//:replay"]),
-    ]
-]
 
 [
     sh_test(
         name = "sh_" + scenario["name"],
         srcs = ["//test/lib/sim:sim.sh"],
-        args = ["$(location :%s)" % scenario["sim"]] + scenario["args"],
+        args = ["$(location :sim)"] + scenario["args"],
         data = [
-            ":" + scenario["sim"],
+            ":sim",
             "//test/replay/fixtures:evcds",
         ],
     )
     for scenario in [
-        # REPLAY_ENABLE is 0, so the interposer is wires. This build has no
-        # replay in it at all -- it does not even know the +cvm_replay_file
-        # flag, which is what makes it stand for the synthesis build.
+        # The harness is elaborated but never enabled, so it forces nothing and
+        # the design runs exactly as it would without it.
         {
-            "name": "passthrough",
-            "sim": "sim_off",
+            "name": "untouched",
             "args": [
+                "+skip_enable=1",
                 "+expect_errors=0",
                 "+expect_last_result=3",
             ],
         },
-        # The same design, replaying the buried instance.
+        # The same build, replaying the buried instance.
         {
             "name": "buried",
-            "sim": "sim_on",
             "args": [
                 "+cvm_replay_file=test/replay/fixtures/alu.evcd",
                 "+expect_errors=0",
                 "+expect_replay_result=7",
-                "+expect_last_result=3",
+                # The design drives 4 + 5 once replay lets go.
+                "+expect_last_result=9",
                 "+expect_done_cycles=7",
             ],
         },
         # Load bearing: one recorded output bit is wrong, so the checker must
-        # report it through the bind.
+        # report it.
         {
             "name": "buried_mismatch",
-            "sim": "sim_on",
             "args": [
                 "+cvm_replay_file=test/replay/fixtures/alu_bad.evcd",
                 "+expect_errors=1",

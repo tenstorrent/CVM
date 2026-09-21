@@ -485,6 +485,10 @@ def emit(spec: Spec, name: str, clock: str, exclude: List[str]) -> str:
     if spec.localparams:
         body["localparams"] = "".join(f"    {line}\n"
                                       for line in spec.localparams)
+    # Carried into the spec, not just dropped from `ports`: the module reports
+    # them as unreplayed, or a recording carrying one fails conformance.
+    if exclude:
+        body["exclude"] = list(exclude)
     ports: Dict[str, object] = {}
     for port in spec.ports:
         if port.name in skip:

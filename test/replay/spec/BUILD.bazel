@@ -103,3 +103,29 @@ verilog_library(
     )
     for suffix in ["_x", "_y"]
 ]
+
+# `exclude` has to reach the spec, not just drop ports from it, or a recording
+# carrying an excluded port fails conformance.
+replay_ports(
+    name = "elsif_spec_excluded",
+    clock = "clk",
+    dut = "elsif_ports",
+    dut_lib = ":elsif_sv",
+    exclude = ["rst_n"],
+    spec_name = "elsif_replay",
+)
+
+sh_test(
+    name = "sh_elsif_exclude_matches_golden",
+    size = "small",
+    srcs = ["diff.sh"],
+    args = [
+        "$(location elsif_excluded_golden.yml)",
+        "$(location :elsif_spec_excluded.yml)",
+        "regenerate with: bazel build //test/replay/spec:elsif_spec_excluded && cp bazel-bin/test/replay/spec/elsif_spec_excluded.yml test/replay/spec/elsif_excluded_golden.yml",
+    ],
+    data = [
+        "elsif_excluded_golden.yml",
+        ":elsif_spec_excluded.yml",
+    ],
+)

@@ -40,12 +40,15 @@ cc_library(
 )
 
 verilog_library(
+    name = "pipe_pkg_sv",
+    srcs = ["cvm_pipe_pkg.sv"],
+)
+
+verilog_library(
     name = "pipe_sv",
-    srcs = [
-        "cvm_pipe_in.sv",
-        "cvm_pipe_pkg.sv",
-    ],
+    srcs = ["cvm_pipe_in.sv"],
     deps = [
+        ":pipe_pkg_sv",
         "//:registry_sv",
         "//:topology_sv",
     ],

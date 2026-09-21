@@ -78,12 +78,15 @@ cc_library(
 )
 
 verilog_library(
+    name = "replay_pkg_sv",
+    srcs = ["cvm_replay_pkg.sv"],
+)
+
+verilog_library(
     name = "replay_sv",
-    srcs = [
-        "cvm_replay_engine.sv",
-        "cvm_replay_pkg.sv",
-    ],
+    srcs = ["cvm_replay_engine.sv"],
     deps = [
+        ":replay_pkg_sv",
         "//src/pipe:pipe_sv",
         "//:topology_sv",
     ],

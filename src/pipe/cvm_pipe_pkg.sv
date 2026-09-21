@@ -21,7 +21,8 @@ package cvm_pipe_pkg;
 
     // Reports this instance's geometry and zeroes the C-owned write pointer
     // through the export. Called once out of reset.
-    import "DPI-C" function void cvm_pipe_reset(
+    // `context`: the implementation calls the cvm_pipe_in_zero export back.
+    import "DPI-C" context function void cvm_pipe_reset(
         int unsigned location,
         int unsigned depth,
         int unsigned words_per_element,

@@ -296,6 +296,18 @@ def _fragment_ports(source: str, when: Tuple[str, ...]) -> List[Port]:
     return found
 
 
+def span_of(node) -> Tuple[object, int, int]:
+    """The source range a syntax node covers, as (buffer, first, last)."""
+    first = node.getFirstToken().location
+    last = node.getLastToken().location
+    return (str(first.buffer), first.offset, last.offset)
+
+
+def within(where: Tuple[object, int], span: Tuple[object, int, int]) -> bool:
+    buffer, start, end = span
+    return where[0] == buffer and start <= where[1] <= end
+
+
 def module_of(instance):
     node = instance.body.syntax
     while node is not None and node.kind.name != "ModuleDeclaration":
@@ -413,6 +425,10 @@ def build(driver, top: str) -> Spec:
     for tree in driver.syntaxTrees:
         conditionals.scan(tree.root)
 
+    # Skipped branches elsewhere in the source set belong to other modules;
+    # reparsing those as port declarations is wrong and slow.
+    dut_span = span_of(module)
+
     spec = Spec(dut=top)
     seen = set()
 
@@ -440,6 +456,8 @@ def build(driver, top: str) -> Spec:
     # slang elaborated, so leaving them out would make the spec a description of
     # this build rather than of the module.
     for body, when, where in conditionals.skipped:
+        if not within(where, dut_span):
+            continue
         for port in parse_fragment(body, when, where):
             if port.name in seen:
                 continue

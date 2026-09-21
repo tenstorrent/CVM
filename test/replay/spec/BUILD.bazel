@@ -1,4 +1,5 @@
 load("@cvm//:defs.bzl", "replay_ports")
+load("@rules_hdl//verilog:providers.bzl", "verilog_library")
 
 # What the port spec must satisfy, with no simulation involved: the same DUT
 # read two ways has to produce the same spec, and what slang reports has to show
@@ -59,3 +60,46 @@ sh_test(
         ":alu_spec.yml",
     ],
 )
+
+# The spec must come out the same whichever branch of an `elsif` chain slang
+# elaborates. Three readings, one per branch.
+verilog_library(
+    name = "elsif_sv",
+    srcs = ["elsif.sv"],
+)
+
+[
+    replay_ports(
+        name = "elsif_spec" + suffix,
+        clock = "clk",
+        dut = "elsif_ports",
+        dut_lib = ":elsif_sv",
+        slang_defines = defines,
+        spec_name = "elsif_replay",
+    )
+    for suffix, defines in [
+        ("", []),
+        ("_x", ["MODE_X"]),
+        ("_y", ["MODE_Y"]),
+    ]
+]
+
+[
+    sh_test(
+        name = "sh_elsif_define_independent" + suffix,
+        size = "small",
+        srcs = ["diff.sh"],
+        args = [
+            "$(location :elsif_spec.yml)",
+            "$(location :elsif_spec%s.yml)" % suffix,
+            "the spec depends on which branch of the `elsif` chain was " +
+            "elaborated, so it describes one build of elsif_ports rather " +
+            "than elsif_ports",
+        ],
+        data = [
+            ":elsif_spec.yml",
+            ":elsif_spec%s.yml" % suffix,
+        ],
+    )
+    for suffix in ["_x", "_y"]
+]

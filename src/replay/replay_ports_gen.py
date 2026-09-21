@@ -139,9 +139,13 @@ class Conditionals:
 
     slang keeps the branch the preprocessor did not take, as `disabledTokens` on
     the directive, and reports directives nested inside a skipped region in
-    source order just as it does live ones. So one stack of (condition,
-    polarity) serves both: a declaration lands under the same chain whichever
-    way the defines were set, which is what makes the spec define-independent.
+    source order just as it does live ones. So one stack serves both: a
+    declaration lands under the same chain whichever way the defines were set,
+    which is what makes the spec define-independent.
+
+    A frame is (prior, current): the conditions already tried and found false,
+    and the one this branch is under. An `elsif` therefore reads as a nested
+    `ifdef`/`else`.
     """
 
     def __init__(self) -> None:
@@ -149,7 +153,15 @@ class Conditionals:
         self.skipped: List[Tuple[str, Tuple[str, ...], Tuple[object, int]]] = []
 
     def _chain(self, stack) -> Tuple[str, ...]:
-        return tuple(("!" + cond) if negate else cond for cond, negate in stack)
+        terms: List[str] = []
+        for prior, current in stack:
+            # Every earlier branch failed, so each contributes its inverse.
+            for cond, negate in prior:
+                terms.append(cond if negate else ("!" + cond))
+            if current is not None:
+                cond, negate = current
+                terms.append(("!" + cond) if negate else cond)
+        return tuple(terms)
 
     def scan(self, root) -> None:
         stack: List[List] = []
@@ -163,17 +175,23 @@ class Conditionals:
     def _directive(self, node, stack) -> None:
         kind = node.kind.name
         if kind in ("IfDefDirective", "IfNDefDirective"):
-            stack.append([str(node.expr).strip(), kind == "IfNDefDirective"])
+            stack.append([[], (str(node.expr).strip(),
+                               kind == "IfNDefDirective")])
         elif kind == "ElseDirective":
             if not stack:
                 die("an `else` with no `ifdef` open")
-            stack[-1][1] = not stack[-1][1]
+            prior, current = stack[-1]
+            if current is None:
+                die("a second `else` for one `ifdef`")
+            stack[-1] = [prior + [current], None]
         elif kind == "ElsIfDirective":
-            # Representable only as a nested ifdef/else, which would change the
-            # emitted structure rather than copy it. Refused rather than
-            # mis-emitted.
-            die("`elsif` around a port declaration is not supported; use "
-                "nested `ifdef`/`else`")
+            if not stack:
+                die("an `elsif` with no `ifdef` open")
+            prior, current = stack[-1]
+            if current is None:
+                die("an `elsif` after an `else`")
+            stack[-1] = [prior + [current],
+                         (str(node.expr).strip(), False)]
         elif kind == "EndIfDirective":
             if not stack:
                 die("an `endif` with no `ifdef` open")

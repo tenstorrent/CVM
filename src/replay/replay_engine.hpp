@@ -69,7 +69,7 @@ namespace cvm {
       public:
         engine(cvm::topology::loc_t loc, unsigned id);
 
-        // Called once at end of run, by cvm::registry::check().
+        // Called at end of run, by cvm::registry::check(). Reports once.
         void check() const;
 
       private:
@@ -102,6 +102,7 @@ namespace cvm {
 
         std::string path_;
         bool reported_ = false;
+        mutable bool checked_ = false;
     };
 
   } // namespace replay

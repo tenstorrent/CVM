@@ -107,8 +107,9 @@ namespace cvm {
     // finishing only means the transport swallowed the recording, which a short
     // one does whether or not `enable` ever rose.
     void engine::check() const {
-      if (path_.empty() || reported_)
+      if (path_.empty() || reported_ || checked_)
         return;
+      checked_ = true;
       cvm::log(cvm::ERROR,
                "Error: cvm::replay: {}: `{}` was loaded but replay never "
                "finished; {} elements reached the transport. Was `enable` "

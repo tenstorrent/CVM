@@ -1,5 +1,5 @@
 # Minimal CI container for cvm. Provides Bazel 6.5.0 + Bazel 7.7.1, clang 20,
-# Python 3, m4 / flex / bison, libatomic (with the .so symlink ld expects).
+# Python 3, m4 / flex / bison, libatomic (with the .so symlink ld expects), and valgrind.
 
 FROM debian:trixie-slim
 
@@ -25,6 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         m4 \
         flex \
         bison \
+        valgrind \
         zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 

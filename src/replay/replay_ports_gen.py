@@ -508,8 +508,12 @@ def emit(spec: Spec, name: str, clock: str, exclude: List[str]) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source", action="append", required=True,
+    parser.add_argument("--source", action="append", default=[],
                         help="a Verilog file; repeat for each")
+    parser.add_argument("--flist", action="append", default=[],
+                        help="a command file slang reads the sources from, "
+                             "paths relative to the working directory; "
+                             "repeat for each")
     parser.add_argument("--include-dir", action="append", default=[])
     parser.add_argument("--define", action="append", default=[],
                         help="read only to elaborate; the spec must not depend "
@@ -525,7 +529,12 @@ def main() -> None:
     parser.add_argument("--out", required=True)
     args = parser.parse_args()
 
+    if not args.source and not args.flist:
+        die("give at least one --source or --flist")
+
     command = ["slang"] + list(args.source)
+    for flist in args.flist:
+        command += ["-f", flist]
     for directory in args.include_dir:
         command += ["-I", directory]
     for define in args.define:

@@ -327,21 +327,23 @@ replay_attach(
 ```
 
 **The design is not modified** -- not the block, not its parent, not an
-instantiation. And neither generated file names a design, an instance or a
-path, so both are reusable:
+instantiation. And the generated file names no design, instance or path, so
+it is reusable:
 
-+ `alu_replay.sv` is the replay module: the transport, the host calls and the
-  boundary arithmetic. It observes through `_obs` ports and answers with `_rep`
-  and `_en`, so it knows nothing about where the DUT is.
-+ `alu_replay_attach.svh` is a macro that attaches one of those to one
-  instance, **taking the instance as an argument**. It reads the boundary by
-  hierarchical reference and drives it with `force`.
+`alu_replay.sv` holds both halves, neither of which is usable without the
+other:
 
-A testbench includes the header and invokes the macro once per instance:
++ a macro that attaches replay to one instance, **taking the instance as an
+  argument**. It reads the boundary by hierarchical reference and drives it
+  with `force`.
++ the replay module it instantiates: the transport, the host calls and the
+  boundary arithmetic. It observes through `_obs` ports and answers with
+  `_rep` and `_en`, so it knows nothing about where the DUT is.
+
+Compiling that file defines the macro, so a testbench only invokes it once per
+instance:
 
 ```systemverilog
-`include "alu_replay_attach.svh"
-
 `ALU_REPLAY_ATTACH(alu, top.u_core.u_alu,
                    cvm_topology_gen::get_location(topo.TOP.REPLAY.ID, 0),
                    tb_reset_n, tb_enable, tb_done_alu)

@@ -21,10 +21,9 @@ ${pad}`endif ${C}
 // Spec: ${spec.name}   DUT: ${spec.dut}
 
 // Attaches replay to one instance of ${spec.dut}, wherever it is. The instance
-// is an argument, so this file names no design and no site: include it once and
-// invoke the macro once per instance you want to replay.
+// is an argument, so this file names no design and no site: compile it ahead
+// of the testbench and invoke the macro once per instance to replay.
 //
-//   `include "${spec.name}_attach.svh"
 //   `${M}(alu0, top.u_chip.u_alu, LOC, rst_n, enable, done)
 //
 // It expands to a named generate block, so invoking it twice does not collide,

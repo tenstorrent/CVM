@@ -117,16 +117,14 @@ def _replay_attach_impl(ctx):
     """Generate the replay module and the macro that attaches it to a DUT."""
 
     module = ctx.outputs.module
-    macro = ctx.outputs.macro
     merged = ctx.outputs.merged
 
     args = ctx.actions.args()
     args.add_all("--definitions", ctx.files.srcs)
     args.add("--attach-sv", module)
-    args.add("--attach-svh", macro)
     args.add("--merged", merged)
 
-    outputs = [module, macro, merged]
+    outputs = [module, merged]
     ctx.actions.run(
         arguments = [args],
         executable = ctx.executable._gen,
@@ -142,7 +140,6 @@ _replay_attach = rule(
     attrs = {
         "srcs": attr.label_list(mandatory = True, allow_files = True),
         "module": attr.output(),
-        "macro": attr.output(),
         "merged": attr.output(),
         "_gen": attr.label(
             default = "//src/replay:replay_gen",
@@ -165,18 +162,22 @@ def replay_attach(
         visibility = None):
     """Replay a DUT where it stands, in a design that is not modified.
 
-    Emits two files, and neither names a design, an instance or a path:
+    Emits `<name>.sv`, which names no design, instance or path and holds both
+    halves of the mechanism:
 
-      `<name>.sv` is the replay module -- the transport, the host calls and the
-      boundary arithmetic. It observes through `_obs` ports and answers with
-      `_rep` and `_en`, so it knows nothing about where the DUT is.
+      the attach macro, which takes the instance as an argument, reads its
+      boundary by hierarchical reference and drives it with `force`, so the DUT
+      keeps its ports, its connections and its hierarchical path and the design
+      needs no edit at all. A forced port overrides every other driver, so the
+      instance is genuinely isolated -- an inout included, which a shared net
+      cannot be.
 
-      `<name>_attach.svh` is a macro that attaches one of those to one
-      instance, taking the instance as an argument. It reads the boundary by
-      hierarchical reference and drives it with `force`, so the DUT keeps its
-      ports, its connections and its hierarchical path, and the design needs no
-      edit at all. A forced port overrides every other driver, so the instance
-      is genuinely isolated -- an inout included, which a shared net cannot be.
+      the replay module the macro instantiates -- the transport, the host calls
+      and the boundary arithmetic. It observes through `_obs` ports and answers
+      with `_rep` and `_en`, so it knows nothing about where the DUT is.
+
+    One file because neither half is usable without the other, and because a
+    `define has to be compiled ahead of whatever expands it.
 
     A testbench invokes the macro once per instance. It expands to a named
     generate block, so several invocations coexist, and invoking it inside a
@@ -210,16 +211,13 @@ def replay_attach(
         name = name,
         srcs = srcs,
         module = name + ".sv",
-        macro = name + "_attach.svh",
         merged = name + "_merged.yml",
         visibility = visibility,
     )
 
-    # The macro travels as a header, so a testbench only has to include it.
     verilog_library(
         name = name + "_sv",
         srcs = [name + ".sv"],
-        hdrs = [name + "_attach.svh"],
         deps = ["@cvm//:replay_sv"] + (deps or []),
         visibility = visibility,
     )

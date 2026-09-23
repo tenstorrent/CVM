@@ -244,10 +244,10 @@ def load_topology(path: Optional[str]) -> Optional[Dict]:
     return flat
 
 
-def render(template_path: str, output_path: str, spec: Spec) -> None:
-    template = Template(filename=template_path)
+def render(output_path: str, spec: Spec, *template_paths: str) -> None:
     with open(output_path, "w") as handle:
-        handle.write(template.render(spec=spec))
+        for path in template_paths:
+            handle.write(Template(filename=path).render(spec=spec))
 
 
 def main() -> None:
@@ -255,10 +255,9 @@ def main() -> None:
     parser.add_argument("--definitions", nargs="+", required=True)
     parser.add_argument("--topology", default=None)
     parser.add_argument("--sv", default=None)
-    # The buried-block pair: an interposer that is synthesized alongside the
-    # DUT, and the replay stack a testbench binds into it.
+    # The buried-block form: the attach macro and the replay module it
+    # instantiates, in one file because neither is usable without the other.
     parser.add_argument("--attach-sv", default=None)
-    parser.add_argument("--attach-svh", default=None)
     parser.add_argument("--bound-sv", default=None)
     parser.add_argument("--merged", required=True)
     args = parser.parse_args()
@@ -268,14 +267,14 @@ def main() -> None:
 
     # Templates are runfiles beside this script, as packet_gen.py does it.
     templates = pathlib.Path(os.path.abspath(__file__)).parent / "templates"
-    if not (args.sv or args.attach_sv or args.attach_svh):
-        sys.exit("give at least one of --sv, --force-sv or --bound-sv")
+    if not (args.sv or args.attach_sv):
+        sys.exit("give at least one of --sv or --attach-sv")
     if args.sv:
-        render(str(templates / "template.sv"), args.sv, spec)
+        render(args.sv, spec, str(templates / "template.sv"))
     if args.attach_sv:
-        render(str(templates / "attach.sv"), args.attach_sv, spec)
-    if args.attach_svh:
-        render(str(templates / "attach.svh"), args.attach_svh, spec)
+        # The macro first, so it is defined before anything that expands it.
+        render(args.attach_sv, spec,
+               str(templates / "attach.svh"), str(templates / "attach.sv"))
 
     with open(args.merged, "w") as handle:
         yaml.safe_dump(

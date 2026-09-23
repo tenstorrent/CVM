@@ -5,7 +5,6 @@
 // harness is an ordinary module instantiated here: it reaches into core by
 // hierarchical name and takes the boundary with force, so the testbench owns
 // LOCATION, reset, enable and done as ordinary parameters and ports.
-`include "alu_replay_attach.svh"
 
 module top;
 

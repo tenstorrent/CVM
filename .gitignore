@@ -2,11 +2,4 @@
 /bazel_output_base
 /bazel_output_user_root
 /MODULE.bazel.lock
-# A slang checkout, kept beside the tree as the API reference for the port-spec
-# producer -- which uses the pyslang wheel, not this. Unignored it is one
-# `git add -A` away from failing the licence job on several thousand files.
-/slang/
-
-# Python leaves these beside generator sources, and they carry no licence
-# header.
 __pycache__/

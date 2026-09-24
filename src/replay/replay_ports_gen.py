@@ -421,13 +421,23 @@ def build(driver, top: str) -> Spec:
     instance = instances[0]
     module = module_of(instance)
 
-    conditionals = Conditionals()
-    for tree in driver.syntaxTrees:
-        conditionals.scan(tree.root)
-
     # Skipped branches elsewhere in the source set belong to other modules;
     # reparsing those as port declarations is wrong and slow.
     dut_span = span_of(module)
+
+    # Only the DUT's own tree is scanned. The directive stack is consulted at
+    # the DUT's port tokens and the skipped branches are filtered to its span,
+    # so walking every tree costs a token-by-token traversal of the whole
+    # source set to produce results that are then discarded.
+    unit = module
+    while unit.parent is not None:
+        unit = unit.parent
+    dut_buffer = str(unit.getFirstToken().location.buffer)
+
+    conditionals = Conditionals()
+    for tree in driver.syntaxTrees:
+        if str(tree.root.getFirstToken().location.buffer) == dut_buffer:
+            conditionals.scan(tree.root)
 
     spec = Spec(dut=top)
     seen = set()

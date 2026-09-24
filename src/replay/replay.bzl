@@ -100,9 +100,7 @@ _replay_gen = rule(
             mandatory = False,
             allow_single_file = [".json"],
         ),
-        # `sv` for replay(), `attach_sv` for replay_attach(). Both are the same
-        # generator reading the same spec, so the rule is one and the macros
-        # choose; an output nobody asks for is simply not declared.
+        # `sv` for replay(), `attach_sv` for replay_attach().
         "sv": attr.output(),
         "attach_sv": attr.output(),
         "merged": attr.output(),

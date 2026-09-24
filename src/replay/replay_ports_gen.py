@@ -4,12 +4,10 @@
 
 """Derive a replay port spec from arbitrary Verilog, with slang.
 
-Nothing emitted here may depend on a define or on a parameter's value. A spec
-holding a resolved number that came from either has silently stopped describing
-every configuration of the DUT, which is the whole property replay's generated
-interposer exists to provide. So a port's type is copied as the source spells it
--- `logic [NUM_CORES-1:0]`, not `logic [3:0]` -- and a port inside an `ifdef`
-keeps the condition instead of the answer.
+Nothing emitted here may depend on a resolved define or parameter value. So
+this only has to be run once to support every DUT configuration. A port's type
+is copied as the source spells it -- `logic [NUM_CORES-1:0]`, not `logic [3:0]`
+-- and a port inside an `ifdef` keeps the condition.
 
 The one place a define is read is elaboration, because slang has to pick a
 branch to elaborate at all. Ports in the branch it did not pick are recovered

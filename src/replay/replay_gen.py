@@ -80,17 +80,14 @@ class Spec:
     name: str
     dut: str
     ports: List[Port]
-    # The DUT port carrying the clock. Named here because a cycle-indexed
-    # recording samples once per cycle, so a clock reads as a constant in it --
-    # the dump cannot say which port is special. Never replayed.
+    # The DUT port carrying the clock. Not replayed.
     clock: str = ""
     # Packages the port types below resolve in, and DUT-private widths they
     # reference, both emitted into the generated module verbatim.
     imports: List[str] = field(default_factory=list)
     localparams: str = ""
-    # Ports the recording may carry that this interposer does not replay. A
-    # port the dump carries and nobody binds is otherwise fatal, which is what
-    # stops a spec that has drifted from the DUT narrowing the test in silence.
+    # Ports the recording may carry that this interposer does not replay.
+    # A port the dump carries and nobody binds is otherwise fatal.
     exclude: List[str] = field(default_factory=list)
     # Parameters the port types reference. The testbench must pass the same
     # values to the interposer and to the DUT.

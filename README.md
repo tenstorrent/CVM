@@ -196,8 +196,7 @@ regression, or for reproducing a failure without the surrounding environment.
 
 The recording is an [EVCD](https://en.wikipedia.org/wiki/Value_change_dump)
 (`$dumpports`), read as cycles: at cycle *k* the dump holds the inputs for cycle
-*k* beside the outputs standing *during* it. It is a runtime input, not a build
-input, so one build replays any number of conforming recordings.
+*k* beside the outputs standing *during* it.
 
 ### Generating the interposer
 
@@ -219,20 +218,20 @@ replay(
 |---|---|
 | `dut_lib` | the DUT's `verilog_library`. Carries its sources, its include dirs and its package closure, and is added to the generated library's `deps` -- which it must be, or the interposer elaborates before the packages its port types name. |
 | `dut` | the module to replay. |
-| `clock` | the DUT's clock port. Human input by necessity: a cycle-indexed recording samples once per cycle, so a clock reads as a constant in it and the dump cannot say which port is special. Never replayed. |
-| `exclude` | ports to leave unreplayed -- one on a second clock domain, which no cycle-indexed recording describes. Also how a whole-hierarchy `$dumpports` is made usable, since a dump port nothing binds is fatal. |
-| `slang_defines` | read only so slang can pick a branch to elaborate. The spec must come out identical whichever way these are set; `//test/replay/spec:sh_define_independent` is that check. |
+| `clock` | the DUT's clock port. Used to advance the evcd and not replayed. |
+| `exclude` | ports to leave unreplayed. |
+| `slang_defines` | for testing purposes, to tell slang which branch to elaborate. The spec must come out identical whichever way these are set. |
 | `srcs` | a hand-written spec instead of `dut_lib`, for a DUT slang cannot see. Exactly one of the two. |
 | `topology` | resolves `${A.B.C}` interpolation of widths and depths inside a hand-written spec. Unrelated to the topology replay needs at runtime. |
 
 ### The spec
 
-The same format either way, so a generated spec and a hand-written one are read
-by one parser. Everything in it is a SystemVerilog *expression*, never a resolved
-number: the interposer re-declares each port with the DUT's own type and measures
-it with `$bits`, so **one generated interposer holds for every parameterization
-and every define setting of the DUT**. A resolved width in a spec has silently
-stopped describing anything but the configuration it was taken from.
+Typically you'll want to use the `replay` rule to generate this spec, but it
+can be hand written if preferred. Everything in it is a SystemVerilog
+*expression*, never a resolved number: the interposer re-declares each port
+with the DUT's own type and measures it with `$bits`, so one generated
+interposer holds for every parameterization and every define setting of the
+DUT.
 
 ```yaml
 alu_replay:                 # = the generated interposer's module name

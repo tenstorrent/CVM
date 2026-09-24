@@ -53,15 +53,21 @@ _replay_ports = rule(
     provides = [DefaultInfo],
 )
 
-def _replay_impl(ctx):
-
-    sv = ctx.outputs.sv
-    merged = ctx.outputs.merged
+def _replay_gen_impl(ctx):
+    """Run the generator, emitting whichever outputs the caller asked for."""
 
     args = ctx.actions.args()
     args.add_all("--definitions", ctx.files.srcs)
-    args.add("--sv", sv)
-    args.add("--merged", merged)
+
+    outputs = []
+    for flag, output in (
+        ("--sv", ctx.outputs.sv),
+        ("--attach-sv", ctx.outputs.attach_sv),
+        ("--merged", ctx.outputs.merged),
+    ):
+        if output:
+            args.add(flag, output)
+            outputs.append(output)
 
     inputs = list(ctx.files.srcs)
 
@@ -73,8 +79,6 @@ def _replay_impl(ctx):
         args.add("--topology", ctx.file.topology)
         inputs.append(ctx.file.topology)
 
-    outputs = [sv, merged]
-
     ctx.actions.run(
         arguments = [args],
         executable = ctx.executable._gen,
@@ -83,14 +87,10 @@ def _replay_impl(ctx):
         mnemonic = "CVMReplayGen",
     )
 
-    return [
-        DefaultInfo(
-            files = depset(outputs),
-        ),
-    ]
+    return [DefaultInfo(files = depset(outputs))]
 
-_replay = rule(
-    _replay_impl,
+_replay_gen = rule(
+    _replay_gen_impl,
     attrs = {
         "srcs": attr.label_list(
             mandatory = True,
@@ -100,46 +100,11 @@ _replay = rule(
             mandatory = False,
             allow_single_file = [".json"],
         ),
+        # `sv` for replay(), `attach_sv` for replay_attach(). Both are the same
+        # generator reading the same spec, so the rule is one and the macros
+        # choose; an output nobody asks for is simply not declared.
         "sv": attr.output(),
-        "merged": attr.output(),
-        "_gen": attr.label(
-            default = "//src/replay:replay_gen",
-            executable = True,
-            cfg = "exec",
-        ),
-    },
-    provides = [
-        DefaultInfo,
-    ],
-)
-
-def _replay_attach_impl(ctx):
-    """Generate the replay module and the macro that attaches it to a DUT."""
-
-    module = ctx.outputs.module
-    merged = ctx.outputs.merged
-
-    args = ctx.actions.args()
-    args.add_all("--definitions", ctx.files.srcs)
-    args.add("--attach-sv", module)
-    args.add("--merged", merged)
-
-    outputs = [module, merged]
-    ctx.actions.run(
-        arguments = [args],
-        executable = ctx.executable._gen,
-        inputs = ctx.files.srcs,
-        outputs = outputs,
-        mnemonic = "CVMReplayAttach",
-    )
-
-    return [DefaultInfo(files = depset(outputs))]
-
-_replay_attach = rule(
-    _replay_attach_impl,
-    attrs = {
-        "srcs": attr.label_list(mandatory = True, allow_files = True),
-        "module": attr.output(),
+        "attach_sv": attr.output(),
         "merged": attr.output(),
         "_gen": attr.label(
             default = "//src/replay:replay_gen",
@@ -149,6 +114,40 @@ _replay_attach = rule(
     },
     provides = [DefaultInfo],
 )
+
+def _spec_srcs(kind, name, srcs, dut, dut_lib, clock, exclude, slang_defines,
+               deps, visibility):
+    """Resolve the two ways a spec arrives; return the srcs and deps to use.
+
+    Either it is handed over as `srcs`, or it is derived from the DUT's own
+    Verilog -- and then the DUT's library is a dependency too, because the
+    generated module's port types come from its packages.
+    """
+
+    if (srcs == None) == (dut_lib == None):
+        fail("%s(%s): give exactly one of `srcs` (a hand-written spec) or " % (kind, name) +
+             "`dut_lib` (the DUT's verilog_library, for slang to read)")
+
+    if dut_lib == None:
+        if dut != None or clock != None or exclude != None or slang_defines != None:
+            fail("%s(%s): `dut`, `clock`, `exclude` and `slang_defines` are " % (kind, name) +
+                 "for the `dut_lib` mode; a hand-written spec states them itself")
+        return srcs, (deps or [])
+
+    if dut == None or clock == None:
+        fail("%s(%s): `dut_lib` needs `dut` and `clock`" % (kind, name))
+
+    replay_ports(
+        name = name + "_ports",
+        dut_lib = dut_lib,
+        dut = dut,
+        clock = clock,
+        exclude = exclude,
+        slang_defines = slang_defines,
+        spec_name = name,
+        visibility = visibility,
+    )
+    return [name + "_ports.yml"], (deps or []) + [dut_lib]
 
 def replay_attach(
         name,
@@ -160,57 +159,33 @@ def replay_attach(
         slang_defines = None,
         deps = None,
         visibility = None):
-    """Replay a DUT where it stands, in a design that is not modified.
+    """Replay a DUT that is lower down in the hierarchy.
 
-    Emits `<name>.sv`, which names no design, instance or path and holds both
-    halves of the mechanism:
+    Use `replay()` instead when the block is extracted and replayed on its own.
+    There is no hierarchy to point at.
+
+    Emits `<name>.sv`, which has:
 
       the attach macro, which takes the instance as an argument, reads its
-      boundary by hierarchical reference and drives it with `force`, so the DUT
-      keeps its ports, its connections and its hierarchical path and the design
-      needs no edit at all. A forced port overrides every other driver, so the
-      instance is genuinely isolated -- an inout included, which a shared net
-      cannot be.
+      boundary by hierarchical reference and drives it with `force`.
 
       the replay module the macro instantiates -- the transport, the host calls
       and the boundary arithmetic. It observes through `_obs` ports and answers
       with `_rep` and `_en`, so it knows nothing about where the DUT is.
 
-    One file because neither half is usable without the other, and because a
-    `define has to be compiled ahead of whatever expands it.
-
     A testbench invokes the macro once per instance. It expands to a named
-    generate block, so several invocations coexist, and invoking it inside a
-    `for (genvar ...)` attaches to an arrayed instance. Each site is a separate
+    generate block, so several invocations coexist. Each site is a separate
     registry component, so each needs its own topology node.
 
-    Use `replay()` instead when the block is extracted and replayed on its own:
-    there is no hierarchy to point at, so an interposer is the only option.
     """
 
-    if (srcs == None) == (dut_lib == None):
-        fail("replay_attach(%s): give exactly one of `srcs` or `dut_lib`" % name)
+    srcs, deps = _spec_srcs("replay_attach", name, srcs, dut, dut_lib, clock,
+                            exclude, slang_defines, deps, visibility)
 
-    if dut_lib != None:
-        if dut == None or clock == None:
-            fail("replay_attach(%s): `dut_lib` needs `dut` and `clock`" % name)
-        replay_ports(
-            name = name + "_ports",
-            dut_lib = dut_lib,
-            dut = dut,
-            clock = clock,
-            exclude = exclude,
-            slang_defines = slang_defines,
-            spec_name = name,
-            visibility = visibility,
-        )
-        srcs = [name + "_ports.yml"]
-        deps = (deps or []) + [dut_lib]
-
-    _replay_attach(
+    _replay_gen(
         name = name,
         srcs = srcs,
-        module = name + ".sv",
+        attach_sv = name + ".sv",
         merged = name + "_merged.yml",
         visibility = visibility,
     )
@@ -267,62 +242,25 @@ def replay(
         **kwargs):
     """Generate a replay interposer for a Verilog module.
 
-    Two modes, and exactly one of them applies:
+    Two modes:
 
       `dut_lib` + `dut` + `clock` derive the port spec from the DUT's own
-      Verilog with slang, so it cannot go stale. This is the one to use.
+      Verilog with slang.
 
-      `srcs` takes a hand-written spec instead, for a DUT slang cannot see or
-      for a spec someone wants to keep by hand.
-
-    `clock` and `exclude` are the only human input either way: a cycle-indexed
-    recording samples once per cycle, so it cannot say which port is the clock,
-    and a port on another clock domain is one no recording describes.
-
-    Emits only SystemVerilog: the port layout is handed to the runtime by the
-    generated module's bind calls, so there is no generated C++. The recording is
-    not a build input either, so one build replays any number of conforming
-    recordings.
+      `srcs` takes a hand-written spec
 
     `deps` are verilog_library targets providing the packages the spec's port
-    types name. They have to be elaborated before the interposer, so a spec that
-    uses a package type without listing it here fails with the type reported as
-    undeclared. `dut_lib` is added for you, since it carries its own packages.
+    types name.
     """
 
-    if (srcs == None) == (dut_lib == None):
-        fail("replay(%s): give exactly one of `srcs` (a hand-written spec) or " % name +
-             "`dut_lib` (the DUT's verilog_library, for slang to read)")
+    srcs, deps = _spec_srcs("replay", name, srcs, dut, dut_lib, clock,
+                            exclude, slang_defines, deps, visibility)
 
-    if dut_lib != None:
-        if dut == None or clock == None:
-            fail("replay(%s): `dut_lib` needs `dut` and `clock`" % name)
-        replay_ports(
-            name = name + "_ports",
-            dut_lib = dut_lib,
-            dut = dut,
-            clock = clock,
-            exclude = exclude,
-            slang_defines = slang_defines,
-            spec_name = name,
-            visibility = visibility,
-        )
-        srcs = [name + "_ports.yml"]
-        # Also the elaboration order the interposer needs: its port types come
-        # from this library's packages.
-        deps = (deps or []) + [dut_lib]
-    elif dut != None or clock != None or exclude != None or slang_defines != None:
-        fail("replay(%s): `dut`, `clock`, `exclude` and `slang_defines` are " % name +
-             "for the `dut_lib` mode; a hand-written spec states them itself")
-
-    sv = name + ".sv"
-    merged = name + "_merged.yml"
-
-    _replay(
+    _replay_gen(
         name = name,
         srcs = srcs,
-        sv = sv,
-        merged = merged,
+        sv = name + ".sv",
+        merged = name + "_merged.yml",
         topology = topology,
         visibility = visibility,
         **kwargs
@@ -330,7 +268,7 @@ def replay(
 
     verilog_library(
         name = name + "_sv",
-        srcs = [sv],
+        srcs = [name + ".sv"],
         deps = ["@cvm//:replay_sv"] + (deps or []),
         visibility = visibility,
     )

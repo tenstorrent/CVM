@@ -4,6 +4,7 @@
 #include <gtest/gtest.h>
 #include "cvm/topology.hpp"
 #include "cvm/registry.hpp"
+#include "cvm/topology_defs.hpp"
 
 class dummy3 {
   public:

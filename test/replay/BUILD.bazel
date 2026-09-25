@@ -1,16 +1,10 @@
-load("@cvm//:defs.bzl", "replay")
-load("@rules_hdl//verilog:providers.bzl", "verilog_library")
-load("@rules_verilator//verilator:defs.bzl", "verilator_cc_library")
-load("//:defs.bzl", "topology_gen")
+load("@cvm_pypi//:requirements.bzl", "requirement")
 
-topology_gen(
-    name = "topology",
-    srcs = ["topology.yml"],
-    cc_attrs = {
-        "alwayslink": True,
-        "linkstatic": True,
-    },
-)
+# What every replay scenario shares. The scenarios themselves are one directory
+# each: alu/ is the DUT they replay, standalone/ puts the interposer in a
+# testbench, buried/ puts it inside a design, engine/ drives the engine with no
+# recording at all, spec/ is the port spec's own contract, and fixtures/ holds
+# the recordings.
 
 cc_test(
     name = "replay_test",
@@ -26,170 +20,41 @@ cc_test(
     ],
 )
 
-replay(
-    name = "alu_replay",
-    srcs = ["alu_ports.yml"],
+# Guards the two slang capabilities the port-spec producer depends on, under the
+# interpreter bazel resolves rather than whatever is installed system-wide.
+py_test(
+    name = "pyslang_test",
+    size = "small",
+    srcs = ["pyslang_test.py"],
+    deps = [requirement("pyslang")],
 )
 
-verilog_library(
-    name = "tb_top_sv",
-    srcs = [
-        "alu_pkg.sv",
-        "dut.sv",
-        "tb_top.sv",
-    ],
-    deps = [
-        ":topology_sv",
-        ":alu_replay_sv",
-        "//:plusargs_sv",
-        "//:registry_sv",
-        "//test/lib/sim:sim_sv",
-    ],
-    top_module = "top",
-)
-
-verilator_cc_library(
-    name = "tb_top_veri_lib",
-    module = ":tb_top_sv",
-    timing = True,
-    vopts = ["--assert"],
-)
-
-# Declares the scenario expectations so gflags validates them.
+# Declares the scenario expectations so gflags validates them. Shared, because
+# standalone/ and buried/ check the same things.
 cc_library(
     name = "tb_flags",
     srcs = ["tb_flags.cpp"],
     alwayslink = True,
     linkstatic = True,
+    visibility = ["//test/replay:__subpackages__"],
     deps = ["@com_github_gflags_gflags//:gflags"],
 )
-
-cc_binary(
-    name = "sim",
-    # main() only; the checks are in tb_top.sv so they travel to other
-    # simulators.
-    srcs = ["//test/lib/sim:sim_main"],
-    deps = [
-        ":tb_flags",
-        ":tb_top_veri_lib",
-        "//:logger",
-        "//:plusargs",
-        "//:registry",
-        "//:topology",
-        ":topology_cc",
-        "//:replay",
-        "//test/lib/sim:sim_dpi",
-    ],
-)
-
-# One build, driven entirely by plusargs: replay, a second dump, bypass, and a
-# corrupted dump that must fail.
-[
-    sh_test(
-        name = "sh_" + scenario["name"],
-        srcs = ["//test/lib/sim:sim.sh"],
-        args = ["$(location :sim)"] + scenario["args"],
-        data = [
-            ":sim",
-            "//test/replay/fixtures:evcds",
-        ],
-    )
-    for scenario in [
-        # Runs to cycle 4, recorded result 7. Afterwards the testbench drives
-        # 1 + 2, so a last result of 3 shows the inputs were handed back.
-        {
-            "name": "replay",
-            "args": [
-                "+cvm_replay_file=test/replay/fixtures/alu.evcd",
-                "+expect_errors=0",
-                "+expect_replay_result=7",
-                "+expect_last_result=3",
-                "+expect_done_cycles=7",
-            ],
-        },
-        # Shorter, so the run length demonstrably comes from the recording.
-        {
-            "name": "replay_second_dump",
-            "args": [
-                "+cvm_replay_file=test/replay/fixtures/alu2.evcd",
-                "+expect_errors=0",
-                "+expect_replay_result=7",
-                "+expect_last_result=3",
-                "+expect_done_cycles=5",
-            ],
-        },
-        # Same recording, selected by key rather than as a bare path.
-        {
-            "name": "replay_keyed_dump",
-            "args": [
-                "+cvm_replay_file=TOP.REPLAY=test/replay/fixtures/alu2.evcd",
-                "+expect_errors=0",
-                "+expect_replay_result=7",
-                "+expect_last_result=3",
-                "+expect_done_cycles=5",
-            ],
-        },
-        # A recording loaded and never replayed: the testbench itself passes,
-        # so the host's end-of-run check is the only thing that catches it.
-        {
-            "name": "never_enabled",
-            "args": [
-                "--expect-failure",
-                "+cvm_replay_file=test/replay/fixtures/alu.evcd",
-                "+skip_enable=1",
-                "+expect_errors=0",
-            ],
-        },
-        # No recording, so a transparent wire that finishes immediately -- but
-        # the monitor must still see traffic.
-        {
-            "name": "no_recording",
-            "args": [
-                "+expect_errors=0",
-                "+expect_last_result=3",
-                "+expect_done_cycles=1",
-            ],
-        },
-        # Both workers on, against the corrupted dump: the testbench reads the
-        # host's error count straight after the summary call, so this is what
-        # holds that call to completing before it returns.
-        {
-            "name": "replay_async_report",
-            "args": [
-                "+signal_async=1",
-                "+cb_async=1",
-                "+cvm_replay_file=test/replay/fixtures/alu_bad.evcd",
-                "+expect_errors=1",
-                "+expect_replay_result=7",
-                "+expect_done_cycles=7",
-            ],
-        },
-        # Load bearing: the only scenario that fails if the checker stops
-        # running. One recorded result bit is wrong, so exactly one summary
-        # must appear; the stimulus is untouched.
-        {
-            "name": "replay_mismatch_detected",
-            "args": [
-                "+cvm_replay_file=test/replay/fixtures/alu_bad.evcd",
-                "+expect_errors=1",
-                "+expect_replay_result=7",
-                "+expect_last_result=3",
-                "+expect_done_cycles=7",
-            ],
-        },
-    ]
-]
 
 test_suite(
     name = "smoke",
     tests = [
-        "replay_test",
-        ":sh_never_enabled",
-        ":sh_no_recording",
-        ":sh_replay",
-        ":sh_replay_async_report",
-        ":sh_replay_keyed_dump",
-        ":sh_replay_mismatch_detected",
-        ":sh_replay_second_dump",
+        ":replay_test",
+        "//test/replay/buried:sh_buried",
+        "//test/replay/buried:sh_untouched",
+        "//test/replay/spec:sh_define_independent",
+        "//test/replay/spec:sh_matches_golden",
+        "//test/replay/standalone:sh_never_enabled",
+        "//test/replay/standalone:sh_no_recording",
+        "//test/replay/standalone:sh_replay",
+        "//test/replay/standalone:sh_replay_async_report",
+        "//test/replay/standalone:sh_replay_gate",
+        "//test/replay/standalone:sh_replay_keyed_dump",
+        "//test/replay/standalone:sh_replay_mismatch_detected",
+        "//test/replay/standalone:sh_replay_second_dump",
     ],
 )

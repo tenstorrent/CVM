@@ -1,0 +1,117 @@
+load("@cvm//:defs.bzl", "replay_attach")
+load("@rules_hdl//verilog:providers.bzl", "verilog_library")
+load("@rules_verilator//verilator:defs.bzl", "verilator_cc_library")
+load("//:defs.bzl", "topology_gen")
+
+# Replay of a DUT where it stands, inside a design that is not modified for it.
+# Three sites from one macro: a plain instance, and both elements of an
+# instance array reached through a `for (genvar ...)` loop.
+
+topology_gen(
+    name = "topology",
+    srcs = ["topology.yml"],
+    cc_attrs = {
+        "alwayslink": True,
+        "linkstatic": True,
+    },
+)
+
+# The spec comes from alu's own Verilog. Neither generated file names a design,
+# an instance or a path -- the testbench passes those to the macro.
+replay_attach(
+    name = "alu_replay",
+    clock = "clk",
+    dut = "alu",
+    dut_lib = "//test/replay/alu:alu_sv",
+)
+
+verilog_library(
+    name = "core_sv",
+    srcs = ["core.sv"],
+    deps = ["//test/replay/alu:alu_sv"],
+)
+
+verilog_library(
+    name = "top_sv",
+    srcs = ["top.sv"],
+    top_module = "top",
+    deps = [
+        ":alu_replay_sv",
+        ":core_sv",
+        ":topology_sv",
+        "//:plusargs_sv",
+        "//:registry_sv",
+        "//test/lib/sim:sim_sv",
+    ],
+)
+
+verilator_cc_library(
+    name = "top_veri_lib",
+    module = ":top_sv",
+    timing = True,
+    vopts = ["--assert"],
+)
+
+cc_binary(
+    name = "sim",
+    srcs = ["//test/lib/sim:sim_main"],
+    deps = [
+        ":top_veri_lib",
+        ":topology_cc",
+        "//:logger",
+        "//:plusargs",
+        "//:registry",
+        "//:replay",
+        "//:topology",
+        "//test/lib/sim:sim_dpi",
+        "//test/replay:tb_flags",
+    ],
+)
+
+[
+    sh_test(
+        name = "sh_" + scenario["name"],
+        srcs = ["//test/lib/sim:sim.sh"],
+        args = ["$(location :sim)"] + scenario["args"],
+        data = [
+            ":sim",
+            "//test/replay/fixtures:evcds",
+        ],
+    )
+    for scenario in [
+        # The harness is elaborated but never enabled, so it forces nothing and
+        # the design runs exactly as it would without it.
+        {
+            "name": "untouched",
+            "args": [
+                "+skip_enable=1",
+                "+expect_errors=0",
+                "+expect_last_result=3",
+            ],
+        },
+        # The same build, replaying the buried instance.
+        {
+            "name": "buried",
+            "args": [
+                "+cvm_replay_file=test/replay/fixtures/alu.evcd",
+                "+expect_errors=0",
+                "+expect_replay_result=7",
+                # The design drives 4 + 5 once replay lets go.
+                "+expect_last_result=9",
+                "+expect_done_cycles=7",
+            ],
+        },
+        # Load bearing: one recorded output bit is wrong, so the checker must
+        # report it -- once per site, which is also how the count shows all
+        # three are live and independent.
+        {
+            "name": "buried_mismatch",
+            "args": [
+                "+cvm_replay_file=test/replay/fixtures/alu_bad.evcd",
+                "+expect_errors=3",
+                "+expect_replay_result=7",
+                "+expect_done_cycles=7",
+            ],
+        },
+    ]
+]

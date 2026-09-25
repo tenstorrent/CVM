@@ -1,0 +1,39 @@
+alu_hand:
+  dut: alu
+  # Infrastructure, never replayed: a cycle-indexed recording samples once per
+  # cycle, so a clock reads as a constant in it.
+  clock: clk
+  # Resolves the unqualified type names below, the way the DUT's own header
+  # does.
+  imports: [alu_pkg]
+  # Kept by hand on purpose: this is the second mode of replay(), for a DUT slang
+# cannot see. The interposer it generates is elaborated by the testbench build
+# without being instantiated, which is what keeps `width:` and `imports:`
+# compiling.
+#
+# Each port is given as its declaration, not a width, so a width that comes
+  # from a package parameter or a $clog2 stays parametric: the interposer takes
+  # $bits of what it declared. `width:` is still accepted for a spec that knows
+  # its numbers, and rst_n below keeps that path covered.
+  ports:
+    rst_n:    { width: 1, dir: in }
+    opa:      { type: "logic [3:0]",                            dir: in }
+    opb:      { type: "logic [3:0]",                            dir: in }
+    cmd:      { type: "bundle_t",                               dir: in }
+    mat:      { type: "logic [alu_pkg::LANES-1:0][3:0]",        dir: in }
+    sel:      { type: "logic [$clog2(alu_pkg::LANES*4)-1:0]",   dir: in }
+    # Conditional in the DUT, so conditional here: `when` is re-emitted as
+    # nested `ifdef`s, which is what lets one generated interposer be correct
+    # for both settings without the generator being told about defines.
+    gate:      { width: 1, dir: in,  when: [FEAT_GATE] }
+    gate_echo: { width: 1, dir: out, when: [FEAT_GATE] }
+    # An inout is driven and checked at once, bit by bit, as the recording
+    # says. `width` gives it a net type; a `type` for one must name a net
+    # itself.
+    bus:      { width: 3, dir: inout }
+    bus_echo: { width: 1, dir: out }
+    result:   { type: "logic [4:0]",                            dir: out }
+    valid:    { width: 1, dir: out }
+    resp:     { type: "alu_pkg::lane_t",                        dir: out }
+    sum:      { type: "logic [7:0]",                            dir: out }
+    sel_echo: { type: "logic [$clog2(alu_pkg::LANES*4)-1:0]",   dir: out }

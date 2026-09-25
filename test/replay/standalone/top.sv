@@ -21,21 +21,39 @@ module top;
 
     logic reset_n, enable, done;
 
-    logic             rst_n_tb, valid_tb;
-    logic [3:0]       opa_tb, opb_tb;
-    logic [4:0]       result_tb;
-    alu_pkg::bundle_t cmd_tb;
-    logic [1:0][3:0]  mat_tb;
-    alu_pkg::lane_t   resp_tb;
-    logic [7:0]       sum_tb;
+    logic             rst_n_outer, valid_outer;
+    logic [3:0]       opa_outer, opb_outer;
+    logic [4:0]       result_outer;
+    alu_pkg::bundle_t cmd_outer;
+    logic [alu_pkg::LANES-1:0][3:0] mat_outer;
+    logic [$clog2(alu_pkg::LANES*4)-1:0] sel_outer, sel_echo_outer;
+    alu_pkg::lane_t   resp_outer;
+    logic [7:0]       sum_outer;
+    logic             bus_echo_outer;
+`ifdef FEAT_GATE
+    logic             gate_outer, gate_echo_outer;
+`else
+    logic             no_gate_outer;
+`endif
 
-    logic             rst_n_dut, valid_dut;
-    logic [3:0]       opa_dut, opb_dut;
-    logic [4:0]       result_dut;
-    alu_pkg::bundle_t cmd_dut;
-    logic [1:0][3:0]  mat_dut;
-    alu_pkg::lane_t   resp_dut;
-    logic [7:0]       sum_dut;
+    logic             rst_n_inner, valid_inner;
+    logic [3:0]       opa_inner, opb_inner;
+    logic [4:0]       result_inner;
+    alu_pkg::bundle_t cmd_inner;
+    logic [alu_pkg::LANES-1:0][3:0] mat_inner;
+    logic [$clog2(alu_pkg::LANES*4)-1:0] sel_inner, sel_echo_inner;
+    alu_pkg::lane_t   resp_inner;
+    logic [7:0]       sum_inner;
+    logic             bus_echo_inner;
+    // One net for the inout, connected to the interposer and to the DUT, which
+    // is what joins them. Deliberately undriven here: the recording owns the
+    // bits it says the outside drove, and the DUT owns the rest.
+    wire  [2:0]       bus;
+`ifdef FEAT_GATE
+    logic             gate_inner, gate_echo_inner;
+`else
+    logic             no_gate_inner;
+`endif
 
     logic [7:0] mon_edges;
     logic [4:0] mon_last_result;
@@ -44,6 +62,11 @@ module top;
     // where the DUT expects them.
     alu_pkg::lane_t mon_resp;
     logic [7:0]     mon_sum;
+    logic           mon_bus_echo;
+    logic [2:0]     mon_bus;
+`ifdef FEAT_GATE
+    logic           mon_gate_echo;
+`endif
     // Cycles from enable rising to done, and the count at which done arrived.
     int         mon_done_cycles;
     int         cycles;
@@ -59,56 +82,89 @@ module top;
         .reset_n  (reset_n),
         .enable   (enable),
         .done     (done),
-        .rst_n_tb (rst_n_tb),  .rst_n_dut (rst_n_dut),
-        .opa_tb   (opa_tb),    .opa_dut   (opa_dut),
-        .opb_tb   (opb_tb),    .opb_dut   (opb_dut),
-        .cmd_tb   (cmd_tb),    .cmd_dut   (cmd_dut),
-        .mat_tb   (mat_tb),    .mat_dut   (mat_dut),
-        .result_dut (result_dut), .result_tb (result_tb),
-        .valid_dut  (valid_dut),  .valid_tb  (valid_tb),
-        .resp_dut   (resp_dut),   .resp_tb   (resp_tb),
-        .sum_dut    (sum_dut),    .sum_tb    (sum_tb)
+        .rst_n_outer (rst_n_outer),  .rst_n_inner (rst_n_inner),
+        .opa_outer   (opa_outer),    .opa_inner   (opa_inner),
+        .opb_outer   (opb_outer),    .opb_inner   (opb_inner),
+        .cmd_outer   (cmd_outer),    .cmd_inner   (cmd_inner),
+        .mat_outer   (mat_outer),    .mat_inner   (mat_inner),
+        .sel_outer   (sel_outer),    .sel_inner   (sel_inner),
+`ifdef FEAT_GATE
+        .gate_outer  (gate_outer),   .gate_inner  (gate_inner),
+        .gate_echo_inner (gate_echo_inner), .gate_echo_outer (gate_echo_outer),
+`else
+        .no_gate_outer (no_gate_outer), .no_gate_inner (no_gate_inner),
+`endif
+        .result_inner (result_inner), .result_outer (result_outer),
+        .valid_inner  (valid_inner),  .valid_outer  (valid_outer),
+        .resp_inner   (resp_inner),   .resp_outer   (resp_outer),
+        .sum_inner    (sum_inner),    .sum_outer    (sum_outer),
+        .sel_echo_inner (sel_echo_inner), .sel_echo_outer (sel_echo_outer),
+        .bus          (bus),
+        .bus_echo_inner (bus_echo_inner),  .bus_echo_outer (bus_echo_outer)
     );
 
     alu u_dut (
         .clk    (clk),
-        .rst_n  (rst_n_dut),
-        .opa    (opa_dut),
-        .opb    (opb_dut),
-        .cmd    (cmd_dut),
-        .mat    (mat_dut),
-        .result (result_dut),
-        .valid  (valid_dut),
-        .resp   (resp_dut),
-        .sum    (sum_dut)
+        .rst_n  (rst_n_inner),
+        .opa    (opa_inner),
+        .opb    (opb_inner),
+        .cmd    (cmd_inner),
+        .mat    (mat_inner),
+        .sel    (sel_inner),
+`ifdef FEAT_GATE
+        .gate      (gate_inner),
+        .gate_echo (gate_echo_inner),
+`else
+        .no_gate   (no_gate_inner),
+`endif
+        .result (result_inner),
+        .valid  (valid_inner),
+        .resp   (resp_inner),
+        .sum    (sum_inner),
+        .sel_echo (sel_echo_inner),
+        .bus      (bus),
+        .bus_echo (bus_echo_inner)
     );
 
     // Ignored in REPLAY until it finishes; drives in BYPASS.
     initial begin
         reset_n  = 1'b0;
         enable   = 1'b0;
-        rst_n_tb = 1'b0;
+        rst_n_outer = 1'b0;
         // Matches cycle 0 of the recordings, so the outputs standing during the
         // first recorded cycle are the ones the recording assumes.
-        opa_tb   = 4'd1;
-        opb_tb   = 4'd2;
-        cmd_tb   = '0;
-        mat_tb   = '0;
+        opa_outer   = 4'd1;
+        opb_outer   = 4'd2;
+        cmd_outer   = '0;
+        mat_outer   = '0;
+        sel_outer   = '0;
+`ifdef FEAT_GATE
+        // Low, so a gate_echo still high after replay would mean the recording
+        // never handed the port back.
+        gate_outer  = 1'b0;
+`else
+        no_gate_outer = 1'b0;
+`endif
     end
 
     // Knows nothing of the mode, and must see traffic either way.
     always_ff @(posedge clk) begin
         if (mon_edges !== 8'hFF) mon_edges <= mon_edges + 8'd1;
-        if (valid_dut === 1'b1) begin
-            mon_last_result <= result_dut;
+        if (valid_inner === 1'b1) begin
+            mon_last_result <= result_inner;
             // Only while replay runs, so it is what the recording produced.
-            if (done !== 1'b1) mon_replay_result <= result_dut;
+            if (done !== 1'b1) mon_replay_result <= result_inner;
         end
         // After done the testbench drives zeros, so these stop being what the
         // recording produced.
         if (done !== 1'b1) begin
-            mon_resp <= resp_dut;
-            mon_sum  <= sum_dut;
+            mon_resp <= resp_inner;
+            mon_sum  <= sum_inner;
+            mon_bus_echo <= bus_echo_inner;
+            mon_bus      <= bus;
+`ifdef FEAT_GATE
+            mon_gate_echo <= gate_echo_inner;
+`endif
         end
     end
 
@@ -145,11 +201,16 @@ module top;
         mon_replay_result = 5'd0;
         mon_resp          = '0;
         mon_sum           = 8'd0;
+        mon_bus_echo      = 1'b0;
+        mon_bus           = 3'b000;
+`ifdef FEAT_GATE
+        mon_gate_echo     = 1'b0;
+`endif
 
         // The interposer loads out of reset, so reset precedes enable.
         repeat (4) @(negedge clk);
         reset_n  = 1'b1;
-        rst_n_tb = 1'b1;
+        rst_n_outer = 1'b1;
         repeat (2) @(negedge clk);
         if (skip_enable == 0) begin
             enable = 1'b1;
@@ -186,6 +247,41 @@ module top;
             $display("FAIL: resp.data=%0d resp.valid=%0b sum=%0d, wanted 9, 0 and 7",
                      mon_resp.data, mon_resp.valid, mon_sum);
             errors++;
+        end
+`ifdef FEAT_GATE
+        // The conditional port pair, end to end: the recording drove gate and
+        // the DUT echoed it. Under the same build without the define neither
+        // port exists, in the DUT or in the interposer.
+        if (expect_replay_result >= 0 && mon_gate_echo !== 1'b1) begin
+            $display("FAIL: gate_echo=%0b under replay, wanted 1", mon_gate_echo);
+            errors++;
+        end
+        if (gate_echo_inner !== 1'b0) begin
+            $display("FAIL: gate_echo=%0b after replay, wanted 0; the testbench should drive gate again",
+                     gate_echo_inner);
+            errors++;
+        end
+`endif
+        // The inout, all three of its cases at once. Bit 0 is the recording's,
+        // and bus_echo proves the DUT read what was driven onto it. Bit 1 is
+        // the DUT's, so the interposer had to release it for the DUT's value to
+        // appear at all -- and it is checked, which a held bit could not be.
+        // Bit 2 is nobody's, and must produce no mismatch.
+        if (expect_replay_result >= 0) begin
+            if (mon_bus_echo !== 1'b1) begin
+                $display("FAIL: bus_echo=%0b under replay, wanted 1; the DUT should have read the driven bit",
+                         mon_bus_echo);
+                errors++;
+            end
+            if (mon_bus[1] !== 1'b1) begin
+                $display("FAIL: bus[1]=%0b under replay, wanted 1; the DUT drives it, so the interposer must release it",
+                         mon_bus[1]);
+                errors++;
+            end
+            // Bit 2, which nobody drives, is not asserted on here: what an
+            // all-high-Z net reads back as is the simulator's business, and
+            // one of them resolves it to 0. That it is never *checked* is what
+            // matters, and expect_errors=0 above is that check.
         end
         if (expect_done_cycles >= 0 && mon_done_cycles != expect_done_cycles) begin
             $display("FAIL: replay finished after %0d cycles, wanted %0d",

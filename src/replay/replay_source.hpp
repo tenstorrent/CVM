@@ -16,18 +16,34 @@
 namespace cvm {
   namespace replay {
 
+    // A port's direction, always from the DUT's perspective. `inout` is both
+    // at once, and the recording says which side was driving -- per bit, per
+    // cycle -- so it is not a third case bolted on but the one the EVCD was
+    // built to describe.
+    enum class direction { in,
+                           out,
+                           inout };
+
     // A recording, read as the cycles the engine replays. The port layout
-    // arrives at runtime through open() rather than being generated a second
+    // arrives at runtime through bind() rather than being generated a second
     // time in C++.
     class source {
       public:
-        // `layout` is the port list as `name:width:offset:is_output:check;...`,
-        // emitted by the generated interposer: one call rather than a per-port
-        // handshake back across the DPI boundary. Binding is the conformance
-        // check, so a dump that disagrees fails here. `name` appears in parse
-        // diagnostics; pass the path `in` came from.
-        bool open(std::istream& in, const std::string& layout,
-                  const std::string& name = "");
+        // Reads the header. `name` appears in parse diagnostics; pass the path
+        // `in` came from.
+        bool open(std::istream& in, const std::string& name = "");
+
+        // Declares one port and checks the dump agrees about it -- the
+        // conformance check, so a recording that lacks the port or disagrees on
+        // width fails here. Returns the bind index, or -1.
+        int bind(const std::string& name, std::size_t width, direction dir,
+                 std::size_t bit_offset);
+
+        // The mirror of bind()'s check: every port the dump carries must have
+        // been bound, or be named in `exempt`. Without this a spec that has
+        // drifted from the DUT narrows the test in silence -- it replays the
+        // ports it still lists and says nothing about the rest.
+        bool require_all_bound(const std::vector<std::string>& exempt);
 
         // Next recorded cycle, split into stimulus, expectation and care mask.
         // An emulator has no X, so an unknown *input* bit is resolved to 0 here
@@ -52,11 +68,15 @@ namespace cvm {
             std::uint32_t bval = 0;
         };
 
-        // One timestamp of the flattened vector. `recorded` marks ports the
-        // dump wrote at this timestamp, indexed by bind order.
+        // One timestamp of the flattened vector, both recorded sides of it.
+        // A pure input reads only `driven_in` and a pure output only
+        // `driven_out`; an `inout` needs both, which is why neither can be
+        // resolved away at this level. `recorded` marks ports the dump wrote at
+        // this timestamp, indexed by bind order.
         struct replay_vector {
             std::uint64_t time = 0;
-            std::vector<logic_word> value;
+            std::vector<logic_word> driven_in;
+            std::vector<logic_word> driven_out;
             std::vector<bool> recorded;
         };
 
@@ -65,20 +85,15 @@ namespace cvm {
             std::size_t dump_index = 0;
             std::size_t width = 0;
             std::size_t bit_offset = 0;
-            bool is_output = false;
-            bool check = true;
+            direction dir = direction::in;
             bool saw_dut_in = false;
             bool saw_dut_out = false;
         };
 
-        // Declares one port and checks the dump agrees about it. Returns the
-        // bind index, or -1. `is_output` selects which side of the recorded
-        // value to take: what the fixture drove, or what the DUT did.
-        int bind(const std::string& name, std::size_t width, bool is_output,
-                 std::size_t bit_offset, bool check = true);
         bool next(replay_vector& out);
 
-        void write_bit(std::size_t bit, evcd::drive d);
+        static void write_bit(std::vector<logic_word>& buf, std::size_t bit,
+                              evcd::drive d);
         void set_port(std::size_t bound,
                       const std::vector<evcd::port_state>& state);
         void fill_port(std::size_t bound, evcd::drive d);
@@ -95,7 +110,8 @@ namespace cvm {
         std::vector<std::size_t> to_bound_;
 
         // A dump records only what changes, so values carry forward.
-        std::vector<logic_word> current_;
+        std::vector<logic_word> current_in_;
+        std::vector<logic_word> current_out_;
         std::vector<bool> recorded_;
         // Ports the dump has written at any point, not just at this timestamp.
         // An expectation persists between elements, so what may be checked must

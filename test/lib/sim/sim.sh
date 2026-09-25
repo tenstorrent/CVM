@@ -9,10 +9,15 @@ set -o pipefail
 
 # A scenario whose failure is the point: the simulation must exit non-zero.
 expect_failure=0
+# ...and, optionally, for the stated reason. A run can exit non-zero many ways,
+# so without this a scenario keeps passing once it starts failing elsewhere.
+expect_message=""
 args=()
 for a in "$@"; do
     if [[ $a == --expect-failure ]]; then
         expect_failure=1
+    elif [[ $a == --expect-message=* ]]; then
+        expect_message="${a#--expect-message=}"
     else
         args+=("$a")
     fi
@@ -22,6 +27,10 @@ out=$("${args[@]}" 2>&1)
 status=$?
 printf '%s\n' "$out"
 
+if [[ -n $expect_message ]] && ! grep -qE "$expect_message" <<< "$out"; then
+    echo "sim.sh: output does not match the expected /$expect_message/"
+    exit 1
+fi
 if [[ $expect_failure -eq 1 ]]; then
     if [[ $status -eq 0 ]]; then
         echo "sim.sh: expected a non-zero exit, got 0"

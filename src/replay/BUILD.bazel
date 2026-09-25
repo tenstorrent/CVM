@@ -78,12 +78,15 @@ cc_library(
 )
 
 verilog_library(
+    name = "replay_pkg_sv",
+    srcs = ["cvm_replay_pkg.sv"],
+)
+
+verilog_library(
     name = "replay_sv",
-    srcs = [
-        "cvm_replay_engine.sv",
-        "cvm_replay_pkg.sv",
-    ],
+    srcs = ["cvm_replay_engine.sv"],
     deps = [
+        ":replay_pkg_sv",
         "//src/pipe:pipe_sv",
         "//:topology_sv",
     ],
@@ -97,6 +100,17 @@ py_binary(
         requirement("Mako"),
         requirement("PyYAML"),
     ],
-    data = glob(["templates/template.*"]),
+    data = glob(["templates/*"]),
+    visibility = ["//visibility:public"],
+)
+
+# Derives a port spec from Verilog
+py_binary(
+    name = "replay_ports_gen",
+    srcs = ["replay_ports_gen.py"],
+    deps = [
+        requirement("PyYAML"),
+        requirement("pyslang"),
+    ],
     visibility = ["//visibility:public"],
 )

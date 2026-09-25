@@ -53,6 +53,10 @@ module top;
         .done             (done),
         .observed         (observed),
         .driven           (driven),
+        // Every bit here is an input or an output slice, never an inout, so
+        // the enable is constant and the DUT reads `driven` directly.
+        .drive_en         (),
+        .drive_val        (),
         .mismatches       (mismatches),
         .first_fail_cycle (first_fail_cycle),
         .fail_bits        (fail_bits)

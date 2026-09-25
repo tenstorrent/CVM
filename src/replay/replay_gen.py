@@ -11,7 +11,7 @@ import pathlib
 import re
 import sys
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import yaml
 from mako.template import Template
@@ -19,10 +19,6 @@ from mako.template import Template
 INTERPOLATION = re.compile(r"\$\{([^}]*)\}")
 
 DIRECTIONS = ("in", "out", "inout")
-
-# Must match CVM_PIPE_MAX_WORDS in src/pipe/cvm_pipe_pkg.sv: the largest array
-# formal the sized DPI families provide.
-PIPE_MAX_WORDS = 32768
 
 
 def interpolate(value, topology, where):
@@ -47,19 +43,36 @@ def interpolate(value, topology, where):
 @dataclass
 class Port:
     name: str
-    width: int
     dir: str
+    # The port's declaration as written in the DUT, passed through to the
+    # generated module untouched -- `logic [NUM_CORES-1:0]`, `my_pkg::cmd_t`.
+    # Never parsed here: the interposer takes $bits of the declared signal, so
+    # a width that depends on a parameter stays a parameter.
+    type_text: str = ""
+    # The literal alternative, for a hand-written spec that knows its widths.
+    width: Optional[int] = None
     dump_name: str = ""
-    check: bool = True
-    source: str = "replay"        # "replay" or "external"
-    bit_offset: int = 0
+    # The chain of conditions the DUT declares this port under, outermost
+    # first, re-emitted as nested `ifdef`s -- or `ifndef`, for an entry written
+    # `!COND`, which is what an `else` branch around a declaration means. The
+    # interposer then appears and disappears with the port, so it needs no
+    # defines of its own.
+    when: List[str] = field(default_factory=list)
 
-    @property
-    def is_external(self) -> bool:
-        return self.source == "external"
+    def sv_type(self) -> str:
+        if self.type_text:
+            return self.type_text
+        # An `inout` port has to be a net, not a variable: the interposer
+        # aliases the two sides into one net and drives it conditionally.
+        kind = "wire" if self.dir == "inout" else "logic"
+        return f"{kind} [{self.width - 1}:0]"
 
-    def sv_range(self) -> str:
-        return f"[{self.width - 1}:0]"
+    def sv_dir(self) -> str:
+        return {"in": "input ", "out": "output", "inout": "inout "}[self.dir]
+
+    def dir_code(self) -> int:
+        """What cvm_replay_bind takes -- cvm::replay::direction as an int."""
+        return {"in": 0, "out": 1, "inout": 2}[self.dir]
 
 
 @dataclass
@@ -67,45 +80,54 @@ class Spec:
     name: str
     dut: str
     ports: List[Port]
+    # The DUT port carrying the clock. Not replayed.
+    clock: str = ""
+    # Packages the port types below resolve in, and DUT-private widths they
+    # reference, both emitted into the generated module verbatim.
+    imports: List[str] = field(default_factory=list)
+    localparams: str = ""
+    # Ports the recording may carry that this interposer does not replay.
+    # A port the dump carries and nobody binds is otherwise fatal.
+    exclude: List[str] = field(default_factory=list)
+    # Parameters the port types reference. The testbench must pass the same
+    # values to the interposer and to the DUT.
+    parameters: Dict = field(default_factory=dict)
     pipe_depth: int = 4096
-    # 0 means "compute it from the payload width"; see push_max_elements.
+    # 0 means "let the generated module compute it from the element size".
     push_max: int = 0
-    tb_suffix: str = "_tb"
-    dut_suffix: str = "_dut"
+    # The two sides of the standalone interposer, named positionally: `_outer`
+    # faces whatever the block sits in and `_inner` faces the block.
+    outer_suffix: str = "_outer"
+    inner_suffix: str = "_inner"
     standalone_top: bool = False
-    total_bits: int = 0
-
-    @property
-    def words(self) -> int:
-        return (self.total_bits + 31) // 32
-
-    @property
-    def element_words(self) -> int:
-        """Words the transport carries per cycle: a 64-bit cycle number plus
-        the stimulus, the expectation and the care mask."""
-        return 2 + 3 * self.words
-
-    @property
-    def push_max_elements(self) -> int:
-        """Most elements one push may carry, when `push_max` overrides the
-        expression the generated module computes."""
-        return self.push_max or PIPE_MAX_WORDS // self.element_words
 
     def inputs(self) -> List[Port]:
         return [p for p in self.ports if p.dir == "in"]
 
+    def has_inout(self) -> bool:
+        return any(p.dir == "inout" for p in self.ports)
+
     def outputs(self) -> List[Port]:
         return [p for p in self.ports if p.dir == "out"]
 
-    def driven_inputs(self) -> List[Port]:
-        """DUT inputs the interposer drives from the dump."""
-        return [p for p in self.inputs() if not p.is_external]
+    def ignored(self) -> List[str]:
+        """Dump ports deliberately left unreplayed -- the clock, plus `exclude`."""
+        return [self.clock] + self.exclude
 
-    def external_inputs(self) -> List[Port]:
-        return [p for p in self.inputs() if p.is_external]
+    def groups(self) -> List[Tuple[List[str], List[Port]]]:
+        """Ports in order, with consecutive same-condition runs coalesced.
 
-    def checked_outputs(self) -> List[Port]:
-        return [p for p in self.outputs() if p.check]
+        One `ifdef` around a run of ports rather than around each of them,
+        which for a DUT whose conditionals gate whole port blocks is the
+        difference between a readable module and one guard per line.
+        """
+        out: List[Tuple[List[str], List[Port]]] = []
+        for port in self.ports:
+            if out and out[-1][0] == port.when:
+                out[-1][1].append(port)
+            else:
+                out.append((port.when, [port]))
+        return out
 
     @classmethod
     def load(cls, definitions: List[str], topology: Optional[Dict]) -> "Spec":
@@ -129,72 +151,70 @@ class Spec:
         raw_ports = body.get("ports")
         assert raw_ports, f"{name}: `ports` is required and must be non-empty"
 
+        clock = body.get("clock")
+        assert clock, (
+            f"{name}: `clock` is required -- name the DUT's clock port. A "
+            "cycle-indexed recording samples once per cycle, so a clock reads "
+            "as a constant in it and must never be replayed."
+        )
+
         suffixes = body.get("suffixes") or {}
         spec = cls(
             name=name,
             dut=dut,
             ports=[],
+            clock=clock,
+            imports=list(body.get("imports") or []),
+            localparams=body.get("localparams", "") or "",
+            exclude=[str(name) for name in (body.get("exclude") or [])],
+            parameters=body.get("parameters") or {},
             pipe_depth=int(interpolate(body.get("pipe_depth", 4096), topology, name)),
             push_max=int(interpolate(body.get("push_max", 0), topology, name)),
-            tb_suffix=suffixes.get("tb", "_tb"),
-            dut_suffix=suffixes.get("dut", "_dut"),
+            outer_suffix=suffixes.get("outer", "_outer"),
+            inner_suffix=suffixes.get("inner", "_inner"),
             standalone_top=bool(body.get("standalone_top", False)),
         )
 
-        offset = 0
         for port_name, attrs in raw_ports.items():
             assert isinstance(attrs, dict), f"{name}.{port_name}: must be a mapping"
             where = f"{name}.{port_name}"
-
-            width = interpolate(attrs.get("width"), topology, where)
-            assert width is not None, f"{where}: `width` is required"
-            width = int(width)
-            assert width > 0, f"{where}: width must be positive, got {width}"
+            assert port_name != clock, (
+                f"{where}: this is the clock, so it must not be a replayed port"
+            )
 
             direction = attrs.get("dir")
             assert direction in DIRECTIONS, (
                 f"{where}: `dir` must be one of {DIRECTIONS}, got {direction!r}. "
                 "Direction is always stated from the DUT's perspective."
             )
-            if direction == "inout":
+            type_text = attrs.get("type")
+            if direction == "inout" and type_text and \
+                    type_text.split()[0] in ("logic", "bit", "reg"):
                 sys.exit(
-                    f"{where}: `dir: inout` is not supported. A pass-through "
-                    "interposer would need tristate resolution in both "
-                    "directions, which is out of scope for now."
+                    f"{where}: an `inout` must be declared as a net, so its "
+                    f"`type` cannot start with `{type_text.split()[0]}`. Give "
+                    "the DUT's own net declaration, or use `width`."
                 )
-
-            source = attrs.get("source", "replay")
-            assert source in ("replay", "external"), (
-                f"{where}: `source` must be `replay` or `external`, got {source!r}"
+            width = attrs.get("width")
+            assert (type_text is None) != (width is None), (
+                f"{where}: give exactly one of `type` (the declaration as "
+                "written, so the width stays parametric) or `width` (a literal)"
             )
-            if source == "external" and direction != "in":
-                sys.exit(f"{where}: `source: external` only applies to `dir: in`")
+            if width is not None:
+                width = int(interpolate(width, topology, where))
+                assert width > 0, f"{where}: width must be positive, got {width}"
 
             spec.ports.append(
                 Port(
                     name=port_name,
-                    width=width,
                     dir=direction,
+                    type_text=str(type_text) if type_text is not None else "",
+                    width=width,
                     dump_name=attrs.get("dump_name", "") or port_name,
-                    check=bool(attrs.get("check", True)),
-                    source=source,
-                    bit_offset=offset,
+                    when=[str(c) for c in (attrs.get("when") or [])],
                 )
             )
-            offset += width
 
-        spec.total_bits = offset
-
-        # Only reachable through `push_max`: the generated default cannot
-        # exceed the formal, because it is derived from it.
-        if spec.push_max_elements * spec.element_words > PIPE_MAX_WORDS:
-            sys.exit(
-                f"{name}: {spec.total_bits} bits of ports need "
-                f"{spec.element_words} words per element, so a push of "
-                f"{spec.push_max_elements} exceeds the push formal "
-                f"({PIPE_MAX_WORDS} words). Lower `push_max`, or raise "
-                "CVM_PIPE_MAX_WORDS in src/pipe/cvm_pipe_pkg.sv."
-            )
         return spec
 
 
@@ -221,17 +241,21 @@ def load_topology(path: Optional[str]) -> Optional[Dict]:
     return flat
 
 
-def render(template_path: str, output_path: str, spec: Spec) -> None:
-    template = Template(filename=template_path)
+def render(output_path: str, spec: Spec, *template_paths: str) -> None:
     with open(output_path, "w") as handle:
-        handle.write(template.render(spec=spec))
+        for path in template_paths:
+            handle.write(Template(filename=path).render(spec=spec))
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--definitions", nargs="+", required=True)
     parser.add_argument("--topology", default=None)
-    parser.add_argument("--sv", required=True)
+    parser.add_argument("--sv", default=None)
+    # The buried-block form: the attach macro and the replay module it
+    # instantiates, in one file because neither is usable without the other.
+    parser.add_argument("--attach-sv", default=None)
+    parser.add_argument("--bound-sv", default=None)
     parser.add_argument("--merged", required=True)
     args = parser.parse_args()
 
@@ -240,22 +264,28 @@ def main() -> None:
 
     # Templates are runfiles beside this script, as packet_gen.py does it.
     templates = pathlib.Path(os.path.abspath(__file__)).parent / "templates"
-    render(str(templates / "template.sv"), args.sv, spec)
+    if not (args.sv or args.attach_sv):
+        sys.exit("give at least one of --sv or --attach-sv")
+    if args.sv:
+        render(args.sv, spec, str(templates / "template.sv"))
+    if args.attach_sv:
+        # The macro first, so it is defined before anything that expands it.
+        render(args.attach_sv, spec,
+               str(templates / "attach.svh"), str(templates / "attach.sv"))
 
     with open(args.merged, "w") as handle:
         yaml.safe_dump(
             {
                 spec.name: {
                     "dut": spec.dut,
-                    "total_bits": spec.total_bits,
+                    "clock": spec.clock,
+                    **({"exclude": spec.exclude} if spec.exclude else {}),
                     "ports": {
                         p.name: {
-                            "width": p.width,
                             "dir": p.dir,
+                            "type": p.sv_type(),
                             "dump_name": p.dump_name,
-                            "check": p.check,
-                            "source": p.source,
-                            "bit_offset": p.bit_offset,
+                            **({"when": p.when} if p.when else {}),
                         }
                         for p in spec.ports
                     },

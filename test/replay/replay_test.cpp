@@ -7,6 +7,7 @@
 #include <gtest/gtest.h>
 
 #include <sstream>
+#include <tuple>
 #include <string>
 
 #include "vpi_user.h"
@@ -22,12 +23,15 @@ vpi_get_vlog_info(p_vpi_vlog_info vlog_info_p) {
 }
 
 using cvm::replay::cycle_element;
+using cvm::replay::direction;
 using cvm::replay::source;
 
-namespace {
+// Read at every bind below, so spell them the way a spec does.
+constexpr direction in_ = direction::in;
+constexpr direction out_ = direction::out;
+constexpr direction inout_ = direction::inout;
 
-  constexpr bool kInput = false;
-  constexpr bool kOutput = true;
+namespace {
 
   std::string
   header(const std::string& vars) {
@@ -35,14 +39,19 @@ namespace {
            "$upscope $end\n$enddefinitions $end\n";
   }
 
-  // One entry of the layout string the generated interposer emits. Tests bind
-  // the way production does, so open() is exercised rather than a back door.
-  std::string
-  port(const std::string& name, std::size_t width, bool is_output,
-       std::size_t bit_offset, bool check = true) {
-    return name + ":" + std::to_string(width) + ":" +
-           std::to_string(bit_offset) + ":" + (is_output ? "1" : "0") + ":" +
-           (check ? "1" : "0");
+  // Opens and binds the way the generated interposer does: read the header,
+  // then declare each port.
+  bool
+  open_bound(source& s, std::istream& in,
+             const std::vector<std::tuple<std::string, std::size_t, direction,
+                                          std::size_t>>& ports) {
+    if (!s.open(in))
+      return false;
+    for (const auto& [name, width, dir, offset] : ports) {
+      if (s.bind(name, width, dir, offset) < 0)
+        return false;
+    }
+    return true;
   }
 
   bool bit_set(const std::vector<std::uint32_t>& words, std::size_t bit) {
@@ -56,20 +65,20 @@ namespace {
 TEST(Conformance, AcceptsAMatchingPort) {
   std::istringstream in(header("$var port 1 <0 clk $end\n"));
   source s;
-  EXPECT_TRUE(s.open(in, port("clk", 1, kInput, 0))) << s.error();
+  EXPECT_TRUE(open_bound(s, in, {{"clk", 1, in_, 0}})) << s.error();
 }
 
 TEST(Conformance, RejectsMissingPort) {
   std::istringstream in(header("$var port 1 <0 clk $end\n"));
   source s;
-  EXPECT_FALSE(s.open(in, port("rst_n", 1, kInput, 0)));
+  EXPECT_FALSE(open_bound(s, in, {{"rst_n", 1, in_, 0}}));
   EXPECT_NE(s.error().find("rst_n"), std::string::npos) << s.error();
 }
 
 TEST(Conformance, RejectsWidthMismatch) {
   std::istringstream in(header("$var port [3:0] <0 a $end\n"));
   source s;
-  EXPECT_FALSE(s.open(in, port("a", 8, kInput, 0)));
+  EXPECT_FALSE(open_bound(s, in, {{"a", 8, in_, 0}}));
   EXPECT_NE(s.error().find("width mismatch"), std::string::npos) << s.error();
 }
 
@@ -78,8 +87,7 @@ TEST(Conformance, LayoutOrderDecidesOffsetsNotDumpOrder) {
       header("$var port 1 <0 b $end\n$var port 1 <1 a $end\n") +
       "#0\npU 6 0 <0\npD 6 0 <1\n");
   source s;
-  ASSERT_TRUE(s.open(in, port("a", 1, kInput, 0) + ";" +
-                             port("b", 1, kInput, 1)))
+  ASSERT_TRUE(open_bound(s, in, {{"a", 1, in_, 0}, {"b", 1, in_, 1}}))
       << s.error();
 
   cycle_element e;
@@ -88,20 +96,34 @@ TEST(Conformance, LayoutOrderDecidesOffsetsNotDumpOrder) {
   EXPECT_TRUE(bit_set(e.in, 1));
 }
 
-TEST(Conformance, UnboundDumpPortsAreIgnored) {
+TEST(Conformance, AnUnboundDumpPortIsFatal) {
+  // The mirror of the missing-port check. A spec that has drifted from the DUT
+  // would otherwise replay the ports it still lists and say nothing about the
+  // rest, which reads exactly like a pass.
   std::istringstream in(
       header("$var port 1 <0 clk $end\n$var port 1 <1 spare $end\n") +
       "#0\npD 6 0 <0\npD 6 0 <1\n");
   source s;
-  ASSERT_TRUE(s.open(in, port("clk", 1, kInput, 0))) << s.error();
-  EXPECT_EQ(s.total_bits(), 1u);
+  ASSERT_TRUE(open_bound(s, in, {{"clk", 1, in_, 0}})) << s.error();
+  EXPECT_FALSE(s.require_all_bound({}));
+  EXPECT_NE(s.error().find("`spare`"), std::string::npos) << s.error();
+}
+
+TEST(Conformance, AnExemptDumpPortNeedNotBeBound) {
+  // How the clock passes: it is in every recording and must never be replayed.
+  std::istringstream in(
+      header("$var port 1 <0 clk $end\n$var port 1 <1 a $end\n") +
+      "#0\npD 6 0 <0\npD 6 0 <1\n");
+  source s;
+  ASSERT_TRUE(open_bound(s, in, {{"a", 1, in_, 1}})) << s.error();
+  EXPECT_TRUE(s.require_all_bound({"clk"})) << s.error();
 }
 
 TEST(Conformance, DirectionContradictionIsAnError) {
   // `y` is bound as an input but only the DUT ever drives it.
   std::istringstream in(header("$var port 1 <0 y $end\n") + "#0\npH 0 6 <0\n");
   source s;
-  ASSERT_TRUE(s.open(in, port("y", 1, kInput, 0))) << s.error();
+  ASSERT_TRUE(open_bound(s, in, {{"y", 1, in_, 0}})) << s.error();
 
   cycle_element e;
   EXPECT_FALSE(s.next_cycle(e));
@@ -115,8 +137,7 @@ TEST(Flatten, TakesFixtureSideForInputsAndDutSideForOutputs) {
       header("$var port 1 <0 a $end\n$var port 1 <1 y $end\n") +
       "#0\npD 6 0 <0\npH 0 6 <1\n");
   source s;
-  ASSERT_TRUE(s.open(in, port("a", 1, kInput, 0) + ";" +
-                             port("y", 1, kOutput, 1)))
+  ASSERT_TRUE(open_bound(s, in, {{"a", 1, in_, 0}, {"y", 1, out_, 1}}))
       << s.error();
 
   cycle_element e;
@@ -125,11 +146,92 @@ TEST(Flatten, TakesFixtureSideForInputsAndDutSideForOutputs) {
   EXPECT_TRUE(bit_set(e.exp, 1)); // H: DUT drives high
 }
 
+// --- inout ---
+//
+// The recording already distinguishes every case an inout has, because
+// decode_state returns both sides of every sample. These four are the whole of
+// it: a bit is driven, or checked, or neither, or contended.
+
+TEST(Inout, IsDrivenWhereTheOutsideHadTheNet) {
+  // `D` and `U`: the fixture drove, and the DUT side was not recorded.
+  std::istringstream in(header("$var port [1:0] <0 p $end\n") +
+                        "#0\npDU 6 0 <0\n");
+  source s;
+  ASSERT_TRUE(open_bound(s, in, {{"p", 2, inout_, 0}})) << s.error();
+
+  cycle_element e;
+  ASSERT_TRUE(s.next_cycle(e)) << s.error();
+  EXPECT_TRUE(bit_set(e.drive_en, 0));
+  EXPECT_TRUE(bit_set(e.drive_en, 1));
+  EXPECT_TRUE(bit_set(e.in, 0));  // U, the low bit, drives high
+  EXPECT_FALSE(bit_set(e.in, 1)); // D drives low
+  // Nothing to check: the interposer holds the net, so it cannot read the DUT
+  // through it.
+  EXPECT_FALSE(bit_set(e.care, 0));
+  EXPECT_FALSE(bit_set(e.care, 1));
+}
+
+TEST(Inout, IsCheckedWhereTheDutHadTheNet) {
+  // `H`: the DUT drove and the outside released.
+  std::istringstream in(header("$var port 1 <0 p $end\n") +
+                        "#0\npH 0 6 <0\n");
+  source s;
+  ASSERT_TRUE(open_bound(s, in, {{"p", 1, inout_, 0}})) << s.error();
+
+  cycle_element e;
+  ASSERT_TRUE(s.next_cycle(e)) << s.error();
+  EXPECT_FALSE(bit_set(e.drive_en, 0));
+  EXPECT_TRUE(bit_set(e.exp, 0));
+  EXPECT_TRUE(bit_set(e.care, 0));
+}
+
+TEST(Inout, IsNeitherWhenNobodyHadTheNet) {
+  // `F`: high-Z from both sides.
+  std::istringstream in(header("$var port 1 <0 p $end\n") +
+                        "#0\npF 0 0 <0\n");
+  source s;
+  ASSERT_TRUE(open_bound(s, in, {{"p", 1, inout_, 0}})) << s.error();
+
+  cycle_element e;
+  ASSERT_TRUE(s.next_cycle(e)) << s.error();
+  EXPECT_FALSE(bit_set(e.drive_en, 0));
+  EXPECT_FALSE(bit_set(e.care, 0));
+}
+
+TEST(Inout, DrivesAndDoesNotCheckWhenBothSidesDid) {
+  // `A`: the fixture drove low while the DUT drove high. Replaying that means
+  // reproducing the contention, not checking through it -- the comparison
+  // would be against whatever the simulator's net resolution produced.
+  std::istringstream in(header("$var port 1 <0 p $end\n") +
+                        "#0\npA 6 6 <0\n");
+  source s;
+  ASSERT_TRUE(open_bound(s, in, {{"p", 1, inout_, 0}})) << s.error();
+
+  cycle_element e;
+  ASSERT_TRUE(s.next_cycle(e)) << s.error();
+  EXPECT_TRUE(bit_set(e.drive_en, 0));
+  EXPECT_FALSE(bit_set(e.in, 0));
+  EXPECT_FALSE(bit_set(e.care, 0));
+}
+
+TEST(Inout, ClaimsBothSidesSoNeitherIsADirectionContradiction) {
+  // What fails for an `in` or an `out` is normal here.
+  std::istringstream in(header("$var port 1 <0 p $end\n") +
+                        "#0\npH 0 6 <0\n#1\npD 6 0 <0\n");
+  source s;
+  ASSERT_TRUE(open_bound(s, in, {{"p", 1, inout_, 0}})) << s.error();
+
+  cycle_element e;
+  ASSERT_TRUE(s.next_cycle(e)) << s.error();
+  ASSERT_TRUE(s.next_cycle(e)) << s.error();
+  EXPECT_TRUE(s.error().empty()) << s.error();
+}
+
 TEST(Flatten, VectorBitsLandMsbFirst) {
   std::istringstream in(header("$var port [7:0] <0 a $end\n") +
                         "#0\npDDDDDDUU 6 0 <0\n");
   source s;
-  ASSERT_TRUE(s.open(in, port("a", 8, kInput, 0))) << s.error();
+  ASSERT_TRUE(open_bound(s, in, {{"a", 8, in_, 0}})) << s.error();
 
   cycle_element e;
   ASSERT_TRUE(s.next_cycle(e)) << s.error();
@@ -144,7 +246,7 @@ TEST(Flatten, HonoursBitOffset) {
   std::istringstream in(header("$var port [3:0] <0 a $end\n") +
                         "#0\npDDDU 6 0 <0\n");
   source s;
-  ASSERT_TRUE(s.open(in, port("a", 4, kInput, 8))) << s.error();
+  ASSERT_TRUE(open_bound(s, in, {{"a", 4, in_, 8}})) << s.error();
 
   cycle_element e;
   ASSERT_TRUE(s.next_cycle(e)) << s.error();
@@ -157,8 +259,7 @@ TEST(Flatten, UnchangedValuesCarryForward) {
       header("$var port 1 <0 a $end\n$var port 1 <1 b $end\n") +
       "#0\npU 6 0 <0\npU 6 0 <1\n#10\npD 6 0 <0\n");
   source s;
-  ASSERT_TRUE(s.open(in, port("a", 1, kInput, 0) + ";" +
-                             port("b", 1, kInput, 1)))
+  ASSERT_TRUE(open_bound(s, in, {{"a", 1, in_, 0}, {"b", 1, in_, 1}}))
       << s.error();
 
   cycle_element e;
@@ -178,7 +279,7 @@ TEST(Flatten, DumpPortsOffDrivesEveryPortUnknown) {
   std::istringstream in(header("$var port 1 <0 a $end\n") +
                         "#0\npU 6 0 <0\n#10\n$dumpportsoff\n");
   source s;
-  ASSERT_TRUE(s.open(in, port("a", 1, kInput, 0))) << s.error();
+  ASSERT_TRUE(open_bound(s, in, {{"a", 1, in_, 0}})) << s.error();
 
   cycle_element e;
   ASSERT_TRUE(s.next_cycle(e)) << s.error();
@@ -201,10 +302,13 @@ namespace {
                   "$var port 1 <2 y $end\n");
   }
 
-  std::string
-  abc_layout() {
-    return port("a", 1, kInput, 0) + ";" + port("b", 1, kInput, 1) + ";" +
-           port("y", 1, kOutput, 2);
+  const std::vector<
+      std::tuple<std::string, std::size_t, direction, std::size_t>>&
+  abc_ports() {
+    static const std::vector<
+        std::tuple<std::string, std::size_t, direction, std::size_t>>
+        p{{"a", 1, in_, 0}, {"b", 1, in_, 1}, {"y", 1, out_, 2}};
+    return p;
   }
 
 } // namespace
@@ -213,7 +317,7 @@ TEST(Encode, SplitsByDirectionAndKeepsTheRecordedTimestampAsTheCycle) {
   std::istringstream in(two_in_one_out() +
                         "#0\npU 6 0 <0\npD 6 0 <1\npH 0 6 <2\n#7\npD 6 0 <0\n");
   source s;
-  ASSERT_TRUE(s.open(in, abc_layout())) << s.error();
+  ASSERT_TRUE(open_bound(s, in, abc_ports())) << s.error();
 
   cycle_element e;
   ASSERT_TRUE(s.next_cycle(e));
@@ -235,7 +339,7 @@ TEST(Encode, ResolvesUnknownInputBitsToZero) {
   // whatever a simulator collapses it to.
   std::istringstream in(two_in_one_out() + "#0\npN 6 0 <0\n");
   source s;
-  ASSERT_TRUE(s.open(in, port("a", 1, kInput, 0))) << s.error();
+  ASSERT_TRUE(open_bound(s, in, {{"a", 1, in_, 0}})) << s.error();
 
   cycle_element e;
   ASSERT_TRUE(s.next_cycle(e));
@@ -245,7 +349,7 @@ TEST(Encode, ResolvesUnknownInputBitsToZero) {
 TEST(Encode, UnknownOutputBitsAreNotCompared) {
   std::istringstream in(two_in_one_out() + "#0\npX 0 6 <2\n#1\npH 0 6 <2\n");
   source s;
-  ASSERT_TRUE(s.open(in, port("y", 1, kOutput, 2))) << s.error();
+  ASSERT_TRUE(open_bound(s, in, {{"y", 1, out_, 2}})) << s.error();
 
   cycle_element e;
   ASSERT_TRUE(s.next_cycle(e));
@@ -263,8 +367,7 @@ TEST(Encode, CareSurvivesCyclesThatDoNotRewriteTheOutput) {
   std::istringstream in(two_in_one_out() +
                         "#0\npD 6 0 <0\npH 0 6 <2\n#1\npU 6 0 <0\n");
   source s;
-  ASSERT_TRUE(s.open(in, port("a", 1, kInput, 0) + ";" +
-                             port("y", 1, kOutput, 2)))
+  ASSERT_TRUE(open_bound(s, in, {{"a", 1, in_, 0}, {"y", 1, out_, 2}}))
       << s.error();
 
   cycle_element e;
@@ -280,7 +383,7 @@ TEST(Encode, CareSurvivesCyclesThatDoNotRewriteTheOutput) {
 TEST(Encode, ReportsFailingBitsByPortName) {
   std::istringstream in(two_in_one_out() + "#0\npH 0 6 <2\n");
   source s;
-  ASSERT_TRUE(s.open(in, port("y", 1, kOutput, 2))) << s.error();
+  ASSERT_TRUE(open_bound(s, in, {{"y", 1, out_, 2}})) << s.error();
 
   // The engine reports bit indices because it has no idea what a port is.
   const std::vector<std::string> names = s.failing_bits({0b100u});
@@ -296,18 +399,19 @@ TEST(Encoder, PacksTheCycleAsTwoWordsLowFirst) {
   std::istringstream in(header("$var port 1 <0 a $end\n") +
                         "#4294967303\npU 6 0 <0\n");
   source s;
-  ASSERT_TRUE(s.open(in, port("a", 1, kInput, 0))) << s.error();
+  ASSERT_TRUE(open_bound(s, in, {{"a", 1, in_, 0}})) << s.error();
 
   cvm::replay::encoder enc;
-  enc.start(s, 2 + 3 * 1);
-  std::vector<std::uint32_t> w(5, 0xA5A5A5A5u);
+  enc.start(s, 2 + 4 * 1);
+  std::vector<std::uint32_t> w(6, 0xA5A5A5A5u);
   ASSERT_EQ(enc.fill(w.data(), 1), 1u);
 
   EXPECT_EQ(w[0], 7u) << "low half of 2^32 + 7";
   EXPECT_EQ(w[1], 1u) << "high half";
   EXPECT_EQ(w[2], 1u) << "stimulus";
-  EXPECT_EQ(w[3], 0u) << "expectation";
-  EXPECT_EQ(w[4], 0u) << "care";
+  EXPECT_EQ(w[3], 1u) << "drive enable -- an input is always driven";
+  EXPECT_EQ(w[4], 0u) << "expectation";
+  EXPECT_EQ(w[5], 0u) << "care";
 }
 
 // The transport hands the producer a buffer it does not clear, so a word left
@@ -316,11 +420,11 @@ TEST(Encoder, WritesEveryWordOfEveryElement) {
   std::istringstream in(header("$var port 1 <0 a $end\n") +
                         "#0\npD 6 0 <0\n#1\npU 6 0 <0\n");
   source s;
-  ASSERT_TRUE(s.open(in, port("a", 1, kInput, 0))) << s.error();
+  ASSERT_TRUE(open_bound(s, in, {{"a", 1, in_, 0}})) << s.error();
 
   cvm::replay::encoder enc;
-  enc.start(s, 5);
-  std::vector<std::uint32_t> w(10, 0xA5A5A5A5u);
+  enc.start(s, 6);
+  std::vector<std::uint32_t> w(12, 0xA5A5A5A5u);
   ASSERT_EQ(enc.fill(w.data(), 2), 2u);
   for (std::size_t i = 0; i < w.size(); ++i)
     EXPECT_NE(w[i], 0xA5A5A5A5u) << "word " << i;
@@ -332,7 +436,7 @@ TEST(Encoder, CyclesThatChangeNothingCostNoElement) {
   std::istringstream in(header("$var port 1 <0 a $end\n") +
                         "#0\npU 6 0 <0\n#1\npU 6 0 <0\n#2\npD 6 0 <0\n");
   source s;
-  ASSERT_TRUE(s.open(in, port("a", 1, kInput, 0))) << s.error();
+  ASSERT_TRUE(open_bound(s, in, {{"a", 1, in_, 0}})) << s.error();
 
   cvm::replay::encoder enc;
   enc.start(s, 5);
@@ -346,7 +450,7 @@ TEST(Encoder, FinishedOnceTheRecordingIsSpent) {
   std::istringstream in(header("$var port 1 <0 a $end\n") +
                         "#0\npU 6 0 <0\n");
   source s;
-  ASSERT_TRUE(s.open(in, port("a", 1, kInput, 0))) << s.error();
+  ASSERT_TRUE(open_bound(s, in, {{"a", 1, in_, 0}})) << s.error();
 
   cvm::replay::encoder enc;
   enc.start(s, 5);

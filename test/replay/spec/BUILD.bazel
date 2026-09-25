@@ -1,0 +1,131 @@
+load("@cvm//:defs.bzl", "replay_ports")
+load("@rules_hdl//verilog:providers.bzl", "verilog_library")
+
+# What the port spec must satisfy, with no simulation involved: the same DUT
+# read two ways has to produce the same spec, and what slang reports has to show
+# up in review rather than as a downstream elaboration error.
+
+# The same spec key on both, because the key is the only part of a spec that
+# comes from the target rather than from the DUT.
+replay_ports(
+    name = "alu_spec",
+    clock = "clk",
+    dut = "alu",
+    dut_lib = "//test/replay/alu:alu_sv",
+    spec_name = "alu_replay",
+)
+
+replay_ports(
+    name = "alu_spec_defined",
+    clock = "clk",
+    dut = "alu",
+    dut_lib = "//test/replay/alu:alu_sv",
+    slang_defines = ["FEAT_GATE"],
+    spec_name = "alu_replay",
+)
+
+# slang has to pick a branch to elaborate, so the only way the spec can describe
+# the module rather than the build is if the defines make no difference to it.
+# If these differ, a port in the untaken branch was elaborated instead of
+# recovered -- or dropped.
+sh_test(
+    name = "sh_define_independent",
+    size = "small",
+    srcs = ["diff.sh"],
+    args = [
+        "$(location :alu_spec.yml)",
+        "$(location :alu_spec_defined.yml)",
+        "the spec depends on FEAT_GATE, so it describes one build of alu rather than alu",
+    ],
+    data = [
+        ":alu_spec.yml",
+        ":alu_spec_defined.yml",
+    ],
+)
+
+# The failure the test above cannot see is the quiet one: resolving the types
+# instead of copying them as written still passes every replay scenario, because
+# the resolved widths are correct for the one parameterization in the tree.
+sh_test(
+    name = "sh_matches_golden",
+    size = "small",
+    srcs = ["diff.sh"],
+    args = [
+        "$(location golden.yml)",
+        "$(location :alu_spec.yml)",
+        "regenerate with: bazel build //test/replay/spec:alu_spec && cp bazel-bin/test/replay/spec/alu_spec.yml test/replay/spec/golden.yml",
+    ],
+    data = [
+        "golden.yml",
+        ":alu_spec.yml",
+    ],
+)
+
+# The spec must come out the same whichever branch of an `elsif` chain slang
+# elaborates. Three readings, one per branch.
+verilog_library(
+    name = "elsif_sv",
+    srcs = ["elsif.sv"],
+)
+
+[
+    replay_ports(
+        name = "elsif_spec" + suffix,
+        clock = "clk",
+        dut = "elsif_ports",
+        dut_lib = ":elsif_sv",
+        slang_defines = defines,
+        spec_name = "elsif_replay",
+    )
+    for suffix, defines in [
+        ("", []),
+        ("_x", ["MODE_X"]),
+        ("_y", ["MODE_Y"]),
+    ]
+]
+
+[
+    sh_test(
+        name = "sh_elsif_define_independent" + suffix,
+        size = "small",
+        srcs = ["diff.sh"],
+        args = [
+            "$(location :elsif_spec.yml)",
+            "$(location :elsif_spec%s.yml)" % suffix,
+            "the spec depends on which branch of the `elsif` chain was " +
+            "elaborated, so it describes one build of elsif_ports rather " +
+            "than elsif_ports",
+        ],
+        data = [
+            ":elsif_spec.yml",
+            ":elsif_spec%s.yml" % suffix,
+        ],
+    )
+    for suffix in ["_x", "_y"]
+]
+
+# `exclude` has to reach the spec, not just drop ports from it, or a recording
+# carrying an excluded port fails conformance.
+replay_ports(
+    name = "elsif_spec_excluded",
+    clock = "clk",
+    dut = "elsif_ports",
+    dut_lib = ":elsif_sv",
+    exclude = ["rst_n"],
+    spec_name = "elsif_replay",
+)
+
+sh_test(
+    name = "sh_elsif_exclude_matches_golden",
+    size = "small",
+    srcs = ["diff.sh"],
+    args = [
+        "$(location elsif_excluded_golden.yml)",
+        "$(location :elsif_spec_excluded.yml)",
+        "regenerate with: bazel build //test/replay/spec:elsif_spec_excluded && cp bazel-bin/test/replay/spec/elsif_spec_excluded.yml test/replay/spec/elsif_excluded_golden.yml",
+    ],
+    data = [
+        "elsif_excluded_golden.yml",
+        ":elsif_spec_excluded.yml",
+    ],
+)

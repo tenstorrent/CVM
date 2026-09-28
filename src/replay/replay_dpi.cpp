@@ -7,8 +7,11 @@
 #include "cvm/registry.hpp"
 
 // Replay owns its transport, so a consumer declares one node of this type and
-// passes its location to the generated module.
-REGISTRY_register(cvm::replay::engine, REPLAY, cvm::registry::all)
+// passes its location to the generated module. Registration resolves the node
+// by name at runtime because the consumer's topology is not visible here.
+namespace {
+  [[maybe_unused]] const bool registered = cvm::registry::regist<cvm::replay::engine>("REPLAY", cvm::registry::all, 0u);
+}
 
 extern "C" {
 

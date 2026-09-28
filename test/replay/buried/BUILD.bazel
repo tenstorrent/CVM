@@ -57,7 +57,7 @@ cc_binary(
     srcs = ["//test/lib/sim:sim_main"],
     deps = [
         ":top_veri_lib",
-        ":topology_cc",
+        ":topology",
         "//:logger",
         "//:plusargs",
         "//:registry",

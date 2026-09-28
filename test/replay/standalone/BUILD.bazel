@@ -72,7 +72,7 @@ verilator_cc_library(
 )
 
 SIM_DEPS = [
-    ":topology_cc",
+    ":topology",
     "//:logger",
     "//:plusargs",
     "//:registry",

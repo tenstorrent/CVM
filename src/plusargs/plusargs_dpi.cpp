@@ -6,17 +6,42 @@
 #include <cassert>
 #include <iostream>
 #include <cstring>
-#include <set>
 #include <string>
+#include <string_view>
+#include <type_traits>
 
-// Storage size of each type name reported by gflags::FlagValue::TypeName().
-static std::size_t gflags_size(const std::string& type) {
-    if (type == "bool")                      return sizeof(bool);
-    if (type == "int32" || type == "uint32") return sizeof(std::int32_t);
-    if (type == "int64" || type == "uint64") return sizeof(std::int64_t);
-    if (type == "double")                    return sizeof(double);
-    if (type == "string")                    return sizeof(std::string);
-    return 0;
+template <typename TYPE>
+static constexpr std::string_view type_name() {
+    if constexpr (std::is_same_v<TYPE, bool>)                          return "bool";
+    else if constexpr (std::is_same_v<TYPE, GFLAGS_NAMESPACE::int32>)  return "int32";
+    else if constexpr (std::is_same_v<TYPE, GFLAGS_NAMESPACE::uint32>) return "uint32";
+    else if constexpr (std::is_same_v<TYPE, GFLAGS_NAMESPACE::int64>)  return "int64";
+    else if constexpr (std::is_same_v<TYPE, GFLAGS_NAMESPACE::uint64>) return "uint64";
+    else if constexpr (std::is_same_v<TYPE, double>)                   return "double";
+    else if constexpr (std::is_same_v<TYPE, std::string>)              return "string";
+    else static_assert(sizeof(TYPE) == 0, "type has no gflags storage");
+}
+
+// Signedness is not distinguished: the SV side has one accessor per width.
+template <typename TYPE>
+static constexpr bool compatible(std::string_view type) {
+    if constexpr (std::is_same_v<TYPE, GFLAGS_NAMESPACE::int32> || std::is_same_v<TYPE, GFLAGS_NAMESPACE::uint32>)
+        return type == "int32" || type == "uint32";
+    else if constexpr (std::is_same_v<TYPE, GFLAGS_NAMESPACE::int64> || std::is_same_v<TYPE, GFLAGS_NAMESPACE::uint64>)
+        return type == "int64" || type == "uint64";
+    else
+        return type == type_name<TYPE>();
+}
+
+template <typename TYPE>
+static TYPE read(const char* p, const gflags::CommandLineFlagInfo& flag) {
+    if (!compatible<TYPE>(flag.type)) {
+        std::cerr << "Error: Plusarg type mismatch - " << p << " is defined as " << flag.type
+                  << " but accessed as " << type_name<TYPE>() << std::endl;
+        assert(false);
+        return TYPE{};
+    }
+    return *static_cast<const TYPE*>(flag.flag_ptr);
 }
 
 template <typename TYPE>
@@ -29,20 +54,7 @@ TYPE get(const char* p) {
         assert(false);  // Force assertion failure after printing
     }
 
-    const std::size_t defined_size = gflags_size(info.type);
-    if (sizeof(TYPE) > defined_size) {
-        std::cerr << "Error: Plusarg type mismatch - " << p << " is defined as " << info.type
-                  << " (" << defined_size << " bytes) but accessed as " << sizeof(TYPE) << " bytes" << std::endl;
-        assert(false);
-    }
-    if (sizeof(TYPE) < defined_size) {
-        static std::set<std::string> reported;
-        if (reported.insert(p).second) {
-            std::cerr << "Warning: Plusarg " << p << " is defined as " << info.type
-                      << " (" << defined_size << " bytes) but accessed as " << sizeof(TYPE) << " bytes; value truncated" << std::endl;
-        }
-    }
-    return *((TYPE *)info.flag_ptr);
+    return read<TYPE>(p, info);
 }
 
 
@@ -70,7 +82,7 @@ extern "C" {
 
     const char* cvm_plusargs_get_string(const char* p) {
         static std::string s;
-        s = get<std::string>(p);
+        s = get<decltype(s)>(p);
         return s.c_str();
     }
 

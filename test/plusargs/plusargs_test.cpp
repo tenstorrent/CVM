@@ -68,3 +68,17 @@ TEST(Plusargs, Plusargs) {
     EXPECT_EQ(FLAGS_testflag2infile, 2);
     EXPECT_EQ(FLAGS_testflag3infile, 3);
 }
+
+TEST(Plusargs, DpiTypeCheck) {
+
+    EXPECT_EQ(cvm_plusargs_get_bool("testsetbool"), FLAGS_testsetbool);
+    EXPECT_EQ(cvm_plusargs_get_int32("testflag1infile"), FLAGS_testflag1infile);
+    EXPECT_STREQ(cvm_plusargs_get_string("teststring"), FLAGS_teststring.c_str());
+
+    // Narrowing read is tolerated and returns the low bytes
+    EXPECT_EQ(cvm_plusargs_get_bool("testflag1infile"), static_cast<std::uint8_t>(FLAGS_testflag1infile));
+
+    EXPECT_DEATH(cvm_plusargs_get_int64("testsetbool"), "type mismatch.*defined as bool \\(1 bytes\\) but accessed as 8 bytes");
+    EXPECT_DEATH(cvm_plusargs_get_string("testflag1infile"), "type mismatch.*defined as int32 \\(4 bytes\\) but accessed as 32 bytes");
+    EXPECT_DEATH(cvm_plusargs_get_int32("nonexistentflag"), "Plusarg not found");
+}

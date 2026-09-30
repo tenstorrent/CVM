@@ -1,4 +1,4 @@
-load("@cvm//:defs.bzl", "replay_attach")
+load("@cvm//:defs.bzl", "replay_attach", "replay_register")
 load("@rules_hdl//verilog:providers.bzl", "verilog_library")
 load("@rules_verilator//verilator:defs.bzl", "verilator_cc_library")
 load("//:defs.bzl", "topology_gen")
@@ -14,6 +14,11 @@ topology_gen(
         "alwayslink": True,
         "linkstatic": True,
     },
+)
+
+replay_register(
+    name = "replay_register",
+    topology = ":topology",
 )
 
 # The spec comes from alu's own Verilog. Neither generated file names a design,
@@ -62,6 +67,7 @@ cc_binary(
         "//:plusargs",
         "//:registry",
         "//:replay",
+        ":replay_register",
         "//:topology",
         "//test/lib/sim:sim_dpi",
         "//test/replay:tb_flags",

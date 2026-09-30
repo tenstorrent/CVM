@@ -22,20 +22,9 @@ static constexpr std::string_view type_name() {
     else static_assert(sizeof(TYPE) == 0, "type has no gflags storage");
 }
 
-// Signedness is not distinguished: the SV side has one accessor per width.
-template <typename TYPE>
-static constexpr bool compatible(std::string_view type) {
-    if constexpr (std::is_same_v<TYPE, GFLAGS_NAMESPACE::int32> || std::is_same_v<TYPE, GFLAGS_NAMESPACE::uint32>)
-        return type == "int32" || type == "uint32";
-    else if constexpr (std::is_same_v<TYPE, GFLAGS_NAMESPACE::int64> || std::is_same_v<TYPE, GFLAGS_NAMESPACE::uint64>)
-        return type == "int64" || type == "uint64";
-    else
-        return type == type_name<TYPE>();
-}
-
 template <typename TYPE>
 static TYPE read(const char* p, const gflags::CommandLineFlagInfo& flag) {
-    if (!compatible<TYPE>(flag.type)) {
+    if (type_name<TYPE>() != flag.type) {
         std::cerr << "Error: Plusarg type mismatch - " << p << " is defined as " << flag.type
                   << " but accessed as " << type_name<TYPE>() << std::endl;
         assert(false);
@@ -66,6 +55,10 @@ extern "C" {
 
     std::int32_t cvm_plusargs_get_int32(const char* p) {
         return get<std::int32_t>(p);
+    }
+
+    std::uint32_t cvm_plusargs_get_uint32(const char* p) {
+        return get<std::uint32_t>(p);
     }
 
     std::int64_t cvm_plusargs_get_int64(const char* p) {

@@ -270,3 +270,22 @@ def replay(
         deps = ["@cvm//:replay_sv"] + (deps or []),
         visibility = visibility,
     )
+
+def replay_register(name, topology, visibility = None):
+    """Register the replay engine against one topology.
+
+    A testbench that links `@cvm//:replay` adds one of these per topology, so the
+    engine binds to that topology's REPLAY node at compile time.
+    """
+
+    native.cc_library(
+        name = name,
+        srcs = ["@cvm//src/replay:replay_register.cpp"],
+        deps = [
+            "@cvm//:replay",
+            topology,
+        ],
+        alwayslink = True,
+        linkstatic = True,
+        visibility = visibility,
+    )

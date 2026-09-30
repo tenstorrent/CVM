@@ -6,6 +6,32 @@
 #include <cassert>
 #include <iostream>
 #include <cstring>
+#include <string>
+#include <string_view>
+#include <type_traits>
+
+template <typename TYPE>
+static constexpr std::string_view type_name() {
+    if constexpr (std::is_same_v<TYPE, bool>)                          return "bool";
+    else if constexpr (std::is_same_v<TYPE, GFLAGS_NAMESPACE::int32>)  return "int32";
+    else if constexpr (std::is_same_v<TYPE, GFLAGS_NAMESPACE::uint32>) return "uint32";
+    else if constexpr (std::is_same_v<TYPE, GFLAGS_NAMESPACE::int64>)  return "int64";
+    else if constexpr (std::is_same_v<TYPE, GFLAGS_NAMESPACE::uint64>) return "uint64";
+    else if constexpr (std::is_same_v<TYPE, double>)                   return "double";
+    else if constexpr (std::is_same_v<TYPE, std::string>)              return "string";
+    else static_assert(sizeof(TYPE) == 0, "type has no gflags storage");
+}
+
+template <typename TYPE>
+static TYPE read(const char* p, const gflags::CommandLineFlagInfo& flag) {
+    if (type_name<TYPE>() != flag.type) {
+        std::cerr << "Error: Plusarg type mismatch - " << p << " is defined as " << flag.type
+                  << " but accessed as " << type_name<TYPE>() << std::endl;
+        assert(false);
+        return TYPE{};
+    }
+    return *static_cast<const TYPE*>(flag.flag_ptr);
+}
 
 template <typename TYPE>
 TYPE get(const char* p) {
@@ -16,8 +42,8 @@ TYPE get(const char* p) {
         std::cerr << "Error: Plusarg not found - " << p << std::endl;
         assert(false);  // Force assertion failure after printing
     }
-    return *((TYPE *)info.flag_ptr);
 
+    return read<TYPE>(p, info);
 }
 
 
@@ -29,6 +55,10 @@ extern "C" {
 
     std::int32_t cvm_plusargs_get_int32(const char* p) {
         return get<std::int32_t>(p);
+    }
+
+    std::uint32_t cvm_plusargs_get_uint32(const char* p) {
+        return get<std::uint32_t>(p);
     }
 
     std::int64_t cvm_plusargs_get_int64(const char* p) {
@@ -45,7 +75,7 @@ extern "C" {
 
     const char* cvm_plusargs_get_string(const char* p) {
         static std::string s;
-        s = get<std::string>(p);
+        s = get<decltype(s)>(p);
         return s.c_str();
     }
 

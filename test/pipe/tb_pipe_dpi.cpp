@@ -11,6 +11,7 @@
 #include "cvm/logger.hpp"
 #include "cvm/pipe.hpp"
 #include "cvm/registry.hpp"
+#include "cvm/topology_defs.hpp"
 
 // Fault injection: a producer that has nothing *right now* but is not finished,
 // which is what the demand retry status exists for.

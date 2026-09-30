@@ -15,6 +15,7 @@
 #include "cvm/logger.hpp"
 #include "cvm/pipe.hpp"
 #include "cvm/registry.hpp"
+#include "cvm/topology_defs.hpp"
 
 // Declared here rather than in a sim main() so the wrapper stays generic.
 DEFINE_int32(scenario, 0,

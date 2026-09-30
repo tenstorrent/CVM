@@ -65,6 +65,11 @@ cc_library(
     linkstatic = True,
 )
 
+exports_files(
+    ["replay_register.cpp"],
+    visibility = ["//visibility:public"],
+)
+
 # What a testbench depends on: the replay layer plus the DPI entry points.
 cc_library(
     name = "replay",

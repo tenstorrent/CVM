@@ -20,7 +20,7 @@ cc_test(
         # solely when linked with a simulator.
         "//src/pipe:pipe_core",
         "//:topology",
-        ":topology_cc",
+        ":topology",
         "//third_party/dpi:dpi",
         "//third_party/vpi:vpi",
         "@com_google_googletest//:gtest_main",
@@ -60,7 +60,7 @@ cc_binary(
         "//:registry",
         "//test/lib/sim:sim_dpi",
         "//:topology",
-        ":topology_cc",
+        ":topology",
         "@com_github_gflags_gflags//:gflags",
     ],
 )

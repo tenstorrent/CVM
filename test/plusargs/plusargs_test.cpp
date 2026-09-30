@@ -14,6 +14,9 @@ DEFINE_string(teststring, "", "Test string");
 DEFINE_int32(testflag1infile, 1, "Test int in file");
 DEFINE_int32(testflag2infile, 2, "Test int in file");
 DEFINE_int32(testflag3infile, 3, "Test int in file");
+DEFINE_int64(testint64,     100, "Test int64");
+DEFINE_uint32(testuint32,   7,   "Test uint32");
+DEFINE_double(testdouble, 1.5, "Test double");
 
 TEST(Plusargs, Plusargs) {
 
@@ -67,4 +70,24 @@ TEST(Plusargs, Plusargs) {
     EXPECT_EQ(FLAGS_testflag1infile, 1);
     EXPECT_EQ(FLAGS_testflag2infile, 2);
     EXPECT_EQ(FLAGS_testflag3infile, 3);
+}
+
+TEST(Plusargs, DpiTypeCheck) {
+
+    EXPECT_EQ(cvm_plusargs_get_bool("testsetbool"), FLAGS_testsetbool);
+    EXPECT_EQ(cvm_plusargs_get_int32("testflag1infile"), FLAGS_testflag1infile);
+    EXPECT_EQ(cvm_plusargs_get_uint32("testuint32"), FLAGS_testuint32);
+    EXPECT_EQ(cvm_plusargs_get_int64("testint64"), FLAGS_testint64);
+    EXPECT_EQ(cvm_plusargs_get_double("testdouble"), FLAGS_testdouble);
+    EXPECT_STREQ(cvm_plusargs_get_string("teststring"), FLAGS_teststring.c_str());
+
+    EXPECT_DEATH(cvm_plusargs_get_int32("testuint32"), "type mismatch.*defined as uint32 but accessed as int32");
+    EXPECT_DEATH(cvm_plusargs_get_uint64("testint64"), "type mismatch.*defined as int64 but accessed as uint64");
+    EXPECT_DEATH(cvm_plusargs_get_bool("testflag1infile"), "type mismatch.*defined as int32 but accessed as bool");
+    EXPECT_DEATH(cvm_plusargs_get_int32("testint64"), "type mismatch.*defined as int64 but accessed as int32");
+    EXPECT_DEATH(cvm_plusargs_get_int64("testsetbool"), "type mismatch.*defined as bool but accessed as int64");
+    EXPECT_DEATH(cvm_plusargs_get_string("testflag1infile"), "type mismatch.*defined as int32 but accessed as string");
+    EXPECT_DEATH(cvm_plusargs_get_int64("teststring"), "type mismatch.*defined as string but accessed as int64");
+    EXPECT_DEATH(cvm_plusargs_get_double("testint64"), "type mismatch.*defined as int64 but accessed as double");
+    EXPECT_DEATH(cvm_plusargs_get_int32("nonexistentflag"), "Plusarg not found");
 }

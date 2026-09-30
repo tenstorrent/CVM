@@ -1,4 +1,4 @@
-load("@cvm//:defs.bzl", "replay")
+load("@cvm//:defs.bzl", "replay", "replay_register")
 load("@rules_hdl//verilog:providers.bzl", "verilog_library")
 load("@rules_verilator//verilator:defs.bzl", "verilator_cc_library")
 load("//:defs.bzl", "topology_gen")
@@ -13,6 +13,11 @@ topology_gen(
         "alwayslink": True,
         "linkstatic": True,
     },
+)
+
+replay_register(
+    name = "replay_register",
+    topology = ":topology",
 )
 
 # The spec comes from the DUT's own Verilog, so it cannot go stale: every
@@ -72,11 +77,12 @@ verilator_cc_library(
 )
 
 SIM_DEPS = [
-    ":topology_cc",
+    ":topology",
     "//:logger",
     "//:plusargs",
     "//:registry",
     "//:replay",
+    ":replay_register",
     "//:topology",
     "//test/lib/sim:sim_dpi",
     "//test/replay:tb_flags",

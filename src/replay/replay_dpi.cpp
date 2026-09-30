@@ -6,10 +6,6 @@
 #include "cvm/replay_engine.hpp"
 #include "cvm/registry.hpp"
 
-// Replay owns its transport, so a consumer declares one node of this type and
-// passes its location to the generated module.
-REGISTRY_register(cvm::replay::engine, REPLAY, cvm::registry::all)
-
 extern "C" {
 
   int cvm_replay_bind(unsigned int location, const char* name, int width,

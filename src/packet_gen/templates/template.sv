@@ -110,7 +110,7 @@ import "DPI-C" ${"context" if packet.context else ""} function void ${packet_sto
 
     ${packet_store.domains.get(domain, {}).get('always_block_header', '')}
     /* verilator lint_off BLKSEQ */
-    always @(posedge clk) begin
+    always @(posedge clk) begin : tx_domain_${domain}
        %if (init != '') :
        if (${init} == 1'b1) ${packet_store.name}_dpi_init_domain_${domain}();
        %endif

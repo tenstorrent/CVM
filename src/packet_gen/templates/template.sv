@@ -137,7 +137,7 @@ import "DPI-C" ${"context" if packet.context else ""} function void ${packet_sto
                 % endif
                     ${prefix}_pkt.data[${lsb}-1:0]
                 };
-                ${prefix}_b += ${msb}-${lsb}+1;
+                ${prefix}_b += $bits(${prefix}_b)'(${msb}-${lsb}+1);
             end
             %endfor
             ${prefix}_words_to_transfer = ${prefix}_WW'(($bits(${prefix}_pkt)-32'(${prefix}_b)+${type(packet_store).transfer_word_bits()} - 1)/${type(packet_store).transfer_word_bits()});
@@ -151,7 +151,7 @@ import "DPI-C" ${"context" if packet.context else ""} function void ${packet_sto
                         automatic ${packet_store.transfer_word_sv_type()} temp${i}[${chunk}]; // need temp to workaround verilator internal error
                     %endfor
                     for (int i = 0; i < ${words}; i++) begin // zebu can't handle using words_to_transfer as the loop bound, it can't unroll it
-                        if (i < ${prefix}_words_to_transfer) begin
+                        if (i < int'(${prefix}_words_to_transfer)) begin
                             ${prefix}_${words}_unpacked[i] = ${type(packet_store).transfer_word_bits()}'(${prefix}_pkt >> (${type(packet_store).transfer_word_bits()}*i));
                         end
                     end
@@ -162,8 +162,8 @@ import "DPI-C" ${"context" if packet.context else ""} function void ${packet_sto
                 end
 <% prev = words %>
             % endfor
-                default: begin
-                    assert(1'b0) else $error("No valid function found for ${packet.port}_${packet.name}_${packet.variant_id} to send %0d words", ${prefix}_words_to_transfer);
+                default: begin : ${prefix}_no_valid_function
+                    ${prefix}_valid_words: assert(1'b0) else $error("No valid function found for ${packet.port}_${packet.name}_${packet.variant_id} to send %0d words", ${prefix}_words_to_transfer);
                 end
             endcase
         end

@@ -15,6 +15,12 @@ verilog_library(
     srcs = ["alu_aux_pkg.sv"],
 )
 
+# DUT source without its packages; the spec producer resolves no types.
+verilog_library(
+    name = "alu_decl_sv",
+    srcs = ["alu.sv"],
+)
+
 verilog_library(
     name = "alu_sv",
     srcs = ["alu.sv"],

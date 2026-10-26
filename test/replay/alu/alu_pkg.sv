@@ -3,11 +3,15 @@
 
 // The interposer declares its ports with these types and measures them with
 // $bits, so a width stated here is the only place it is stated.
+`ifndef ALU_LANES
+  `define ALU_LANES 2
+`endif
+
 package alu_pkg;
 
     // A width the DUT's ports derive from, so the spec cannot state a literal
-    // without duplicating it.
-    parameter int LANES = 2;
+    // without duplicating it. Set from the build to replay a second width.
+    parameter int LANES = `ALU_LANES;
 
     typedef struct packed {
         logic [7:0] data;

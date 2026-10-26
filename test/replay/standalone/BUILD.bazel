@@ -66,6 +66,17 @@ verilator_cc_library(
     vopts = ["--assert"],
 )
 
+# Same interposer at LANES=3; a width resolved at generation would fail here.
+verilator_cc_library(
+    name = "top_lanes3_veri_lib",
+    module = ":top_sv",
+    timing = True,
+    vopts = [
+        "--assert",
+        "+define+ALU_LANES=3",
+    ],
+)
+
 verilator_cc_library(
     name = "top_gate_veri_lib",
     module = ":top_sv",
@@ -93,6 +104,12 @@ cc_binary(
     # main() only; the checks are in top.sv so they travel to other simulators.
     srcs = ["//test/lib/sim:sim_main"],
     deps = SIM_DEPS + [":top_veri_lib"],
+)
+
+cc_binary(
+    name = "sim_lanes3",
+    srcs = ["//test/lib/sim:sim_main"],
+    deps = SIM_DEPS + [":top_lanes3_veri_lib"],
 )
 
 cc_binary(
@@ -219,6 +236,18 @@ cc_binary(
                 "--expect-message=which the interposer does not replay",
                 "+cvm_replay_file=test/replay/fixtures/alu_extra.evcd",
                 "+expect_errors=0",
+            ],
+        },
+        # Same interposer and scenario, wider DUT; only the recording differs.
+        {
+            "name": "replay_lanes3",
+            "sim": "sim_lanes3",
+            "args": [
+                "+cvm_replay_file=test/replay/fixtures/alu_lanes3.evcd",
+                "+expect_errors=0",
+                "+expect_replay_result=7",
+                "+expect_last_result=3",
+                "+expect_done_cycles=7",
             ],
         },
         # The other side of the conditional: two more ports in the DUT, the

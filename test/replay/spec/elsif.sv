@@ -7,11 +7,11 @@ module elsif_ports (
     input  logic clk,
     input  logic rst_n,
 `ifdef MODE_X
-    input  logic [3:0] mode_x,
+    input  logic [3:0] mode_x, mode_x_also,
 `elsif MODE_Y
-    input  logic [7:0] mode_y,
+    input  logic [7:0] mode_y, mode_y_also,
 `else
-    input  logic       mode_none,
+    input  logic       mode_none, mode_none_also,
 `endif
     output logic       out
 );

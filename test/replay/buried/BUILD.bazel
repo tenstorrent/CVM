@@ -28,6 +28,8 @@ replay_attach(
     clock = "clk",
     dut = "alu",
     dut_lib = "//test/replay/alu:alu_sv",
+    # Recorded but unreplayed: exercises exclude through to cvm_replay_ignore.
+    exclude = ["sum"],
 )
 
 verilog_library(
@@ -50,37 +52,47 @@ verilog_library(
     ],
 )
 
-verilator_cc_library(
-    name = "top_veri_lib",
-    module = ":top_sv",
-    timing = True,
-    vopts = ["--assert"],
-)
+SIM_DEPS = [
+    ":replay_register",
+    ":topology",
+    "//:logger",
+    "//:plusargs",
+    "//:registry",
+    "//:replay",
+    "//:topology",
+    "//test/lib/sim:sim_dpi",
+    "//test/replay:tb_flags",
+]
 
-cc_binary(
-    name = "sim",
-    srcs = ["//test/lib/sim:sim_main"],
-    deps = [
-        ":top_veri_lib",
-        ":topology",
-        "//:logger",
-        "//:plusargs",
-        "//:registry",
-        "//:replay",
-        ":replay_register",
-        "//:topology",
-        "//test/lib/sim:sim_dpi",
-        "//test/replay:tb_flags",
-    ],
-)
+# One generated module and macro at two parameterizations; widths come from
+# $bits of the instance, so a width resolved at generation fails at LANES=3.
+[
+    [
+        verilator_cc_library(
+            name = "top" + suffix + "_veri_lib",
+            module = ":top_sv",
+            timing = True,
+            vopts = ["--assert"] + extra,
+        ),
+        cc_binary(
+            name = "sim" + suffix,
+            srcs = ["//test/lib/sim:sim_main"],
+            deps = SIM_DEPS + [":top" + suffix + "_veri_lib"],
+        ),
+    ]
+    for suffix, extra in [
+        ("", []),
+        ("_lanes3", ["+define+ALU_LANES=3"]),
+    ]
+]
 
 [
     sh_test(
         name = "sh_" + scenario["name"],
         srcs = ["//test/lib/sim:sim.sh"],
-        args = ["$(location :sim)"] + scenario["args"],
+        args = ["$(location :%s)" % scenario.get("sim", "sim")] + scenario["args"],
         data = [
-            ":sim",
+            ":" + scenario.get("sim", "sim"),
             "//test/replay/fixtures:evcds",
         ],
     )
@@ -103,6 +115,18 @@ cc_binary(
                 "+expect_errors=0",
                 "+expect_replay_result=7",
                 # The design drives 4 + 5 once replay lets go.
+                "+expect_last_result=9",
+                "+expect_done_cycles=7",
+            ],
+        },
+        # Same module and macro, wider DUT; only the recording differs.
+        {
+            "name": "buried_lanes3",
+            "sim": "sim_lanes3",
+            "args": [
+                "+cvm_replay_file=test/replay/fixtures/alu_lanes3.evcd",
+                "+expect_errors=0",
+                "+expect_replay_result=7",
                 "+expect_last_result=9",
                 "+expect_done_cycles=7",
             ],

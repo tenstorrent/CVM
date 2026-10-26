@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
 import yaml
-from pyslang.ast import ArgumentDirection
+from pyslang.ast import ArgumentDirection, Compilation
 from pyslang.driver import Driver
 from pyslang.parsing import Token, TriviaKind
 from pyslang.syntax import SyntaxTree
@@ -223,21 +223,28 @@ def parse_fragment(body: str, when: Tuple[str, ...],
     # A branch that never mentions a direction is not a port list at all.
     if not DIRECTION_KEYWORD.search(body):
         return []
-    stripped = body.rstrip().rstrip(",")
-    # A branch reads either as part of an ANSI port list or as body port
-    # declarations, depending on which style the DUT uses.
-    attempts = (
-        f"module {FRAGMENT} ({stripped});\nendmodule\n",
-        f"module {FRAGMENT} ();\n{body}\nendmodule\n",
-    )
-    for source in attempts:
-        ports = _fragment_ports(source, when)
-        if ports:
-            # One position for the whole branch; within it the parse order is
-            # the source order.
-            for index, port in enumerate(ports):
-                port.order = (where[0], where[1] + index)
-            return ports
+
+    # A semicolon cannot appear in an ANSI port list; parsing a non-ANSI branch
+    # as ANSI silently keeps only its first port.
+    if ";" in body:
+        # Non-ANSI declarations need a header naming them to be ports.
+        declared = _declared_names(f"module {FRAGMENT} ();\n{body}\nendmodule\n")
+        ports = []
+        if declared:
+            ports = _fragment_ports(
+                "module %s (%s);\n%s\nendmodule\n"
+                % (FRAGMENT, ", ".join(declared), body), when)
+    else:
+        stripped = body.rstrip().rstrip(",")
+        ports = _fragment_ports(
+            f"module {FRAGMENT} ({stripped});\nendmodule\n", when)
+
+    if ports:
+        # One position per branch, source order within it.
+        for index, port in enumerate(ports):
+            port.order = (where[0], where[1] + index)
+        return ports
+
     die(f"cannot read the skipped branch under {list(when)} as port "
         f"declarations:\n  {body}\n"
         "A branch has to stand alone as declarations to be recovered.")
@@ -257,40 +264,57 @@ def _module_declaration(root):
     return None
 
 
-def _fragment_ports(source: str, when: Tuple[str, ...]) -> List[Port]:
+def _declared_names(source: str) -> List[str]:
+    """The names a non-ANSI fragment's port declarations introduce.
+
+    Only the names, which are always written out -- a direction and a type can
+    be inherited from the declaration before them, and reading those is
+    elaboration's job rather than this function's.
+    """
     module = _module_declaration(SyntaxTree.fromText(source).root)
     if module is None:
         return []
-
-    found: List[Port] = []
-
-    def take(direction_token, data_type, name: str) -> None:
-        if direction_token is None:
-            return
-        # valueText, not str: the token carries any comment above it.
-        direction = direction_token.valueText
-        if direction not in ("input", "output", "inout"):
-            return
-        mapped = {"input": "in", "output": "out", "inout": "inout"}[direction]
-        found.append(Port(name, mapped,
-                          type_text(written_text(data_type), mapped), when))
-
-    port_list = module.header.ports
-    if port_list is not None and port_list.kind.name == "AnsiPortList":
-        for node in nodes(port_list.ports):
-            if node.kind.name != "ImplicitAnsiPort":
-                return []
-            take(node.header.direction, node.header.dataType,
-                 node.declarator.name.valueText)
-
+    names: List[str] = []
     for member in module.members:
         if member.kind.name != "PortDeclaration":
             continue
-        header = member.header
         for declarator in nodes(member.declarators):
-            take(header.direction, header.dataType,
-                 declarator.name.valueText)
+            names.append(declarator.name.valueText)
+    return names
 
+
+def _fragment_ports(source: str, when: Tuple[str, ...]) -> List[Port]:
+    """A synthetic module's ports, read the same way the DUT's own are.
+
+    Elaborated rather than walked, so slang applies the port rules the LRM
+    states: a direction and a type inherited from the port before it, and a
+    non-ANSI header matched to its body declarations. Walking the syntax reads
+    an inherited port as having no direction at all and drops it, which makes
+    the spec depend on which branch slang happened to elaborate -- the one
+    thing it must never do.
+
+    The types a recovered branch names are usually unresolvable here, because
+    the fragment has no packages. That costs nothing: a port's direction and
+    its type as written both survive an unresolved type.
+    """
+    compilation = Compilation()
+    compilation.addSyntaxTree(SyntaxTree.fromText(source))
+    instances = [i for i in compilation.getRoot().topInstances
+                 if i.name == FRAGMENT]
+    if not instances:
+        return []
+
+    found: List[Port] = []
+    for port in instances[0].body.portList:
+        # Null port, e.g. the trailing comma left by a disabled conditional name.
+        if not port.name or getattr(port, "internalSymbol", None) is None:
+            continue
+        direction = DIRECTIONS.get(port.direction)
+        if direction is None:
+            return []
+        written = written_text(port.internalSymbol.declaredType.typeSyntax)
+        found.append(Port(port.name, direction,
+                          type_text(written, direction), when))
     return found
 
 
@@ -441,6 +465,9 @@ def build(driver, top: str) -> Spec:
     seen = set()
 
     for port in instance.body.portList:
+        # Null port, e.g. the trailing comma left by a disabled conditional name.
+        if not port.name or getattr(port, "internalSymbol", None) is None:
+            continue
         direction = DIRECTIONS.get(port.direction)
         if direction is None:
             die(f"port `{port.name}` is `{port.direction}`, which a recording "
@@ -450,10 +477,14 @@ def build(driver, top: str) -> Spec:
             die(f"port `{port.name}` has an unpacked dimension, which slang "
                 "does not report as part of the type; exclude it")
         written = written_text(port.internalSymbol.declaredType.typeSyntax)
+
+        # Order and condition key off the declaration, the only part a
+        # recovered non-ANSI branch has.
+        declaration = getattr(port.internalSymbol, "syntax", None) or syntax
         when = ()
         where: Tuple[object, int] = ("", 0)
-        if syntax is not None:
-            location = syntax.getFirstToken().location
+        if declaration is not None:
+            location = declaration.getFirstToken().location
             when = conditionals.chain_at.get(location, ())
             where = position(location)
         spec.ports.append(Port(port.name, direction,

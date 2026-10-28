@@ -44,7 +44,7 @@ namespace cvm {
 
             static verbosity_level verbosity;
             static std::array<std::function<void()>, NUM_VERBOSITY> handlers;
-            static std::function<std::string_view()> prefix;
+            static std::function<std::string_view(verbosity_level)> prefix;
             static std::ostream& ostream;
 
         public:
@@ -69,9 +69,15 @@ namespace cvm {
             }
 
 
-            static void set_prefix(const std::function<std::string_view()>& pre) {
+            static void set_prefix(const std::function<std::string_view(verbosity_level)>& pre) {
 
                 prefix = pre;
+
+            }
+
+            static void set_prefix(const std::function<std::string_view()>& pre) {
+
+                prefix = [pre](verbosity_level) { return pre(); };
 
             }
 
@@ -93,7 +99,7 @@ namespace cvm {
 
                     if (check_verbosity(v)) {
 
-                        fmt::print(out, "{}", prefix());
+                        fmt::print(out, "{}", prefix(v));
                         fmt::print(out, fmt::runtime(format), log_arg(std::forward<Args>(args))...);
 
                     }

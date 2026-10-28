@@ -36,7 +36,7 @@ DEFINE_uint64(cvm_max_log_size, std::numeric_limits<std::uint64_t>::max(), "Maxi
 
 cvm::verbosity_level cvm::logger::verbosity = cvm::verbosity_level::MEDIUM;
 decltype(cvm::logger::handlers)  cvm::logger::handlers{};
-decltype(cvm::logger::prefix  )  cvm::logger::prefix = [] () { return ""; };
+decltype(cvm::logger::prefix  )  cvm::logger::prefix = [] (cvm::verbosity_level) { return ""; };
 decltype(cvm::logger::ostream )& cvm::logger::ostream = std::cout;
 
 cvm::file_logger::~file_logger() = default;

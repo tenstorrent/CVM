@@ -81,7 +81,7 @@ extern "C" {
 
     // New function that returns a fixed-size char array
     void cvm_plusargs_get_string_bytes_1024(const char* p, unsigned char str_buffer[1024]) {
-        
+
         const char* str = cvm_plusargs_get_string(p);
         size_t len = strlen(str);
 
@@ -90,6 +90,7 @@ extern "C" {
             assert(false);
         }
 
+        memset(str_buffer, 0, 1024);
         memcpy(str_buffer, str, len);
         str_buffer[len] = '\0';
     }

@@ -79,18 +79,17 @@ extern "C" {
         return s.c_str();
     }
 
-    // New function that returns a fixed-size char array
     void cvm_plusargs_get_string_bytes_1024(const char* p, unsigned char str_buffer[1024]) {
-        
-        const char* str = cvm_plusargs_get_string(p);
-        size_t len = strlen(str);
+        std::string str = get<std::string>(p);
+        const std::size_t max_len = 1024 - 1;
+        const bool fits = str.size() <= max_len;
 
-        if (len > 1023) {
+        if (!fits) {
             std::cerr << "ERROR: +" << p << "=" << str << " is too long\n";
             assert(false);
         }
-
-        memcpy(str_buffer, str, len);
-        str_buffer[len] = '\0';
+        const std::size_t n = fits ? str.size() : max_len;
+        std::memcpy(str_buffer, str.data(), n);
+        std::memset(str_buffer + n, 0, 1024 - n);
     }
 }

@@ -25,4 +25,5 @@ extern "C" {
     std::uint64_t cvm_plusargs_get_uint64(const char* p);
     double        cvm_plusargs_get_double(const char* p);
     const char*   cvm_plusargs_get_string(const char* p);
+    void          cvm_plusargs_get_string_bytes_1024(const char* p, unsigned char str_buffer[1024]);
 }

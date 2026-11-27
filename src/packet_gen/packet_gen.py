@@ -76,6 +76,7 @@ class Packet:
     port: str
     fields: list[Field]
     variant_id: int
+    instance_domains: list[int] = None
 
     @classmethod
     def load(cls, name, values, port):
@@ -100,13 +101,22 @@ class Packet:
             elaborated.append(p)
 
         domain = values.get("domain", None)
-        if isinstance(domain, int) or domain is None:
-            all_domains = [domain]
-        else:
-            all_domains = domain
+        all_domains = domain if isinstance(domain, list) and num_variants > 1 else [domain]
         assert len(all_domains) == num_variants, "Need same number of domains as variants"
 
-        return [cls(name, all_domains[i], values.get("disabling_defines", []), values.get("priority", None), values.get("num", 1), values.get("context", False), port, e, i) for i, e in enumerate(elaborated)]
+        def split_domain(domain):
+            if isinstance(domain, list):
+                return (domain[0], None) if len(set(domain)) == 1 else (None, list(domain))
+            return domain, None
+
+        packets = []
+        for i, e in enumerate(elaborated):
+            shared_domain, instance_domains = split_domain(all_domains[i])
+            packets.append(cls(name, shared_domain, values.get("disabling_defines", []), values.get("priority", None), values.get("num", 1), values.get("context", False), port, e, i, instance_domains))
+        return packets
+
+    def domain_of(self, port_instance):
+        return self.domain if self.instance_domains is None else self.instance_domains[port_instance]
 
     def to_c_enum(self):
         return 'MSG_NUMBER_' + self.port + '_' + self.name + '_' + str(self.variant_id)
@@ -230,8 +240,15 @@ class PacketStore:
                 if packet_name not in ["num", "disabling_defines"]:
                     p = Packet.load(packet_name, {**{'disabling_defines': disabling_defines}, **packet_values}, port)
                     assert len(p) == len(ports[port]), "Must specify same number of widths among all packets in a port"
+                    for variant in p:
+                        assert variant.instance_domains is None or len(variant.instance_domains) == ports[port][variant.variant_id], "Need one domain per port instance"
                     packets.append(p)
         return cls(name, domains, packets, ports, max_byte_transfer)
+
+    def packet_domains(self, packet):
+        if packet.instance_domains is None:
+            return [] if packet.domain is None else [packet.domain]
+        return sorted(set(packet.instance_domains))
 
     def clog2(self, num):
 

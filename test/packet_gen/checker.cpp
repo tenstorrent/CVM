@@ -19,6 +19,14 @@ extern "C" void transactions_dpi_init_domain_2() {
     initialize_domain2_call_count++;
 }
 
+static int custom_init_call_count = 0;
+extern "C" void transactions_custom_init() {
+    custom_init_call_count++;
+}
+
+static int own_count[2] = {0, 0};
+static int common_count[2] = {0, 0};
+
 class checker {
 
     public:
@@ -82,6 +90,18 @@ class checker {
                     transactions_finish();
                 }
             );
+            cvm::registry::messenger.connect<transactions::per_instance::own<>>(
+                loc,
+                [this] (const transactions::per_instance::own<>& ret) {
+                    this->check(ret);
+                }
+            );
+            cvm::registry::messenger.connect<transactions::per_instance::common<>>(
+                loc,
+                [] (const transactions::per_instance::common<>& ret) {
+                    common_count[static_cast<unsigned>(ret.id)]++;
+                }
+            );
             cvm::registry::messenger.connect<transactions::dut::anchor_test<>>(
                 loc,
                 [this] (const transactions::dut::anchor_test<>& ret) {
@@ -93,6 +113,7 @@ class checker {
     private:
 
         int count_ = 0;
+        uint32_t last_seq_[2] = {0, 0};
 
         template<typename T>
             void check(const std::string& name, const T& actual, const T& expected) {
@@ -134,6 +155,15 @@ class checker {
             check("dummy2", pkt2.dummy2, decltype(pkt2.dummy2)(3));
         }
 
+        // A domain that samples on the clock of the instance sees each sequence number one time
+        void check(const transactions::per_instance::own<>& pkt) {
+            auto id = static_cast<unsigned>(pkt.id);
+            auto seq = static_cast<uint32_t>(pkt.seq);
+            if (own_count[id] > 0) check<uint32_t>("seq", seq, last_seq_[id] + 1);
+            last_seq_[id] = seq;
+            own_count[id]++;
+        }
+
         void check(const transactions::dut::anchor_test<>& pkt) {
             check("shared_field1", pkt.shared_field1, decltype(pkt.shared_field1)(0x1234));
             check("shared_field2", pkt.shared_field2, decltype(pkt.shared_field2)(0xDEADBEEF));
@@ -163,5 +193,11 @@ extern "C" void end_checker() {
         << "dpi_init function 'transactors_dpi_init_domain_1' was never called";
     EXPECT_EQ(initialize_domain2_call_count, 0) 
         << "dpi_init function 'transactors_dpi_init_domain_2' should NOT be called";
+    EXPECT_GT(custom_init_call_count, 0)
+        << "dpi_init_function 'transactions_custom_init' was never called";
+    EXPECT_GT(own_count[0], 0);
+    EXPECT_GT(own_count[1], own_count[0]);
+    EXPECT_GT(common_count[0], 0);
+    EXPECT_GT(common_count[1], 0);
     cvm::registry::shutdown();
 }

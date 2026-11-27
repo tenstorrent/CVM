@@ -104,6 +104,30 @@ module no_init_test #(
 
 endmodule
 
+module per_instance #(
+    `TRANSACTIONS_PER_INSTANCE_OUTPUT_PARAMS
+) (
+    input clk,
+    input [7:0] id,
+    `TRANSACTIONS_PER_INSTANCE_OUTPUT_PORTS
+);
+
+    parameter int unsigned loc = cvm_topology_gen::get_location (cvm_topology_gen::mods.TOP.CLUSTER.CORE.ID, 0);
+
+    logic [31:0] seq = '0;
+    always @(posedge clk) seq <= seq + 1;
+
+    assign owns[0].valid            = '1;
+    assign owns[0].data.location    = loc;
+    assign owns[0].data.id          = id;
+    assign owns[0].data.seq         = seq;
+
+    assign commons[0].valid         = '1;
+    assign commons[0].data.location = loc;
+    assign commons[0].data.id       = id;
+
+endmodule
+
 module top(
 `ifdef TB_EXTERNAL_CLOCK
     input clk
@@ -120,10 +144,17 @@ module top(
 
     // Signals for dpi_init test - triggers the initialize_domainX() DPI calls
     logic initialize_domain1;
-    
-    `TRANSACTIONS_DOMAIN(1, clk)
+    logic initialize_domain0;
 
-    `TRANSACTIONS_DOMAIN(2, clk)
+    logic clk_half = '0;
+    always @(posedge clk) clk_half <= !clk_half;
+
+    logic domain_clk [2:0];
+    assign domain_clk[0] = clk_half;
+    assign domain_clk[1] = clk;
+    assign domain_clk[2] = clk;
+
+    `TRANSACTIONS_DOMAINS(domain_clk)
 
     int clock_count = 0;
     always @(posedge clk) begin
@@ -135,6 +166,8 @@ module top(
     
     // Trigger dpi_init during the first clock after reset
     assign initialize_domain1 = (clock_count == 5);
+    // Two cycles of clk hold the pulse over one rising edge of clk_half
+    assign initialize_domain0 = (clock_count == 5 || clock_count == 6);
 
     generate
         if (cvm_topology_gen::mods.TOP.CLUSTER.AXI[0].ID_WIDTH != 12)
@@ -192,6 +225,17 @@ module top(
         `TRANSACTIONS_NO_INIT_TEST_SOURCE_PORTS(2, 0, 0)
     );
 
+    `TRANSACTIONS_PER_INSTANCE_0_INSTANCE_SOURCES
+
+    for (genvar p = 0; p < 2; p++) begin
+        per_instance #(
+            `TRANSACTIONS_PER_INSTANCE_SOURCE_PARAMS(0)
+        ) per_instance (
+            .clk(domain_clk[p]),
+            .id(8'(p)),
+            `TRANSACTIONS_PER_INSTANCE_0_INSTANCE_PORTS(p)
+        );
+    end
 
 `ifndef TRANSACTIONS_ZERO_0_DUMMY_UNDEF
     $error("Error: ZERO::DUMMY should not be defined.")

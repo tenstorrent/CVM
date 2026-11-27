@@ -96,6 +96,22 @@ no_init_test:
             cycle:
                 width: 32
 
+per_instance:
+    num: 2
+    own:
+        domain: [0, 1]
+        fields:
+            id:
+                width: 8
+            seq:
+                width: 32
+
+    common:
+        domain: [0, 0]
+        fields:
+            id:
+                width: 8
+
 <%
 axi0 = TOP.CLUSTER.AXI[0]
 axi1 = TOP.CLUSTER.AXI[1]
@@ -127,6 +143,9 @@ axi_test:
 
 
 __domains:
+    0:
+      dpi_init: 'initialize_domain0'
+      dpi_init_function: 'transactions_custom_init'
     1:
       dpi_init: 'initialize_domain1'
     2:

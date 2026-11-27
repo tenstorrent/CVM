@@ -6,10 +6,8 @@
     by_domain = OrderedDict()
     for packet in packet_store.packets:
         for packet_variant in packet:
-            if packet_variant.domain is not None:
-                if packet_variant.domain not in by_domain:
-                    by_domain[packet_variant.domain] = []
-                by_domain[packet_variant.domain].append(packet_variant)
+            for packet_domain in packet_store.packet_domains(packet_variant):
+                by_domain.setdefault(packet_domain, []).append(packet_variant)
     bs = "\\"
 %>\
 `ifndef ${include_guard}
@@ -54,6 +52,7 @@ endpackage
 
 % for domain,domain_packets in by_domain.items():
 <% init = packet_store.domains.get(domain, {}).get('dpi_init', '') or '' %>\
+<% init_function = packet_store.domains.get(domain, {}).get('dpi_init_function', '') or f"{packet_store.name}_dpi_init_domain_{domain}" %>\
 
 module ${packet_store.name}_domain_${domain}(
     input clk,
@@ -88,6 +87,7 @@ import "DPI-C" ${"context" if packet.context else ""} function void ${packet_sto
 
 %for packet in domain_packets:
     %for port in range(packet_store.ports[packet.port][packet.variant_id]):
+        % if packet.domain_of(port) == domain:
         %for i in range(packet.num):
 <% prefix = f"{packet.port}_{packet.name}_{packet.variant_id}_{port}_{i}"%>\
     typedef struct packed {
@@ -102,23 +102,25 @@ import "DPI-C" ${"context" if packet.context else ""} function void ${packet_sto
     ${type(packet_store).transfer_word_sv_type()} ${prefix}_${words}_unpacked[${words}];
             %endfor
         %endfor
+        % endif
     %endfor
 %endfor
     %if (init != '') :
-        import "DPI-C" function void ${packet_store.name}_dpi_init_domain_${domain}();
+        import "DPI-C" function void ${init_function}();
     %endif
 
     ${packet_store.domains.get(domain, {}).get('always_block_header', '')}
     /* verilator lint_off BLKSEQ */
     always @(posedge clk) begin
        %if (init != '') :
-       if (${init} == 1'b1) ${packet_store.name}_dpi_init_domain_${domain}();
+       if (${init} == 1'b1) ${init_function}();
        %endif
 %for packet in domain_packets:
     % for define in packet.disabling_defines:
 `ifndef ${define}
     % endfor
     %for port in range(packet_store.ports[packet.port][packet.variant_id]):
+        % if packet.domain_of(port) == domain:
         %for i in range(packet.num):
         if (tx.${packet.port}_${packet.name}_${packet.variant_id}s[${port}][${i}].valid) begin
 <% prefix = f"{packet.port}_{packet.name}_{packet.variant_id}_{port}_{i}"%>\
@@ -168,6 +170,7 @@ import "DPI-C" ${"context" if packet.context else ""} function void ${packet_sto
             endcase
         end
         %endfor
+        % endif
     %endfor
     % for _ in packet.disabling_defines:
 `endif
@@ -192,12 +195,23 @@ endmodule
         );
 
 <%
+  lines = []
+  for domain in by_domain:
+      init = (packet_store.domains.get(domain) or {}).get('dpi_init', '') or ''
+      init_port = f".{init}({init}), " if init else ""
+      lines.append(f"    {packet_store.name}::domain_{domain} tx_dom_{domain};")
+      lines.append(f"    {packet_store.name}_domain_{domain} {packet_store.name}_domain_{domain} (.clk(clocks[{domain}]), {init_port}.tx(tx_dom_{domain}));")
+%>\
+`define ${packet_store.name.upper()}_DOMAINS(clocks) ${bs}
+${f" {bs}\n".join(lines)}
+
+<%
   by_port = {}
+  sent_packets = [packet for packet in packet_store.packets if packet_store.packet_domains(packet[0])]
   for port in packet_store.ports:
-      for domain_packets in by_domain.values():
-          for packet in domain_packets:
-              if packet.port == port and packet.variant_id == 0:
-                  by_port[port] = by_port.get(port, list()) + [(packet.name, packet.num)]
+      for packet in sent_packets:
+          if packet[0].port == port:
+              by_port[port] = by_port.get(port, list()) + [(packet[0].name, packet[0].num)]
 %>
 %for port, port_packets in by_port.items():
 
@@ -223,6 +237,29 @@ end = len(port_packets) - 1
 `define ${packet_store.name.upper()}_${port.upper()}_SOURCE_PORTS(domain, port_num, sub)   ${bs}
     %for i,(declpacket, _) in enumerate(port_packets):
     .${declpacket}s(tx_dom_``domain.${port}_${declpacket}_``sub``s[port_num])${", \\" if i != end else ""}
+    %endfor
+    %for variant_id, instances in enumerate(packet_store.ports[port]):
+        % if instances:
+<%
+  lines = []
+  for packet in sent_packets:
+      if packet[0].port != port:
+          continue
+      packet_variant = packet[variant_id]
+      member = f"{port}_{packet_variant.name}_{variant_id}"
+      lines.append(f"    {packet_store.name}::{member}_with_valid [{instances}-1:0][{packet_variant.num}-1:0] tx_{member}s;")
+      for instance in range(instances):
+          lines.append(f"    assign tx_dom_{packet_variant.domain_of(instance)}.{member}s[{instance}] = tx_{member}s[{instance}];")
+%>\
+
+`define ${packet_store.name.upper()}_${port.upper()}_${variant_id}_INSTANCE_SOURCES ${bs}
+${f" {bs}\n".join(lines)}
+
+`define ${packet_store.name.upper()}_${port.upper()}_${variant_id}_INSTANCE_PORTS(port_num)   ${bs}
+            %for i,(declpacket, _) in enumerate(port_packets):
+    .${declpacket}s(tx_${port}_${declpacket}_${variant_id}s[port_num])${", \\" if i != end else ""}
+            %endfor
+        % endif
     %endfor
 
 %endfor
